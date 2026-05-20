@@ -20,6 +20,19 @@ function assertNoTracked(pattern) {
   if (out.length > 0) fail(`Forbidden tracked file(s) matched: ${pattern}`);
 }
 
+function assertNoTrackedExcept(pattern, allowed) {
+  const out = execSync(`git ls-files -z -- ${pattern} || true`, {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (!out || out.length === 0) return;
+  const files = out
+    .toString("utf8")
+    .split("\0")
+    .filter(Boolean)
+    .filter((p) => !allowed.has(p));
+  if (files.length > 0) fail(`Forbidden tracked file(s):\n- ${files.join("\n- ")}`);
+}
+
 try {
   const status = run("git status --porcelain=v1");
   if (status.length > 0) fail("Working tree is not clean. Commit or stash changes first.");
@@ -34,7 +47,7 @@ try {
 
   const forbidden = [
     ".env",
-    ".env.*",
+    ".env*.local",
     "dev.db",
     "dev.db-journal",
     "prisma/dev.db",
@@ -52,9 +65,9 @@ try {
     "何承洋简历.pdf",
   ];
   for (const pattern of forbidden) assertNoTracked(pattern);
+  assertNoTrackedExcept(".env.*", new Set([".env.example"]));
 
   console.log("[submission-check] OK");
 } catch (err) {
   fail(err?.message ?? String(err));
 }
-
