@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Project {
+  id             String          @id @default(cuid())
+  title          String
+  sampleTitle    String
+  sampleUrl      String?
+  sampleNotes    String
+  targetBrief    String
+  status         String          @default("draft")
+  mediaPath      String?
+  mediaMeta      Json?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  sampleAnalysis SampleAnalysis?
+  generatedPlans GeneratedPlan[]
+}
+
+model SampleAnalysis {
+  id        String   @id @default(cuid())
+  projectId String   @unique
+  summary   String
+  data      Json
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model GeneratedPlan {
+  id          String   @id @default(cuid())
+  projectId   String
+  versionName String
+  data        Json
+  markdown    String
+  createdAt   DateTime @default(now())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
