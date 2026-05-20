@@ -36,7 +36,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { demoPresets } from "@/lib/demo-presets";
-import { buildMigrationMap, materialFitText } from "@/lib/mapping";
+import {
+  buildMigrationMap,
+  materialFitText,
+  type MigrationMapRow,
+} from "@/lib/mapping";
+import { buildTimelineSegments } from "@/lib/timeline";
 import type {
   MediaMeta,
   MaterialAdaptation,
@@ -385,6 +390,77 @@ function MigrationMappingPanel({
   );
 }
 
+function TimelineOverview({ rows }: { rows: MigrationMapRow[] }) {
+  const segments = useMemo(() => buildTimelineSegments(rows), [rows]);
+
+  if (segments.length === 0) return null;
+
+  return (
+    <div className="space-y-4 rounded-lg border bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">时间线草案</Badge>
+            <Badge variant="outline">
+              {segments[segments.length - 1].endSecond}s
+            </Badge>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            按真实秒数把脚本拆成可生产的时间线，颜色标签对应每段结构任务，素材状态提示该段是否需要补拍或包装兜底。
+          </p>
+        </div>
+        <BarChart3 className="size-8 shrink-0 text-primary" />
+      </div>
+
+      <div className="relative h-20 rounded-lg border bg-background p-3">
+        <div className="absolute left-3 right-3 top-1/2 h-1 -translate-y-1/2 rounded-full bg-secondary" />
+        {segments.map((segment) => (
+          <div
+            className="absolute top-3 min-w-[72px] rounded-md border bg-white px-2 py-1.5 shadow-sm"
+            key={`${segment.index}-${segment.timeRange}`}
+            style={{
+              left: `${segment.leftPercent}%`,
+              width: `${segment.widthPercent}%`,
+              maxWidth: "190px",
+            }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-xs font-semibold text-foreground">
+                {segment.focus}
+              </span>
+              <span className="shrink-0 text-[11px] text-muted-foreground">
+                {segment.timeRange}
+              </span>
+            </div>
+            <p className="mt-1 truncate text-[11px] text-muted-foreground">
+              {segment.label}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        {segments.map((segment) => (
+          <div className="rounded-md border bg-background p-3" key={segment.index}>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">{segment.timeRange}</Badge>
+              <Badge variant={fitBadgeVariant(segment.materialFit)}>
+                {materialFitText(segment.materialFit)}
+              </Badge>
+              <span className="text-xs font-semibold text-foreground">
+                {segment.focus}
+              </span>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              {segment.materialSlotName}：{segment.completionPlan}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [projectTitle, setProjectTitle] = useState("爆款结构迁移演示项目");
   const [sampleTitle, setSampleTitle] = useState("优质短视频样例");
@@ -409,6 +485,10 @@ export default function Home() {
     () => plan?.versions[Math.min(activeVersion, plan.versions.length - 1)],
     [activeVersion, plan],
   );
+  const activeMigrationRows = useMemo(() => {
+    if (!analysis || !plan || !activePlanVersion) return [];
+    return buildMigrationMap({ analysis, plan, version: activePlanVersion });
+  }, [analysis, plan, activePlanVersion]);
 
   async function handleAnalyze() {
     if (!sampleNotes.trim() && !sampleFile && !sampleUrl.trim()) {
@@ -854,6 +934,8 @@ export default function Home() {
                   {plan.materialAdaptation ? (
                     <MaterialAdaptationPanel adaptation={plan.materialAdaptation} />
                   ) : null}
+
+                  <TimelineOverview rows={activeMigrationRows} />
 
                   {analysis ? (
                     <MigrationMappingPanel
