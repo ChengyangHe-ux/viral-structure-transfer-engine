@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   AlertCircle,
+  ArrowRight,
   BarChart3,
   CheckCircle2,
   ClipboardList,
@@ -10,6 +11,7 @@ import {
   Download,
   FileJson,
   FileText,
+  GitBranch,
   Loader2,
   PackageCheck,
   PencilLine,
@@ -34,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { demoPresets } from "@/lib/demo-presets";
+import { buildMigrationMap, materialFitText } from "@/lib/mapping";
 import type {
   MediaMeta,
   MaterialAdaptation,
@@ -272,6 +275,109 @@ function MaterialAdaptationPanel({
               {slot.matchedMaterial}
             </p>
             <p className="mt-2 text-xs font-medium text-foreground">补全：{slot.completionPlan}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function completionStrategyText(strategy: string) {
+  if (strategy === "structure-reorder") return "结构重排";
+  if (strategy === "copy-caption") return "文案/字幕补全";
+  if (strategy === "visual-packaging") return "包装补全";
+  if (strategy === "aigc-generation") return "AIGC 补全";
+  if (strategy === "reuse-existing") return "素材复用";
+  return "人工复核";
+}
+
+function fitBadgeVariant(fit: ReturnType<typeof buildMigrationMap>[number]["materialFit"]) {
+  if (fit === "matched") return "success";
+  if (fit === "partial") return "warning";
+  return "outline";
+}
+
+function MigrationMappingPanel({
+  analysis,
+  plan,
+  version,
+}: {
+  analysis: VideoStructureAnalysis;
+  plan: MigratedVideoPlan;
+  version: PlanVersion;
+}) {
+  const rows = useMemo(
+    () => buildMigrationMap({ analysis, plan, version }),
+    [analysis, plan, version],
+  );
+
+  return (
+    <div className="space-y-4 rounded-lg border bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">迁移映射</Badge>
+            <Badge variant="outline">{version.versionName}</Badge>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            把样例节拍、可迁移规则、新方案镜头和素材补全放在同一张链路图里，便于答辩时解释“学到了什么、迁移到哪里、缺口怎么处理”。
+          </p>
+        </div>
+        <GitBranch className="size-8 shrink-0 text-primary" />
+      </div>
+
+      <div className="space-y-3">
+        {rows.map((row) => (
+          <div className="rounded-lg border bg-background p-3" key={`${row.index}-${row.outputTimeRange}`}>
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_32px_minmax(0,1.15fr)_minmax(170px,0.65fr)] lg:items-stretch">
+              <div className="rounded-md border bg-white p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{row.sampleTimeRange}</Badge>
+                  <span className="text-xs font-semibold text-foreground">
+                    {row.samplePurpose}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {row.sampleRule}
+                </p>
+              </div>
+
+              <div className="hidden items-center justify-center text-primary lg:flex">
+                <ArrowRight className="size-5" />
+              </div>
+
+              <div className="rounded-md border bg-white p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{row.outputTimeRange}</Badge>
+                  <span className="text-xs font-semibold text-foreground">
+                    {row.outputPurpose}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-foreground">
+                  {row.outputLine}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {row.mappingLogic}
+                </p>
+              </div>
+
+              <div className="rounded-md border bg-white p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={fitBadgeVariant(row.materialFit)}>
+                    {materialFitText(row.materialFit)}
+                  </Badge>
+                  <Badge variant="outline">
+                    {completionStrategyText(row.completionStrategy)}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-xs font-medium text-foreground">
+                  {row.materialSlotName}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {row.completionPlan}
+                </p>
+              </div>
+            </div>
           </div>
         ))}
       </div>
@@ -747,6 +853,14 @@ export default function Home() {
 
                   {plan.materialAdaptation ? (
                     <MaterialAdaptationPanel adaptation={plan.materialAdaptation} />
+                  ) : null}
+
+                  {analysis ? (
+                    <MigrationMappingPanel
+                      analysis={analysis}
+                      plan={plan}
+                      version={activePlanVersion}
+                    />
                   ) : null}
 
                   <VersionTimeline version={activePlanVersion} />

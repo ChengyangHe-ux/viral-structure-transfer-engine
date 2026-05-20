@@ -1,4 +1,5 @@
 import type { MigratedVideoPlan, VideoStructureAnalysis } from "@/lib/schemas";
+import { buildMigrationMap, materialFitText } from "@/lib/mapping";
 
 function list(items: string[]) {
   return items.map((item) => `- ${item}`).join("\n");
@@ -120,6 +121,28 @@ ${list(plan.productionNotes)}
 `;
 }
 
+export function renderMigrationMapMarkdown({
+  analysis,
+  plan,
+}: {
+  analysis: VideoStructureAnalysis;
+  plan: MigratedVideoPlan;
+}) {
+  const rows = buildMigrationMap({ analysis, plan });
+
+  return `## 结构迁移映射
+
+| 序号 | 样例节拍 | 可迁移规则 | 新方案节拍 | 映射逻辑 | 素材槽位 | 补全动作 |
+| --- | --- | --- | --- | --- | --- | --- |
+${rows
+  .map(
+    (row) =>
+      `| ${row.index} | ${row.sampleTimeRange} ${row.samplePurpose} | ${row.sampleRule} | ${row.outputTimeRange} ${row.outputPurpose} | ${row.mappingLogic} | ${row.materialSlotName}（${materialFitText(row.materialFit)}） | ${row.completionPlan} |`,
+  )
+  .join("\n")}
+`;
+}
+
 export function renderProjectMarkdown({
   title,
   analysis,
@@ -148,6 +171,8 @@ status: implemented
 ${source ? `关联需求：[[${source}]]\n` : ""}
 
 ${analysis ? renderAnalysisMarkdown(analysis) : ""}
+
+${analysis && plan ? renderMigrationMapMarkdown({ analysis, plan }) : ""}
 
 ${plan ? renderPlanMarkdown(plan) : ""}
 `;
