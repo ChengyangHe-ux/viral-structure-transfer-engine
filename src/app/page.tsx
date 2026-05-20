@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   AlertCircle,
+  BarChart3,
   CheckCircle2,
   ClipboardList,
   Database,
@@ -12,6 +13,7 @@ import {
   Loader2,
   RefreshCw,
   Sparkles,
+  Trophy,
   Upload,
   Video,
   WandSparkles,
@@ -32,6 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type {
   MediaMeta,
   MigratedVideoPlan,
+  PlanEvaluation,
   PlanVersion,
   VideoStructureAnalysis,
 } from "@/lib/schemas";
@@ -130,6 +133,81 @@ function VersionTimeline({ version }: { version: PlanVersion }) {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function readinessText(readiness: PlanEvaluation["readiness"]) {
+  if (readiness === "ready") return "可直接演示";
+  if (readiness === "minor-edits") return "小修后演示";
+  return "需要补强";
+}
+
+function EvaluationPanel({ evaluation }: { evaluation: PlanEvaluation }) {
+  return (
+    <div className="space-y-4 rounded-lg border bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="success">{readinessText(evaluation.readiness)}</Badge>
+            <Badge variant="outline">推荐：{evaluation.bestVersion}</Badge>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {evaluation.judgePitch}
+          </p>
+        </div>
+        <div className="min-w-[108px] rounded-lg border bg-background px-4 py-3 text-center">
+          <p className="text-xs text-muted-foreground">综合评分</p>
+          <p className="mt-1 text-3xl font-semibold text-primary">
+            {evaluation.overallScore}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-5">
+        {evaluation.dimensions.map((dimension) => (
+          <div className="rounded-lg border bg-background p-3" key={dimension.key}>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-foreground">{dimension.label}</p>
+              <span className="text-xs font-semibold text-primary">{dimension.score}</span>
+            </div>
+            <div className="mt-2 h-1.5 rounded-full bg-secondary">
+              <div
+                className="h-1.5 rounded-full bg-primary"
+                style={{ width: `${dimension.score}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              {dimension.suggestion}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <p className="flex items-center gap-2 text-xs font-semibold text-foreground">
+            <Trophy className="size-3.5 text-primary" />
+            亮点
+          </p>
+          <ul className="mt-2 space-y-1.5 text-xs leading-5 text-muted-foreground">
+            {evaluation.strengths.map((strength) => (
+              <li key={strength}>{strength}</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <p className="flex items-center gap-2 text-xs font-semibold text-foreground">
+            <BarChart3 className="size-3.5 text-primary" />
+            优先修正
+          </p>
+          <ul className="mt-2 space-y-1.5 text-xs leading-5 text-muted-foreground">
+            {evaluation.priorityFixes.map((fix) => (
+              <li key={fix}>{fix}</li>
+            ))}
+          </ul>
+        </div>
       </div>
     </div>
   );
@@ -483,6 +561,8 @@ export default function Home() {
                       继承结构：{plan.inheritedStructure.join(" / ")}
                     </p>
                   </div>
+
+                  {plan.evaluation ? <EvaluationPanel evaluation={plan.evaluation} /> : null}
 
                   <VersionTimeline version={activePlanVersion} />
                 </div>

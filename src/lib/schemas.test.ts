@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createFallbackAnalysis, createFallbackPlan } from "@/lib/fallbacks";
+import { attachPlanEvaluation } from "@/lib/evaluation";
 import {
   migratedVideoPlanSchema,
   videoStructureAnalysisSchema,
@@ -21,14 +22,15 @@ describe("structured output schemas", () => {
       sampleTitle: "样例",
       sampleNotes: "开头展示结果，中段拆解步骤，结尾引导收藏。",
     });
-    const plan = createFallbackPlan({
+    const plan = attachPlanEvaluation(createFallbackPlan({
       projectTitle: "测试项目",
       targetBrief: "面向大学生的 AI 简历优化工具",
       analysis,
-    });
+    }), analysis);
 
     const parsed = migratedVideoPlanSchema.parse(plan);
     expect(parsed.versions).toHaveLength(3);
     expect(parsed.versions[0].scriptBeats[0]).toHaveProperty("replaceableAssets");
+    expect(parsed.evaluation?.overallScore).toBeGreaterThan(0);
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createFallbackAnalysis, createFallbackPlan } from "@/lib/fallbacks";
+import { attachPlanEvaluation } from "@/lib/evaluation";
 import { renderAnalysisMarkdown, renderPlanMarkdown } from "@/lib/markdown";
 
 describe("markdown rendering", () => {
@@ -20,15 +21,16 @@ describe("markdown rendering", () => {
       sampleTitle: "样例",
       sampleNotes: "强 Hook、证据推进、结尾转化。",
     });
-    const plan = createFallbackPlan({
+    const plan = attachPlanEvaluation(createFallbackPlan({
       projectTitle: "测试项目",
       targetBrief: "一款 AI 简历优化工具",
       analysis,
-    });
+    }), analysis);
     const markdown = renderPlanMarkdown(plan);
 
     expect(markdown).toContain("口播/字幕");
     expect(markdown).toContain("可替换素材");
     expect(markdown).toContain("稳妥转化版");
+    expect(markdown).toContain("质量诊断");
   });
 });

@@ -54,6 +54,25 @@ ${plan.strategySummary}
 ### 继承的样例结构
 ${list(plan.inheritedStructure)}
 
+${plan.evaluation ? `### 质量诊断
+
+- 综合评分：${plan.evaluation.overallScore}/100
+- 推荐主版本：${plan.evaluation.bestVersion}
+- 参赛讲法：${plan.evaluation.judgePitch}
+
+| 维度 | 分数 | 依据 | 优化建议 |
+| --- | --- | --- | --- |
+${plan.evaluation.dimensions
+  .map(
+    (dimension) =>
+      `| ${dimension.label} | ${dimension.score} | ${dimension.evidence} | ${dimension.suggestion} |`,
+  )
+  .join("\n")}
+
+优先修正：
+${list(plan.evaluation.priorityFixes)}
+` : ""}
+
 ${plan.versions
   .map(
     (version) => `### ${version.versionName}

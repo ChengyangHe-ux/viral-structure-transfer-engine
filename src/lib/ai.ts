@@ -8,6 +8,7 @@ import {
   type VideoStructureAnalysis,
 } from "@/lib/schemas";
 import { createFallbackAnalysis, createFallbackPlan } from "@/lib/fallbacks";
+import { attachPlanEvaluation } from "@/lib/evaluation";
 import { describeMediaForPrompt } from "@/lib/media";
 
 const provider = createOpenAICompatible({
@@ -67,8 +68,9 @@ export async function generateMigratedPlan(input: {
   analysis: VideoStructureAnalysis;
 }) {
   if (!hasAiConfig()) {
+    const plan = createFallbackPlan(input);
     return {
-      plan: createFallbackPlan(input),
+      plan: attachPlanEvaluation(plan, input.analysis),
       usedFallback: true,
       aiError: null,
     };
@@ -95,10 +97,15 @@ ${JSON.stringify(input.analysis, null, 2)}
 3. 输出侧重结构迁移，不要复刻样例中的具体人物、台词和画面。`,
     });
 
-    return { plan: result.object, usedFallback: false, aiError: null };
-  } catch (error) {
     return {
-      plan: createFallbackPlan(input),
+      plan: attachPlanEvaluation(result.object, input.analysis),
+      usedFallback: false,
+      aiError: null,
+    };
+  } catch (error) {
+    const plan = createFallbackPlan(input);
+    return {
+      plan: attachPlanEvaluation(plan, input.analysis),
       usedFallback: true,
       aiError: error instanceof Error ? error.message : "AI plan generation failed",
     };

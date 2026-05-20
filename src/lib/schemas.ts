@@ -89,6 +89,31 @@ export const planVersionSchema = z.object({
   hashtags: z.array(z.string().min(1)).default([]),
 });
 
+export const planEvaluationSchema = z.object({
+  overallScore: z.number().int().min(0).max(100),
+  readiness: z.enum(["ready", "minor-edits", "needs-work"]),
+  bestVersion: z.string().min(1),
+  dimensions: z.array(
+    z.object({
+      key: z.string().min(1),
+      label: z.string().min(1),
+      score: z.number().int().min(0).max(100),
+      evidence: z.string().min(1),
+      suggestion: z.string().min(1),
+    }),
+  ),
+  versionScores: z.array(
+    z.object({
+      versionName: z.string().min(1),
+      score: z.number().int().min(0).max(100),
+      rationale: z.string().min(1),
+    }),
+  ),
+  strengths: z.array(z.string().min(1)),
+  priorityFixes: z.array(z.string().min(1)),
+  judgePitch: z.string().min(1),
+});
+
 export const migratedVideoPlanSchema = z.object({
   projectTitle: z.string().min(1),
   targetBrief: z.string().min(4),
@@ -96,6 +121,7 @@ export const migratedVideoPlanSchema = z.object({
   inheritedStructure: z.array(z.string().min(1)),
   versions: z.array(planVersionSchema).min(1),
   evaluationChecklist: z.array(z.string().min(1)),
+  evaluation: planEvaluationSchema.optional(),
   productionNotes: z.array(z.string().min(1)).default([]),
 });
 
@@ -117,3 +143,4 @@ export type MediaMeta = z.infer<typeof mediaMetaSchema>;
 export type VideoStructureAnalysis = z.infer<typeof videoStructureAnalysisSchema>;
 export type MigratedVideoPlan = z.infer<typeof migratedVideoPlanSchema>;
 export type PlanVersion = z.infer<typeof planVersionSchema>;
+export type PlanEvaluation = z.infer<typeof planEvaluationSchema>;
