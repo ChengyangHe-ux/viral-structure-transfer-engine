@@ -96,6 +96,7 @@ export function evaluatePlan(
       (includesAny(allText, ["避免", "风险", "追溯"]) ? 18 : 0) +
       (analysis?.riskNotes.length ? 8 : 0),
   );
+  const materialScore = plan.materialAdaptation?.sufficiencyScore ?? 65;
 
   const dimensions = [
     {
@@ -130,6 +131,18 @@ export function evaluatePlan(
         editabilityScore >= 85 ? "创作者可直接替换素材。" : "每段增加更明确的可替换素材。",
     },
     {
+      key: "material-adaptation",
+      label: "素材适配",
+      score: materialScore,
+      evidence: plan.materialAdaptation
+        ? `识别 ${plan.materialAdaptation.missingSlotCount} 个素材缺口，并给出槽位级补全策略。`
+        : "当前方案未包含素材槽位诊断。",
+      suggestion:
+        materialScore >= 85
+          ? "素材覆盖较完整。"
+          : "优先补齐缺失槽位，或用字幕卡、包装卡片和结构重排补足。",
+    },
+    {
       key: "risk-control",
       label: "风险控制",
       score: complianceScore,
@@ -153,6 +166,7 @@ export function evaluatePlan(
     strengths: [
       "结构化输出覆盖 Hook、节奏、字幕、包装、卖点和结尾转化。",
       "多版本方案便于现场对比，能展示系统不是一次性文案生成器。",
+      "素材槽位诊断能展示真实创作中“素材不足时如何补全”的决策过程。",
       "每段脚本都保留可替换素材和风险提示，利于真实创作者二次编辑。",
     ],
     priorityFixes:

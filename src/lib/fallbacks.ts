@@ -13,6 +13,7 @@ type AnalysisFallbackInput = {
 type PlanFallbackInput = {
   projectTitle: string;
   targetBrief: string;
+  userMaterials?: string;
   analysis: VideoStructureAnalysis;
 };
 
@@ -142,9 +143,13 @@ export function createFallbackAnalysis({
 export function createFallbackPlan({
   projectTitle,
   targetBrief,
+  userMaterials,
   analysis,
 }: PlanFallbackInput): MigratedVideoPlan {
   const briefTopic = compactBrief(targetBrief);
+  const materialHint = userMaterials?.trim()
+    ? "结合用户已提供素材进行镜头编排"
+    : "素材不足时优先使用字幕卡、卖点卡片和结构重排补足表达";
   const baseBeats = [
     {
       timeRange: "0-3s",
@@ -154,7 +159,7 @@ export function createFallbackPlan({
       packagingStyle: "大字标题压底部，核心词高亮，开头 0.5 秒加音效点",
       sellingPointIntent: "先建立继续观看的理由",
       transitionAndRhythm: "第一镜头直接切结果，第二镜头切痛点，不做背景铺垫",
-      replaceableAssets: "结果截图、商品特写、用户痛点场景、对比画面",
+      replaceableAssets: `结果截图、商品特写、用户痛点场景、对比画面；${materialHint}`,
       riskNotes: "避免夸大无法证明的结果",
     },
     {
@@ -261,7 +266,9 @@ export function createFallbackPlan({
       "结尾是否只有一个清晰下一步",
     ],
     productionNotes: [
-      "拍摄前先准备结果画面、痛点画面、证据素材和行动入口四类素材",
+      userMaterials?.trim()
+        ? `用户素材线索：${userMaterials.trim().slice(0, 120)}`
+        : "当前用户素材不足，拍摄前建议补齐结果画面、痛点画面、证据素材和行动入口四类素材",
       "如果后续进入二期视频合成，可直接把 scriptBeats 转成 Remotion/FFmpeg 时间线",
     ],
   };

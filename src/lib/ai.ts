@@ -14,6 +14,7 @@ import {
   createRefinedFallbackPlan,
 } from "@/lib/fallbacks";
 import { attachPlanEvaluation } from "@/lib/evaluation";
+import { attachMaterialAdaptation } from "@/lib/materials";
 import { describeMediaForPrompt } from "@/lib/media";
 
 const provider = createOpenAICompatible({
@@ -69,13 +70,19 @@ export async function analyzeSample(input: {
 export async function generateMigratedPlan(input: {
   projectTitle: string;
   targetBrief: string;
+  userMaterials?: string;
   direction: string;
   analysis: VideoStructureAnalysis;
 }) {
   if (!hasAiConfig()) {
     const plan = createFallbackPlan(input);
+    const adaptedPlan = attachMaterialAdaptation({
+      plan,
+      targetBrief: input.targetBrief,
+      userMaterials: input.userMaterials,
+    });
     return {
-      plan: attachPlanEvaluation(plan, input.analysis),
+      plan: attachPlanEvaluation(adaptedPlan, input.analysis),
       usedFallback: true,
       aiError: null,
     };
@@ -91,6 +98,7 @@ export async function generateMigratedPlan(input: {
 
 项目：${input.projectTitle}
 新主题/商品 Brief：${input.targetBrief}
+用户素材：${input.userMaterials || "用户未提供明确素材，请识别缺口并给出补全策略。"}
 生成方向：${input.direction}
 
 样例结构分析：
@@ -98,19 +106,30 @@ ${JSON.stringify(input.analysis, null, 2)}
 
 要求：
 1. 每个版本都必须包含时间段、镜头目的、画面建议、口播/字幕、包装风格、卖点意图、转场/节奏、可替换素材、风险提示。
-2. 方案应可被创作者直接二次编辑。
-3. 输出侧重结构迁移，不要复刻样例中的具体人物、台词和画面。`,
+2. 必须考虑素材是否足够支撑目标结构；缺素材时用结构重排、文案/字幕补全、包装补全、AIGC 生成建议或现有素材复用补足。
+3. 方案应可被创作者直接二次编辑。
+4. 输出侧重结构迁移，不要复刻样例中的具体人物、台词和画面。`,
+    });
+    const adaptedPlan = attachMaterialAdaptation({
+      plan: result.object,
+      targetBrief: input.targetBrief,
+      userMaterials: input.userMaterials,
     });
 
     return {
-      plan: attachPlanEvaluation(result.object, input.analysis),
+      plan: attachPlanEvaluation(adaptedPlan, input.analysis),
       usedFallback: false,
       aiError: null,
     };
   } catch (error) {
     const plan = createFallbackPlan(input);
+    const adaptedPlan = attachMaterialAdaptation({
+      plan,
+      targetBrief: input.targetBrief,
+      userMaterials: input.userMaterials,
+    });
     return {
-      plan: attachPlanEvaluation(plan, input.analysis),
+      plan: attachPlanEvaluation(adaptedPlan, input.analysis),
       usedFallback: true,
       aiError: error instanceof Error ? error.message : "AI plan generation failed",
     };

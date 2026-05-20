@@ -13,6 +13,7 @@ model Project {
   sampleUrl      String?
   sampleNotes    String
   targetBrief    String
+  userMaterials  String          @default("")
   status         String          @default("draft")
   mediaPath      String?
   mediaMeta      Json?

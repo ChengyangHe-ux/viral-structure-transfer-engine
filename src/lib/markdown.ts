@@ -54,6 +54,23 @@ ${plan.strategySummary}
 ### 继承的样例结构
 ${list(plan.inheritedStructure)}
 
+${plan.materialAdaptation ? `### 素材缺口与补全
+
+- 素材充分度：${plan.materialAdaptation.sufficiencyScore}/100
+- 缺口数量：${plan.materialAdaptation.missingSlotCount}
+- 素材概览：${plan.materialAdaptation.providedMaterialsSummary}
+- 时间线调整：${plan.materialAdaptation.timelineAdjustment}
+
+| 结构槽位 | 匹配状态 | 需要素材 | 当前匹配 | 影响 | 补全策略 |
+| --- | --- | --- | --- | --- | --- |
+${plan.materialAdaptation.slots
+  .map(
+    (slot) =>
+      `| ${slot.slotName} | ${slot.fit} | ${slot.requiredMaterial} | ${slot.matchedMaterial} | ${slot.impact} | ${slot.completionPlan} |`,
+  )
+  .join("\n")}
+` : ""}
+
 ${plan.evaluation ? `### 质量诊断
 
 - 综合评分：${plan.evaluation.overallScore}/100

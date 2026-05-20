@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
     const { plan, usedFallback, aiError } = await generateMigratedPlan({
       projectTitle: project.title,
       targetBrief: input.targetBrief,
+      userMaterials: input.userMaterials,
       direction: input.direction,
       analysis,
     });
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
       where: { id: project.id },
       data: {
         targetBrief: input.targetBrief,
+        userMaterials: input.userMaterials,
         status: "planned",
       },
     });

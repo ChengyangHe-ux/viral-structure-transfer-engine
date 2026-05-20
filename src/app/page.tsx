@@ -11,6 +11,7 @@ import {
   FileJson,
   FileText,
   Loader2,
+  PackageCheck,
   PencilLine,
   RefreshCw,
   Sparkles,
@@ -35,6 +36,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { demoPresets } from "@/lib/demo-presets";
 import type {
   MediaMeta,
+  MaterialAdaptation,
   MigratedVideoPlan,
   PlanEvaluation,
   PlanVersion,
@@ -215,12 +217,75 @@ function EvaluationPanel({ evaluation }: { evaluation: PlanEvaluation }) {
   );
 }
 
+function fitText(fit: MaterialAdaptation["slots"][number]["fit"]) {
+  if (fit === "matched") return "已匹配";
+  if (fit === "partial") return "部分匹配";
+  return "缺口";
+}
+
+function MaterialAdaptationPanel({
+  adaptation,
+}: {
+  adaptation: MaterialAdaptation;
+}) {
+  return (
+    <div className="space-y-4 rounded-lg border bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={adaptation.missingSlotCount ? "warning" : "success"}>
+              缺口 {adaptation.missingSlotCount}
+            </Badge>
+            <Badge variant="outline">素材充分度 {adaptation.sufficiencyScore}/100</Badge>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {adaptation.providedMaterialsSummary}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {adaptation.timelineAdjustment}
+          </p>
+        </div>
+        <PackageCheck className="size-8 shrink-0 text-primary" />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {adaptation.slots.map((slot) => (
+          <div className="rounded-lg border bg-background p-3" key={slot.slotId}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">{slot.slotName}</p>
+              <Badge
+                variant={
+                  slot.fit === "matched"
+                    ? "success"
+                    : slot.fit === "partial"
+                      ? "warning"
+                      : "outline"
+                }
+              >
+                {fitText(slot.fit)}
+              </Badge>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              {slot.requiredFor}
+            </p>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              {slot.matchedMaterial}
+            </p>
+            <p className="mt-2 text-xs font-medium text-foreground">补全：{slot.completionPlan}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [projectTitle, setProjectTitle] = useState("爆款结构迁移演示项目");
   const [sampleTitle, setSampleTitle] = useState("优质短视频样例");
   const [sampleUrl, setSampleUrl] = useState("");
   const [sampleNotes, setSampleNotes] = useState("");
   const [targetBrief, setTargetBrief] = useState("");
+  const [userMaterials, setUserMaterials] = useState("");
   const [sampleFile, setSampleFile] = useState<File | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<VideoStructureAnalysis | null>(null);
@@ -291,6 +356,7 @@ export default function Home() {
     setSampleTitle(preset.sampleTitle);
     setSampleNotes(preset.sampleNotes);
     setTargetBrief(preset.targetBrief);
+    setUserMaterials(preset.userMaterials);
     setSampleUrl("");
     setSampleFile(null);
     setAnalysis(null);
@@ -323,6 +389,7 @@ export default function Home() {
       body: JSON.stringify({
         projectId,
         targetBrief,
+        userMaterials,
         direction: "比赛 MVP：生成可编辑方案脚本，保留二期视频时间线扩展空间",
       }),
     });
@@ -533,6 +600,15 @@ export default function Home() {
                 value={targetBrief}
                 onChange={(event) => setTargetBrief(event.target.value)}
               />
+              <div className="space-y-2">
+                <Label htmlFor="userMaterials">用户素材</Label>
+                <Textarea
+                  id="userMaterials"
+                  placeholder="描述已有素材，例如：产品图、操作录屏、使用场景、评价截图、CTA 入口；也可以说明缺少哪些素材。"
+                  value={userMaterials}
+                  onChange={(event) => setUserMaterials(event.target.value)}
+                />
+              </div>
               <Button
                 className="w-full"
                 disabled={!analysis || status.type === "loading"}
@@ -668,6 +744,10 @@ export default function Home() {
                   </div>
 
                   {plan.evaluation ? <EvaluationPanel evaluation={plan.evaluation} /> : null}
+
+                  {plan.materialAdaptation ? (
+                    <MaterialAdaptationPanel adaptation={plan.materialAdaptation} />
+                  ) : null}
 
                   <VersionTimeline version={activePlanVersion} />
                 </div>

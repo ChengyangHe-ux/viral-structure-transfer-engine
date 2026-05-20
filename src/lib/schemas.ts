@@ -114,6 +114,32 @@ export const planEvaluationSchema = z.object({
   judgePitch: z.string().min(1),
 });
 
+export const materialAdaptationSchema = z.object({
+  providedMaterialsSummary: z.string().min(1),
+  sufficiencyScore: z.number().int().min(0).max(100),
+  missingSlotCount: z.number().int().min(0),
+  slots: z.array(
+    z.object({
+      slotId: z.string().min(1),
+      slotName: z.string().min(1),
+      requiredFor: z.string().min(1),
+      requiredMaterial: z.string().min(1),
+      matchedMaterial: z.string().min(1),
+      fit: z.enum(["matched", "partial", "missing"]),
+      impact: z.string().min(1),
+      completionStrategy: z.enum([
+        "structure-reorder",
+        "copy-caption",
+        "visual-packaging",
+        "aigc-generation",
+        "reuse-existing",
+      ]),
+      completionPlan: z.string().min(1),
+    }),
+  ),
+  timelineAdjustment: z.string().min(1),
+});
+
 export const migratedVideoPlanSchema = z.object({
   projectTitle: z.string().min(1),
   targetBrief: z.string().min(4),
@@ -121,6 +147,7 @@ export const migratedVideoPlanSchema = z.object({
   inheritedStructure: z.array(z.string().min(1)),
   versions: z.array(planVersionSchema).min(1),
   evaluationChecklist: z.array(z.string().min(1)),
+  materialAdaptation: materialAdaptationSchema.optional(),
   evaluation: planEvaluationSchema.optional(),
   productionNotes: z.array(z.string().min(1)).default([]),
 });
@@ -136,6 +163,7 @@ export const analyzeSampleRequestSchema = z.object({
 export const generatePlanRequestSchema = z.object({
   projectId: z.string().min(1),
   targetBrief: z.string().min(4),
+  userMaterials: z.string().default(""),
   direction: z.string().default("比赛 MVP：优先输出可编辑方案脚本"),
 });
 
@@ -149,3 +177,4 @@ export type VideoStructureAnalysis = z.infer<typeof videoStructureAnalysisSchema
 export type MigratedVideoPlan = z.infer<typeof migratedVideoPlanSchema>;
 export type PlanVersion = z.infer<typeof planVersionSchema>;
 export type PlanEvaluation = z.infer<typeof planEvaluationSchema>;
+export type MaterialAdaptation = z.infer<typeof materialAdaptationSchema>;

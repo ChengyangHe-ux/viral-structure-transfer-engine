@@ -22,7 +22,7 @@ describe("plan evaluation", () => {
     const evaluation = evaluatePlan(plan, analysis);
 
     expect(evaluation.overallScore).toBeGreaterThanOrEqual(75);
-    expect(evaluation.dimensions).toHaveLength(5);
+    expect(evaluation.dimensions).toHaveLength(6);
     expect(evaluation.bestVersion.length).toBeGreaterThan(0);
   });
 
