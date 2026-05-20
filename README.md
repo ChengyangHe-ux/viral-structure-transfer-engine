@@ -45,6 +45,8 @@ ASR_PROVIDER="manual"
 
 - [比赛演示脚本](docs/DEMO_SCRIPT.md)
 - [AI 架构、工具协议与安全边界](docs/ARCHITECTURE.md)
+- [参赛提交清单](docs/SUBMISSION.md)
+- [视频产物 Case](cases/ai-resume-demo-case.md)
 
 ## 参赛亮点
 
