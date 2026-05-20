@@ -11,6 +11,7 @@ import {
   FileJson,
   FileText,
   Loader2,
+  PencilLine,
   RefreshCw,
   Sparkles,
   Trophy,
@@ -226,6 +227,7 @@ export default function Home() {
   const [plan, setPlan] = useState<MigratedVideoPlan | null>(null);
   const [analysisMarkdown, setAnalysisMarkdown] = useState("");
   const [planMarkdown, setPlanMarkdown] = useState("");
+  const [refineInstruction, setRefineInstruction] = useState("");
   const [activeVersion, setActiveVersion] = useState(0);
   const [status, setStatus] = useState<StatusState>({
     type: "idle",
@@ -249,6 +251,7 @@ export default function Home() {
     setStatus({ type: "loading", message: "正在拆解样例结构..." });
     setPlan(null);
     setPlanMarkdown("");
+    setRefineInstruction("");
     setActiveVersion(0);
 
     const formData = new FormData();
@@ -294,6 +297,7 @@ export default function Home() {
     setPlan(null);
     setAnalysisMarkdown("");
     setPlanMarkdown("");
+    setRefineInstruction("");
     setProjectId(null);
     setActiveVersion(0);
     setStatus({
@@ -337,6 +341,43 @@ export default function Home() {
       message: payload.usedFallback
         ? "未检测到可用 AI 密钥，已使用本地演示策略生成脚本。"
         : "迁移方案生成完成。",
+    });
+  }
+
+  async function handleRefinePlan() {
+    if (!projectId || !plan) {
+      setStatus({ type: "error", message: "请先生成迁移方案。" });
+      return;
+    }
+    if (!refineInstruction.trim()) {
+      setStatus({ type: "error", message: "请输入修改指令。" });
+      return;
+    }
+
+    setStatus({ type: "loading", message: "正在按自然语言指令修订方案..." });
+    const response = await fetch("/api/refine-plan", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        instruction: refineInstruction,
+      }),
+    });
+    const payload = (await response.json()) as PlanResponse;
+
+    if (!response.ok) {
+      setStatus({ type: "error", message: payload.error || "方案修订失败" });
+      return;
+    }
+
+    setPlan(payload.plan);
+    setPlanMarkdown(payload.markdown);
+    setActiveVersion(0);
+    setStatus({
+      type: payload.usedFallback ? "warning" : "success",
+      message: payload.usedFallback
+        ? "未检测到可用 AI 密钥，已使用本地演示策略完成修订。"
+        : "方案已按自然语言指令修订。",
     });
   }
 
@@ -500,6 +541,34 @@ export default function Home() {
               >
                 {status.type === "loading" ? <Loader2 className="animate-spin" /> : <RefreshCw />}
                 生成迁移方案
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <PencilLine className="size-4 text-primary" />
+                自然语言编辑
+              </CardTitle>
+              <CardDescription>用一句话调整当前方案，系统会保留结构并重写版本。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Textarea
+                disabled={!plan}
+                placeholder="例如：开头更强一点，语气更像真实学姐种草，并补充可信证据。"
+                value={refineInstruction}
+                onChange={(event) => setRefineInstruction(event.target.value)}
+              />
+              <Button
+                className="w-full"
+                disabled={!plan || status.type === "loading"}
+                onClick={handleRefinePlan}
+                type="button"
+                variant="outline"
+              >
+                {status.type === "loading" ? <Loader2 className="animate-spin" /> : <PencilLine />}
+                应用修改
               </Button>
             </CardContent>
           </Card>

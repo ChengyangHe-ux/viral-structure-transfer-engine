@@ -5,9 +5,14 @@ import {
   migratedVideoPlanSchema,
   videoStructureAnalysisSchema,
   type MediaMeta,
+  type MigratedVideoPlan,
   type VideoStructureAnalysis,
 } from "@/lib/schemas";
-import { createFallbackAnalysis, createFallbackPlan } from "@/lib/fallbacks";
+import {
+  createFallbackAnalysis,
+  createFallbackPlan,
+  createRefinedFallbackPlan,
+} from "@/lib/fallbacks";
 import { attachPlanEvaluation } from "@/lib/evaluation";
 import { describeMediaForPrompt } from "@/lib/media";
 
@@ -108,6 +113,56 @@ ${JSON.stringify(input.analysis, null, 2)}
       plan: attachPlanEvaluation(plan, input.analysis),
       usedFallback: true,
       aiError: error instanceof Error ? error.message : "AI plan generation failed",
+    };
+  }
+}
+
+export async function refineMigratedPlan(input: {
+  projectTitle: string;
+  instruction: string;
+  analysis: VideoStructureAnalysis;
+  plan: MigratedVideoPlan;
+}) {
+  if (!hasAiConfig()) {
+    const refinedPlan = createRefinedFallbackPlan(input.plan, input.instruction);
+    return {
+      plan: attachPlanEvaluation(refinedPlan, input.analysis),
+      usedFallback: true,
+      aiError: null,
+    };
+  }
+
+  try {
+    const result = await generateObject({
+      model: provider(process.env.AI_MODEL_TEXT || "gpt-4.1-mini"),
+      schema: migratedVideoPlanSchema,
+      system:
+        "你是短视频创作平台的自然语言编辑器。基于用户修改指令，保留原结构并生成修订后的完整方案。",
+      prompt: `请根据用户修改指令重写方案，保持 JSON 结构完整。
+
+项目：${input.projectTitle}
+修改指令：${input.instruction}
+
+样例结构分析：
+${JSON.stringify(input.analysis, null, 2)}
+
+当前方案：
+${JSON.stringify(input.plan, null, 2)}
+
+要求：保留可迁移结构，不复刻样例内容；输出完整多版本方案，而不是局部补丁。`,
+    });
+
+    return {
+      plan: attachPlanEvaluation(result.object, input.analysis),
+      usedFallback: false,
+      aiError: null,
+    };
+  } catch (error) {
+    const refinedPlan = createRefinedFallbackPlan(input.plan, input.instruction);
+    return {
+      plan: attachPlanEvaluation(refinedPlan, input.analysis),
+      usedFallback: true,
+      aiError: error instanceof Error ? error.message : "AI plan refinement failed",
     };
   }
 }

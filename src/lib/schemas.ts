@@ -139,6 +139,11 @@ export const generatePlanRequestSchema = z.object({
   direction: z.string().default("比赛 MVP：优先输出可编辑方案脚本"),
 });
 
+export const refinePlanRequestSchema = z.object({
+  projectId: z.string().min(1),
+  instruction: z.string().min(4),
+});
+
 export type MediaMeta = z.infer<typeof mediaMetaSchema>;
 export type VideoStructureAnalysis = z.infer<typeof videoStructureAnalysisSchema>;
 export type MigratedVideoPlan = z.infer<typeof migratedVideoPlanSchema>;

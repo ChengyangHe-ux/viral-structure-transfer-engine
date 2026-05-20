@@ -266,3 +266,56 @@ export function createFallbackPlan({
     ],
   };
 }
+
+export function createRefinedFallbackPlan(
+  plan: MigratedVideoPlan,
+  instruction: string,
+): MigratedVideoPlan {
+  const refined = JSON.parse(JSON.stringify(plan)) as MigratedVideoPlan;
+  const directive = instruction.trim();
+  const wantsStrongerHook = /hook|开头|前\s*3|停留|反差|冲突/i.test(directive);
+  const wantsSofterTone = /口语|自然|种草|年轻|轻松|真实/i.test(directive);
+  const wantsMoreProof = /证据|数据|背书|可信|案例|评价/i.test(directive);
+
+  refined.strategySummary = `${refined.strategySummary} 已按自然语言指令修订：${directive}`;
+  refined.productionNotes = [
+    `修订记录：${directive}`,
+    ...refined.productionNotes.filter((note) => !note.startsWith("修订记录：")),
+  ];
+
+  refined.versions = refined.versions.map((version) => ({
+    ...version,
+    captionTitle: `${version.captionTitle}（修订版）`,
+    scriptBeats: version.scriptBeats.map((beat, index) => {
+      if (index === 0 && wantsStrongerHook) {
+        return {
+          ...beat,
+          visualSuggestion: `先用更强对比画面承接修订要求“${directive}”，再进入原有结果展示。`,
+          voiceoverOrSubtitle: `先别急着划走，${directive}。`,
+          transitionAndRhythm: "0.5 秒内给出反差画面，随后快速切到结果证明。",
+        };
+      }
+
+      if (wantsSofterTone) {
+        return {
+          ...beat,
+          voiceoverOrSubtitle: beat.voiceoverOrSubtitle.replace("第一，", "先看第一点：").replace("第二，", "再看第二点："),
+          packagingStyle: `${beat.packagingStyle}；字幕语气更口语，减少硬广感。`,
+        };
+      }
+
+      if (index === 2 && wantsMoreProof) {
+        return {
+          ...beat,
+          visualSuggestion: `${beat.visualSuggestion}，额外补一帧真实数据、评价截图或过程记录。`,
+          sellingPointIntent: `${beat.sellingPointIntent}，同时补足可信证据。`,
+          riskNotes: "新增证据必须真实可追溯，避免虚构评价。",
+        };
+      }
+
+      return beat;
+    }),
+  }));
+
+  return refined;
+}
