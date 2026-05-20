@@ -31,6 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { demoPresets } from "@/lib/demo-presets";
 import type {
   MediaMeta,
   MigratedVideoPlan,
@@ -282,6 +283,25 @@ export default function Home() {
     });
   }
 
+  function applyDemoPreset(preset: (typeof demoPresets)[number]) {
+    setProjectTitle(preset.projectTitle);
+    setSampleTitle(preset.sampleTitle);
+    setSampleNotes(preset.sampleNotes);
+    setTargetBrief(preset.targetBrief);
+    setSampleUrl("");
+    setSampleFile(null);
+    setAnalysis(null);
+    setPlan(null);
+    setAnalysisMarkdown("");
+    setPlanMarkdown("");
+    setProjectId(null);
+    setActiveVersion(0);
+    setStatus({
+      type: "idle",
+      message: `已载入演示预设：${preset.label}。`,
+    });
+  }
+
   async function handleGeneratePlan() {
     if (!projectId || !analysis) {
       setStatus({ type: "error", message: "请先完成样例结构拆解。" });
@@ -387,6 +407,22 @@ export default function Home() {
               <CardDescription>样例视频、链接或人工观察文本至少填写一项。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>演示预设</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {demoPresets.map((preset) => (
+                    <Button
+                      key={preset.label}
+                      onClick={() => applyDemoPreset(preset)}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="projectTitle">项目名称</Label>
                 <Input
