@@ -13,6 +13,12 @@ npm run dev
 
 默认地址：`http://localhost:3000`
 
+## 提交前自检
+
+```bash
+npm run submission:check
+```
+
 ## AI 配置
 
 `.env` 使用 OpenAI-compatible 配置，可接 OpenAI、火山方舟或其他兼容服务：
