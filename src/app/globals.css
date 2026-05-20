@@ -59,6 +59,26 @@ textarea {
   gap: 1rem;
 }
 
+.workspace-grid {
+  align-items: start;
+}
+
+.control-rail,
+.result-rail {
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .control-rail {
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    padding-right: 0.25rem;
+    scrollbar-gutter: stable;
+  }
+}
+
 @media (max-width: 640px) {
   .timeline-row {
     grid-template-columns: 1fr;

@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { demoPresets } from "@/lib/demo-presets";
+import { renderMigrationMapMarkdown } from "@/lib/markdown";
 import {
   buildMigrationMap,
   materialFitText,
@@ -489,6 +490,19 @@ export default function Home() {
     if (!analysis || !plan || !activePlanVersion) return [];
     return buildMigrationMap({ analysis, plan, version: activePlanVersion });
   }, [analysis, plan, activePlanVersion]);
+  const previewMarkdown = useMemo(() => {
+    if (analysis && plan) {
+      return [
+        analysisMarkdown,
+        renderMigrationMapMarkdown({ analysis, plan }),
+        planMarkdown,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
+
+    return [analysisMarkdown, planMarkdown].filter(Boolean).join("\n");
+  }, [analysis, analysisMarkdown, plan, planMarkdown]);
 
   async function handleAnalyze() {
     if (!sampleNotes.trim() && !sampleFile && !sampleUrl.trim()) {
@@ -690,8 +704,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[390px_minmax(0,1fr)] lg:px-8">
-        <div className="space-y-5">
+      <section className="workspace-grid mx-auto grid max-w-7xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[390px_minmax(0,1fr)] lg:px-8">
+        <div className="control-rail space-y-5">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -836,7 +850,7 @@ export default function Home() {
           </Card>
         </div>
 
-        <div className="space-y-5">
+        <div className="result-rail space-y-5">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -959,18 +973,20 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          {(analysisMarkdown || planMarkdown) && (
+          {previewMarkdown && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="size-4 text-primary" />
-                  Markdown 预览
+                  完整项目稿预览
                 </CardTitle>
-                <CardDescription>导出内容可直接放入 Obsidian 继续编辑。</CardDescription>
+                <CardDescription>
+                  预览内容与导出稿保持一致，可直接进入 Obsidian 或剪辑协作流程。
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <pre className="max-h-[420px] overflow-auto rounded-lg border bg-slate-950 p-4 text-xs leading-5 text-slate-100">
-                  {`${analysisMarkdown}\n${planMarkdown}`}
+                  {previewMarkdown}
                 </pre>
               </CardContent>
             </Card>
