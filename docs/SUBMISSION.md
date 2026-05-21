@@ -7,6 +7,7 @@
 - AI 架构、工具协议与安全边界：`docs/ARCHITECTURE.md`
 - 演示讲稿与录屏流程：`docs/DEMO_SCRIPT.md`
 - 视频产物 case：`cases/ai-resume-demo-case.md`
+- 离线可复现实验案例（自动生成）：`cases/generated/README.md`
 
 ## 运行方式
 
@@ -28,6 +29,14 @@ npm run submission:check
 ```
 
 该命令会检查工作区是否干净、关键文档是否齐全、以及是否存在被误提交的 `.env`/数据库/构建产物等；随后运行 `lint`/`test`/`build`，用于提交前的稳定性验证。
+
+## 离线案例生成（推荐）
+
+```bash
+npm run cases:generate
+```
+
+该命令会基于 `src/lib/demo-presets.ts` 生成 `cases/generated/*`，用于在无模型密钥时也能展示“样例拆解 → 结构迁移 → 映射 → 质量诊断”的完整链路，并提供可复现实验材料。
 
 ## 评分覆盖
 

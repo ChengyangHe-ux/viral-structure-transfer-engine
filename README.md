@@ -19,6 +19,12 @@ npm run dev
 npm run submission:check
 ```
 
+## 离线案例生成
+
+```bash
+npm run cases:generate
+```
+
 ## AI 配置
 
 `.env` 使用 OpenAI-compatible 配置，可接 OpenAI、火山方舟或其他兼容服务：
@@ -53,6 +59,7 @@ ASR_PROVIDER="manual"
 - [AI 架构、工具协议与安全边界](docs/ARCHITECTURE.md)
 - [参赛提交清单](docs/SUBMISSION.md)
 - [视频产物 Case](cases/ai-resume-demo-case.md)
+- [离线可复现实验案例](cases/generated/README.md)
 
 ## 参赛亮点
 

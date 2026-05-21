@@ -1,4 +1,13 @@
-export const demoPresets = [
+export type DemoPreset = {
+  label: string;
+  projectTitle: string;
+  sampleTitle: string;
+  sampleNotes: string;
+  targetBrief: string;
+  userMaterials: string;
+};
+
+export const demoPresets: DemoPreset[] = [
   {
     label: "AI 简历",
     projectTitle: "AI 简历工具结构迁移",
@@ -32,4 +41,4 @@ export const demoPresets = [
     userMaterials:
       "已有素材：产品包装图、冰杯成品图、门店海报和限时口味文案；缺少冲泡过程、真实评价和通勤场景镜头。",
   },
-] as const;
+] satisfies DemoPreset[];

@@ -44,6 +44,10 @@ try {
   assertFile("docs/DEMO_SCRIPT.md");
   assertFile("docs/SUBMISSION.md");
   assertFile("cases/ai-resume-demo-case.md");
+  assertFile("cases/generated/README.md");
+  assertFile("cases/generated/demo-ai-简历.md");
+  assertFile("cases/generated/demo-学习平板.md");
+  assertFile("cases/generated/demo-咖啡新品.md");
 
   const forbidden = [
     ".env",
