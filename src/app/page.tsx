@@ -36,7 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { demoPresets } from "@/lib/demo-presets";
-import { renderMigrationMapMarkdown } from "@/lib/markdown";
+import { renderMigrationMapMarkdown, renderPlanMarkdown } from "@/lib/markdown";
 import {
   buildMigrationMap,
   materialFitText,
@@ -142,6 +142,175 @@ function VersionTimeline({ version }: { version: PlanVersion }) {
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
                   {beat.sellingPointIntent}；{beat.replaceableAssets}
                 </p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type EditableBeatField =
+  | "timeRange"
+  | "shotPurpose"
+  | "visualSuggestion"
+  | "voiceoverOrSubtitle"
+  | "packagingStyle"
+  | "sellingPointIntent"
+  | "transitionAndRhythm"
+  | "replaceableAssets"
+  | "riskNotes";
+
+function EditableVersionPanel({
+  version,
+  onChange,
+  onCancel,
+  onSave,
+  saving,
+}: {
+  version: PlanVersion;
+  onChange: (next: PlanVersion) => void;
+  onCancel: () => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  function setField(field: keyof PlanVersion, value: string) {
+    onChange({ ...version, [field]: value });
+  }
+
+  function setBeatField(index: number, field: EditableBeatField, value: string) {
+    const nextBeats = version.scriptBeats.map((beat, beatIndex) =>
+      beatIndex === index ? { ...beat, [field]: value } : beat,
+    );
+    onChange({ ...version, scriptBeats: nextBeats });
+  }
+
+  function setBeatFields(
+    index: number,
+    patch: Partial<PlanVersion["scriptBeats"][number]>,
+  ) {
+    const nextBeats = version.scriptBeats.map((beat, beatIndex) =>
+      beatIndex === index ? { ...beat, ...patch } : beat,
+    );
+    onChange({ ...version, scriptBeats: nextBeats });
+  }
+
+  return (
+    <div className="space-y-4 rounded-lg border bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">编辑模式</Badge>
+            <Badge variant="outline">{version.versionName}</Badge>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            直接改时间线字段，导出稿会自动更新；适合比赛答辩时现场“改一两处就能落地”。
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onCancel} disabled={saving}>
+            取消
+          </Button>
+          <Button size="sm" onClick={onSave} disabled={saving}>
+            {saving ? <Loader2 className="animate-spin" /> : <PencilLine className="size-4" />}
+            保存为新稿
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="edit-cover-title">封面标题</Label>
+          <Input
+            id="edit-cover-title"
+            value={version.coverTitle}
+            onChange={(event) => setField("coverTitle", event.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-caption-title">发布标题</Label>
+          <Input
+            id="edit-caption-title"
+            value={version.captionTitle}
+            onChange={(event) => setField("captionTitle", event.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {version.scriptBeats.map((beat, index) => (
+          <div className="rounded-lg border bg-background p-3" key={`${beat.timeRange}-${index}`}>
+            <div className="grid gap-3 md:grid-cols-[140px_1fr] md:items-start">
+              <div className="space-y-2">
+                <Label>时间段</Label>
+                <Input
+                  value={beat.timeRange}
+                  onChange={(event) => setBeatField(index, "timeRange", event.target.value)}
+                />
+                <Label>镜头目的</Label>
+                <Input
+                  value={beat.shotPurpose}
+                  onChange={(event) => setBeatField(index, "shotPurpose", event.target.value)}
+                />
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>画面建议</Label>
+                  <Textarea
+                    value={beat.visualSuggestion}
+                    onChange={(event) =>
+                      setBeatField(index, "visualSuggestion", event.target.value)
+                    }
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>口播/字幕</Label>
+                  <Textarea
+                    value={beat.voiceoverOrSubtitle}
+                    onChange={(event) =>
+                      setBeatField(index, "voiceoverOrSubtitle", event.target.value)
+                    }
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>包装与节奏</Label>
+                  <Textarea
+                    value={`${beat.packagingStyle}；${beat.transitionAndRhythm}`}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      const parts = value.split("；");
+                      const packagingStyle = parts[0]?.trim() || beat.packagingStyle;
+                      const transitionAndRhythm = parts.slice(1).join("；").trim() || beat.transitionAndRhythm;
+                      setBeatFields(index, { packagingStyle, transitionAndRhythm });
+                    }}
+                    rows={2}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>卖点与素材</Label>
+                  <Textarea
+                    value={`${beat.sellingPointIntent}；${beat.replaceableAssets}`}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      const parts = value.split("；");
+                      const sellingPointIntent = parts[0]?.trim() || beat.sellingPointIntent;
+                      const replaceableAssets = parts.slice(1).join("；").trim() || beat.replaceableAssets;
+                      setBeatFields(index, { sellingPointIntent, replaceableAssets });
+                    }}
+                    rows={2}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>风险提示</Label>
+                  <Textarea
+                    value={beat.riskNotes}
+                    onChange={(event) => setBeatField(index, "riskNotes", event.target.value)}
+                    rows={2}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -474,9 +643,11 @@ export default function Home() {
   const [analysis, setAnalysis] = useState<VideoStructureAnalysis | null>(null);
   const [plan, setPlan] = useState<MigratedVideoPlan | null>(null);
   const [analysisMarkdown, setAnalysisMarkdown] = useState("");
-  const [planMarkdown, setPlanMarkdown] = useState("");
   const [refineInstruction, setRefineInstruction] = useState("");
   const [activeVersion, setActiveVersion] = useState(0);
+  const [editMode, setEditMode] = useState(false);
+  const [draftVersion, setDraftVersion] = useState<PlanVersion | null>(null);
+  const [savingPlan, setSavingPlan] = useState(false);
   const [status, setStatus] = useState<StatusState>({
     type: "idle",
     message: "上传样例或填入观察文本后即可开始拆解。",
@@ -495,14 +666,16 @@ export default function Home() {
       return [
         analysisMarkdown,
         renderMigrationMapMarkdown({ analysis, plan }),
-        planMarkdown,
+        renderPlanMarkdown(plan),
       ]
         .filter(Boolean)
         .join("\n");
     }
 
-    return [analysisMarkdown, planMarkdown].filter(Boolean).join("\n");
-  }, [analysis, analysisMarkdown, plan, planMarkdown]);
+    return [analysisMarkdown, plan ? renderPlanMarkdown(plan) : ""]
+      .filter(Boolean)
+      .join("\n");
+  }, [analysis, analysisMarkdown, plan]);
 
   async function handleAnalyze() {
     if (!sampleNotes.trim() && !sampleFile && !sampleUrl.trim()) {
@@ -515,9 +688,10 @@ export default function Home() {
 
     setStatus({ type: "loading", message: "正在拆解样例结构..." });
     setPlan(null);
-    setPlanMarkdown("");
     setRefineInstruction("");
     setActiveVersion(0);
+    setEditMode(false);
+    setDraftVersion(null);
 
     const formData = new FormData();
     formData.append("projectTitle", projectTitle);
@@ -551,6 +725,46 @@ export default function Home() {
     });
   }
 
+  async function handleSaveEditedPlan() {
+    if (!projectId || !plan || !draftVersion) return;
+
+    const nextPlan: MigratedVideoPlan = {
+      ...plan,
+      versions: plan.versions.map((version, index) =>
+        index === activeVersion ? draftVersion : version,
+      ),
+    };
+
+    setSavingPlan(true);
+    try {
+      const response = await fetch(`/api/projects/${projectId}/save-plan`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          plan: nextPlan,
+          note: `edit-${draftVersion.versionName}`,
+        }),
+      });
+      const data = (await response.json()) as { plan?: MigratedVideoPlan; error?: string };
+
+      if (!response.ok) {
+        throw new Error(data.error || "保存失败");
+      }
+
+      if (data.plan) setPlan(data.plan);
+      setEditMode(false);
+      setDraftVersion(null);
+      setStatus({ type: "success", message: "已保存编辑稿，可直接导出。" });
+    } catch (error) {
+      setStatus({
+        type: "error",
+        message: error instanceof Error ? error.message : "保存失败",
+      });
+    } finally {
+      setSavingPlan(false);
+    }
+  }
+
   function applyDemoPreset(preset: (typeof demoPresets)[number]) {
     setProjectTitle(preset.projectTitle);
     setSampleTitle(preset.sampleTitle);
@@ -562,10 +776,11 @@ export default function Home() {
     setAnalysis(null);
     setPlan(null);
     setAnalysisMarkdown("");
-    setPlanMarkdown("");
     setRefineInstruction("");
     setProjectId(null);
     setActiveVersion(0);
+    setEditMode(false);
+    setDraftVersion(null);
     setStatus({
       type: "idle",
       message: `已载入演示预设：${preset.label}。`,
@@ -601,8 +816,9 @@ export default function Home() {
     }
 
     setPlan(payload.plan);
-    setPlanMarkdown(payload.markdown);
     setActiveVersion(0);
+    setEditMode(false);
+    setDraftVersion(null);
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
@@ -638,8 +854,9 @@ export default function Home() {
     }
 
     setPlan(payload.plan);
-    setPlanMarkdown(payload.markdown);
     setActiveVersion(0);
+    setEditMode(false);
+    setDraftVersion(null);
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
@@ -956,6 +1173,40 @@ export default function Home() {
                       analysis={analysis}
                       plan={plan}
                       version={activePlanVersion}
+                    />
+                  ) : null}
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-background p-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">可编辑时间线</p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        支持在页面里直接改 beat 字段并保存为新稿，导出 / 预览同步更新。
+                      </p>
+                    </div>
+                    <Button
+                      variant={editMode ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        if (!editMode) setDraftVersion(activePlanVersion);
+                        if (editMode) setDraftVersion(null);
+                        setEditMode(!editMode);
+                      }}
+                    >
+                      <PencilLine className="size-4" />
+                      {editMode ? "退出编辑" : "进入编辑"}
+                    </Button>
+                  </div>
+
+                  {editMode && draftVersion ? (
+                    <EditableVersionPanel
+                      version={draftVersion}
+                      onChange={setDraftVersion}
+                      onCancel={() => {
+                        setEditMode(false);
+                        setDraftVersion(null);
+                      }}
+                      onSave={handleSaveEditedPlan}
+                      saving={savingPlan}
                     />
                   ) : null}
 
