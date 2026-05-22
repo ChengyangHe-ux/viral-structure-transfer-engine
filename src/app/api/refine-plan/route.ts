@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       data: { status: "refined" },
     });
 
-    await prisma.generatedPlan.create({
+    const savedPlan = await prisma.generatedPlan.create({
       data: {
         projectId: project.id,
         versionName: `自然语言修订：${input.instruction.slice(0, 24)}`,
@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       projectId: project.id,
+      planId: savedPlan.id,
       plan,
       markdown,
       usedFallback,

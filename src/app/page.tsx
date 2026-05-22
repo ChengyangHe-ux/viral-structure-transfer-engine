@@ -64,10 +64,33 @@ type AnalyzeResponse = {
 
 type PlanResponse = {
   projectId: string;
+  planId?: string;
   plan: MigratedVideoPlan;
   markdown: string;
   usedFallback: boolean;
   aiError: string | null;
+  error?: string;
+};
+
+type PlanHistoryItem = {
+  id: string;
+  versionName: string;
+  createdAt: string;
+};
+
+type PlansListResponse = {
+  projectId: string;
+  plans: PlanHistoryItem[];
+  error?: string;
+};
+
+type PlanLoadResponse = {
+  projectId: string;
+  planId: string;
+  versionName: string;
+  createdAt: string;
+  markdown: string;
+  plan: MigratedVideoPlan;
   error?: string;
 };
 
@@ -92,8 +115,9 @@ function statusIcon(type: StatusState["type"]) {
   return <Sparkles />;
 }
 
-function downloadExport(projectId: string, format: "md" | "json") {
-  window.open(`/api/projects/${projectId}/export?format=${format}`, "_blank");
+function downloadExport(projectId: string, format: "md" | "json", planId?: string | null) {
+  const planQuery = planId ? `&planId=${encodeURIComponent(planId)}` : "";
+  window.open(`/api/projects/${projectId}/export?format=${format}${planQuery}`, "_blank");
 }
 
 function VersionTimeline({ version }: { version: PlanVersion }) {
@@ -642,6 +666,9 @@ export default function Home() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<VideoStructureAnalysis | null>(null);
   const [plan, setPlan] = useState<MigratedVideoPlan | null>(null);
+  const [planHistory, setPlanHistory] = useState<PlanHistoryItem[]>([]);
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [loadingPlanHistory, setLoadingPlanHistory] = useState(false);
   const [analysisMarkdown, setAnalysisMarkdown] = useState("");
   const [refineInstruction, setRefineInstruction] = useState("");
   const [activeVersion, setActiveVersion] = useState(0);
@@ -677,6 +704,46 @@ export default function Home() {
       .join("\n");
   }, [analysis, analysisMarkdown, plan]);
 
+  async function refreshPlanHistory(nextProjectId: string) {
+    setLoadingPlanHistory(true);
+    try {
+      const response = await fetch(`/api/projects/${nextProjectId}/plans`);
+      const payload = (await response.json()) as PlansListResponse;
+
+      if (!response.ok) {
+        setPlanHistory([]);
+        return;
+      }
+
+      setPlanHistory(payload.plans || []);
+    } finally {
+      setLoadingPlanHistory(false);
+    }
+  }
+
+  async function handleLoadPlan(nextProjectId: string, planId: string) {
+    setStatus({ type: "loading", message: "正在加载历史版本..." });
+    const response = await fetch(
+      `/api/projects/${nextProjectId}/plans?planId=${encodeURIComponent(planId)}`,
+    );
+    const payload = (await response.json()) as PlanLoadResponse;
+
+    if (!response.ok) {
+      setStatus({ type: "error", message: payload.error || "加载失败" });
+      return;
+    }
+
+    setPlan(payload.plan);
+    setActivePlanId(payload.planId);
+    setActiveVersion(0);
+    setEditMode(false);
+    setDraftVersion(null);
+    setStatus({
+      type: "success",
+      message: `已加载：${payload.versionName}`,
+    });
+  }
+
   async function handleAnalyze() {
     if (!sampleNotes.trim() && !sampleFile && !sampleUrl.trim()) {
       setStatus({
@@ -688,6 +755,8 @@ export default function Home() {
 
     setStatus({ type: "loading", message: "正在拆解样例结构..." });
     setPlan(null);
+    setPlanHistory([]);
+    setActivePlanId(null);
     setRefineInstruction("");
     setActiveVersion(0);
     setEditMode(false);
@@ -717,6 +786,7 @@ export default function Home() {
     setProjectId(payload.projectId);
     setAnalysis(payload.analysis);
     setAnalysisMarkdown(payload.markdown);
+    await refreshPlanHistory(payload.projectId);
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
@@ -745,15 +815,23 @@ export default function Home() {
           note: `edit-${draftVersion.versionName}`,
         }),
       });
-      const data = (await response.json()) as { plan?: MigratedVideoPlan; error?: string };
+      const data = (await response.json()) as {
+        projectId: string;
+        planId?: string;
+        plan?: MigratedVideoPlan;
+        markdown?: string;
+        error?: string;
+      };
 
       if (!response.ok) {
         throw new Error(data.error || "保存失败");
       }
 
       if (data.plan) setPlan(data.plan);
+      if (data.planId) setActivePlanId(data.planId);
       setEditMode(false);
       setDraftVersion(null);
+      await refreshPlanHistory(data.projectId);
       setStatus({ type: "success", message: "已保存编辑稿，可直接导出。" });
     } catch (error) {
       setStatus({
@@ -775,6 +853,8 @@ export default function Home() {
     setSampleFile(null);
     setAnalysis(null);
     setPlan(null);
+    setPlanHistory([]);
+    setActivePlanId(null);
     setAnalysisMarkdown("");
     setRefineInstruction("");
     setProjectId(null);
@@ -816,9 +896,11 @@ export default function Home() {
     }
 
     setPlan(payload.plan);
+    setActivePlanId(payload.planId || null);
     setActiveVersion(0);
     setEditMode(false);
     setDraftVersion(null);
+    await refreshPlanHistory(payload.projectId);
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
@@ -854,9 +936,11 @@ export default function Home() {
     }
 
     setPlan(payload.plan);
+    setActivePlanId(payload.planId || null);
     setActiveVersion(0);
     setEditMode(false);
     setDraftVersion(null);
+    await refreshPlanHistory(payload.projectId);
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
@@ -885,7 +969,7 @@ export default function Home() {
             <div className="flex flex-wrap gap-2">
               <Button
                 disabled={!projectId}
-                onClick={() => projectId && downloadExport(projectId, "md")}
+                onClick={() => projectId && downloadExport(projectId, "md", activePlanId)}
                 variant="outline"
                 title="导出 Markdown"
               >
@@ -894,7 +978,7 @@ export default function Home() {
               </Button>
               <Button
                 disabled={!projectId}
-                onClick={() => projectId && downloadExport(projectId, "json")}
+                onClick={() => projectId && downloadExport(projectId, "json", activePlanId)}
                 variant="outline"
                 title="导出 JSON"
               >
@@ -1037,6 +1121,64 @@ export default function Home() {
               </Button>
             </CardContent>
           </Card>
+
+          {projectId ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Database className="size-4 text-primary" />
+                  历史版本
+                </CardTitle>
+                <CardDescription>
+                  选择一个历史稿即可回滚到当时的方案；导出按钮会导出当前选中的版本。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    disabled={loadingPlanHistory}
+                    onClick={() => refreshPlanHistory(projectId)}
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                  >
+                    <RefreshCw />
+                    刷新
+                  </Button>
+                  <Badge variant={activePlanId ? "secondary" : "outline"}>
+                    {activePlanId ? "已选历史稿" : "默认最新稿"}
+                  </Badge>
+                </div>
+
+                {planHistory.length === 0 ? (
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    暂无历史版本；生成方案 / 修订 / 保存编辑稿后会自动入库。
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {planHistory.slice(0, 8).map((item) => (
+                      <Button
+                        key={item.id}
+                        onClick={() => handleLoadPlan(projectId, item.id)}
+                        size="sm"
+                        type="button"
+                        variant={item.id === activePlanId ? "default" : "outline"}
+                        className="h-auto w-full justify-start gap-2 whitespace-normal px-3 py-2 text-left"
+                        title={item.versionName}
+                      >
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(item.createdAt).toLocaleString()}
+                        </span>
+                        <span className="text-sm font-medium text-foreground">
+                          {item.versionName}
+                        </span>
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader>

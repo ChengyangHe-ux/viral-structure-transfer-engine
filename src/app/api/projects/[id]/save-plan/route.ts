@@ -34,7 +34,7 @@ export async function POST(
       data: { status: "edited" },
     });
 
-    await prisma.generatedPlan.create({
+    const savedPlan = await prisma.generatedPlan.create({
       data: {
         projectId: project.id,
         versionName: note ? `${versionName}（${note}）` : `${versionName}（edited）`,
@@ -43,7 +43,7 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({ projectId: project.id, plan, markdown });
+    return NextResponse.json({ projectId: project.id, planId: savedPlan.id, plan, markdown });
   } catch (error) {
     return NextResponse.json(
       {
@@ -53,4 +53,3 @@ export async function POST(
     );
   }
 }
-

@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    await prisma.generatedPlan.create({
+    const savedPlan = await prisma.generatedPlan.create({
       data: {
         projectId: project.id,
         versionName: plan.versions.map((version) => version.versionName).join(" / "),
@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       projectId: project.id,
+      planId: savedPlan.id,
       plan,
       markdown,
       usedFallback,

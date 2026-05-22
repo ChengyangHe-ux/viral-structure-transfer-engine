@@ -15,14 +15,11 @@ export async function GET(
 ) {
   const { id } = await context.params;
   const format = request.nextUrl.searchParams.get("format") || "md";
+  const planId = request.nextUrl.searchParams.get("planId")?.trim() || null;
   const project = await prisma.project.findUnique({
     where: { id },
     include: {
       sampleAnalysis: true,
-      generatedPlans: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-      },
     },
   });
 
@@ -30,15 +27,39 @@ export async function GET(
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
+  const planRecord = planId
+    ? await prisma.generatedPlan.findFirst({
+        where: { id: planId, projectId: project.id },
+      })
+    : await prisma.generatedPlan.findFirst({
+        where: { projectId: project.id },
+        orderBy: { createdAt: "desc" },
+      });
+
+  if (planId && !planRecord) {
+    return NextResponse.json({ error: "Plan not found" }, { status: 404 });
+  }
+
   const analysis = project.sampleAnalysis
     ? videoStructureAnalysisSchema.parse(project.sampleAnalysis.data)
     : undefined;
-  const plan = project.generatedPlans[0]
-    ? migratedVideoPlanSchema.parse(project.generatedPlans[0].data)
+  const plan = planRecord
+    ? migratedVideoPlanSchema.parse(planRecord.data)
     : undefined;
 
   if (format === "json") {
-    return NextResponse.json({ project, analysis, plan });
+    return NextResponse.json({
+      project,
+      analysis,
+      plan,
+      planMeta: planRecord
+        ? {
+            id: planRecord.id,
+            versionName: planRecord.versionName,
+            createdAt: planRecord.createdAt,
+          }
+        : null,
+    });
   }
 
   const markdown = renderProjectMarkdown({
@@ -47,7 +68,10 @@ export async function GET(
     plan,
     source: "项目要求",
   });
-  const safeName = encodeURIComponent(`${project.title || "video-plan"}.md`);
+  const suffix = planRecord
+    ? `-${planRecord.versionName}-${planRecord.createdAt.toISOString().slice(0, 10)}`
+    : "";
+  const safeName = encodeURIComponent(`${project.title || "video-plan"}${suffix}.md`);
 
   return new NextResponse(markdown, {
     headers: {
