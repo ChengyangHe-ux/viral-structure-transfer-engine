@@ -6,6 +6,9 @@ coverage
 .DS_Store
 *.log
 *.tsbuildinfo
+renders/
+*.mp4
+.remotion-binaries/
 .env
 .env*.local
 dev.db

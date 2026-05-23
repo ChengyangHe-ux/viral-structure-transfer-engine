@@ -25,6 +25,12 @@ npm run submission:check
 npm run cases:generate
 ```
 
+## 一键生成演示视频（Remotion）
+
+```bash
+npm run video:render -- --input cases/generated/demo-学习平板.json --out renders/demo.mp4 --title "学习平板结构演示稿"
+```
+
 ## AI 配置
 
 `.env` 使用 OpenAI-compatible 配置，可接 OpenAI、火山方舟或其他兼容服务：

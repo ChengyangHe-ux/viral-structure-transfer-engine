@@ -38,6 +38,14 @@ npm run cases:generate
 
 该命令会基于 `src/lib/demo-presets.ts` 生成 `cases/generated/*`，用于在无模型密钥时也能展示“样例拆解 → 结构迁移 → 映射 → 质量诊断”的完整链路，并提供可复现实验材料。
 
+## 一键生成演示视频（Remotion，可选加分项）
+
+```bash
+npm run video:render -- --input cases/generated/demo-学习平板.json --out renders/demo.mp4 --title "学习平板结构演示稿"
+```
+
+说明：这里生成的是“结构占位演示稿”（字幕卡/结构标签/时间线节奏），后续可在剪辑软件中替换为真实素材或 AIGC 画面。
+
 ## 评分覆盖
 
 | 评分项 | 项目对应能力 | 演示位置 |
