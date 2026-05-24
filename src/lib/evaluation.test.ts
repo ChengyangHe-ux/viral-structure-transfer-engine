@@ -24,6 +24,7 @@ describe("plan evaluation", () => {
     expect(evaluation.overallScore).toBeGreaterThanOrEqual(75);
     expect(evaluation.dimensions).toHaveLength(6);
     expect(evaluation.bestVersion.length).toBeGreaterThan(0);
+    expect(evaluation.structureAlignment?.sampleBeatCount).toBeGreaterThan(0);
   });
 
   it("attaches the evaluation to the persisted plan shape", () => {

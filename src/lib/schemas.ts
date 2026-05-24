@@ -93,6 +93,24 @@ export const planEvaluationSchema = z.object({
   overallScore: z.number().int().min(0).max(100),
   readiness: z.enum(["ready", "minor-edits", "needs-work"]),
   bestVersion: z.string().min(1),
+  structureAlignment: z
+    .object({
+      coverageScore: z.number().int().min(0).max(100),
+      coverageRatio: z.number().min(0).max(1),
+      matchedSampleBeatCount: z.number().int().min(0),
+      sampleBeatCount: z.number().int().min(0),
+      missingSampleBeats: z
+        .array(
+          z.object({
+            timeRange: z.string().min(1),
+            shotPurpose: z.string().min(1),
+            transferableRule: z.string().min(1),
+          }),
+        )
+        .default([]),
+      notes: z.array(z.string().min(1)).default([]),
+    })
+    .optional(),
   dimensions: z.array(
     z.object({
       key: z.string().min(1),

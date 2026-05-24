@@ -5,6 +5,7 @@ import {
   type PlanVersion,
   type VideoStructureAnalysis,
 } from "@/lib/schemas";
+import { alignStructure } from "@/lib/structure-alignment";
 
 function clampScore(score: number) {
   return Math.max(0, Math.min(100, Math.round(score)));
@@ -76,8 +77,14 @@ export function evaluatePlan(
   );
   const allText = JSON.stringify(plan);
   const hookScore = scoreVersion(plan.versions[0] ?? plan.versions[0]);
+  const structureAlignment = analysis
+    ? alignStructure({ analysis, plan })
+    : undefined;
   const transferScore = clampScore(
-    55 + inheritedCount * 7 + (analysis?.reusableTemplate.length ?? 0) * 3,
+    42 +
+      inheritedCount * 7 +
+      (analysis?.reusableTemplate.length ?? 0) * 3 +
+      (structureAlignment?.coverageScore ?? 62) * 0.35,
   );
   const progressionScore = clampScore(
     58 +
@@ -161,6 +168,7 @@ export function evaluatePlan(
     readiness:
       overallScore >= 88 ? "ready" : overallScore >= 76 ? "minor-edits" : "needs-work",
     bestVersion,
+    structureAlignment,
     dimensions,
     versionScores,
     strengths: [

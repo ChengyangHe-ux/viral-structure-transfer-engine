@@ -534,6 +534,37 @@ function EvaluationPanel({ evaluation }: { evaluation: PlanEvaluation }) {
           </ul>
         </div>
       </div>
+
+      {evaluation.structureAlignment ? (
+        <div className="rounded-lg border bg-background p-3">
+          <p className="text-xs font-semibold text-foreground">结构对齐报告</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            覆盖 {evaluation.structureAlignment.matchedSampleBeatCount}/
+            {evaluation.structureAlignment.sampleBeatCount}（
+            {Math.round(evaluation.structureAlignment.coverageRatio * 100)}%），评分{" "}
+            {evaluation.structureAlignment.coverageScore}/100
+          </p>
+          {evaluation.structureAlignment.missingSampleBeats.length ? (
+            <div className="mt-2 space-y-1.5">
+              <p className="text-xs font-medium text-foreground">优先补齐的样例段落</p>
+              <ul className="space-y-1 text-xs leading-5 text-muted-foreground">
+                {evaluation.structureAlignment.missingSampleBeats.map((beat) => (
+                  <li key={`${beat.timeRange}-${beat.shotPurpose}`}>
+                    {beat.timeRange}：{beat.shotPurpose}（{beat.transferableRule}）
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {evaluation.structureAlignment.notes.length ? (
+            <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+              {evaluation.structureAlignment.notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
