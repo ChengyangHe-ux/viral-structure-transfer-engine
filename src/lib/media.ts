@@ -8,6 +8,8 @@ import { mediaMetaSchema, type MediaMeta } from "@/lib/schemas";
 const uploadDir = path.join(process.cwd(), "data", "uploads");
 const frameDir = path.join(process.cwd(), "data", "frames");
 
+const frameIdPattern = /^[0-9a-fA-F-]{36}\.jpg$/;
+
 function runCommand(command: string, args: string[]) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
@@ -48,6 +50,10 @@ function safeFileName(name: string) {
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
   return `${base || "sample"}-${randomUUID()}${ext}`;
+}
+
+export function isSafeFrameId(frameId: string) {
+  return frameIdPattern.test(frameId);
 }
 
 export async function saveUploadedVideo(file: File) {
@@ -110,10 +116,11 @@ export async function extractPreviewFrames(filePath: string, duration?: number) 
 
   await mkdir(frameDir, { recursive: true });
   const offsets = duration && duration > 8 ? [1, duration * 0.3, duration * 0.6] : [1];
-  const framePaths: string[] = [];
+  const frameIds: string[] = [];
 
   for (const offset of offsets) {
-    const framePath = path.join(frameDir, `${randomUUID()}.jpg`);
+    const frameId = `${randomUUID()}.jpg`;
+    const framePath = path.join(frameDir, frameId);
     try {
       await runCommand("ffmpeg", [
         "-y",
@@ -127,13 +134,13 @@ export async function extractPreviewFrames(filePath: string, duration?: number) 
         "3",
         framePath,
       ]);
-      framePaths.push(framePath);
+      frameIds.push(frameId);
     } catch {
       // Frame extraction is best-effort; the scripted MVP can still proceed.
     }
   }
 
-  return framePaths;
+  return frameIds;
 }
 
 export function describeMediaForPrompt(mediaMeta?: MediaMeta) {

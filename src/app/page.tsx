@@ -124,6 +124,74 @@ function downloadExport(projectId: string, format: "md" | "json", planId?: strin
   window.open(`/api/projects/${projectId}/export?format=${format}${planQuery}`, "_blank");
 }
 
+function formatSeconds(seconds?: number) {
+  if (!seconds || !Number.isFinite(seconds)) return "--";
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remaining = seconds % 60;
+  return `${minutes}m${remaining.toFixed(0)}s`;
+}
+
+function MediaMetaPanel({ mediaMeta }: { mediaMeta: MediaMeta }) {
+  const hasAnyMeta =
+    mediaMeta.durationSeconds ||
+    (mediaMeta.width && mediaMeta.height) ||
+    mediaMeta.frameRate ||
+    typeof mediaMeta.hasAudio === "boolean" ||
+    mediaMeta.previewFrames.length;
+
+  if (!hasAnyMeta) return null;
+
+  return (
+    <div className="space-y-3 rounded-lg border bg-background p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="secondary">多模态线索</Badge>
+        <Badge variant="outline">
+          {mediaMeta.sourceKind === "upload"
+            ? "上传视频"
+            : mediaMeta.sourceKind === "url"
+              ? "样例链接"
+              : "人工观察"}
+        </Badge>
+        {mediaMeta.durationSeconds ? (
+          <Badge variant="outline">时长 {formatSeconds(mediaMeta.durationSeconds)}</Badge>
+        ) : null}
+        {mediaMeta.width && mediaMeta.height ? (
+          <Badge variant="outline">
+            {mediaMeta.width}×{mediaMeta.height}
+          </Badge>
+        ) : null}
+        {mediaMeta.frameRate ? (
+          <Badge variant="outline">FPS {mediaMeta.frameRate}</Badge>
+        ) : null}
+        {typeof mediaMeta.hasAudio === "boolean" ? (
+          <Badge variant="outline">{mediaMeta.hasAudio ? "有音频" : "无音频"}</Badge>
+        ) : null}
+      </div>
+
+      {mediaMeta.previewFrames.length ? (
+        <div className="grid grid-cols-3 gap-2">
+          {mediaMeta.previewFrames.map((frameId) => (
+            <div className="overflow-hidden rounded-md border bg-muted/20" key={frameId}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt="样例预览帧"
+                className="aspect-video w-full object-cover"
+                loading="lazy"
+                src={`/api/frames/${encodeURIComponent(frameId)}`}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs leading-6 text-muted-foreground">
+          未抽取预览帧（可能缺少 ffmpeg），但仍可基于转写/观察继续拆解。
+        </p>
+      )}
+    </div>
+  );
+}
+
 function VersionTimeline({ version }: { version: PlanVersion }) {
   return (
     <div className="space-y-4">
@@ -721,6 +789,7 @@ export default function Home() {
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [loadingPlanHistory, setLoadingPlanHistory] = useState(false);
   const [analysisMarkdown, setAnalysisMarkdown] = useState("");
+  const [mediaMeta, setMediaMeta] = useState<MediaMeta | null>(null);
   const [refineInstruction, setRefineInstruction] = useState("");
   const [activeVersion, setActiveVersion] = useState(0);
   const [editMode, setEditMode] = useState(false);
@@ -836,6 +905,7 @@ export default function Home() {
     setNlEditInstruction("");
     setNlEditFeedback(null);
     setNlEditPreview(null);
+    setMediaMeta(null);
 
     const formData = new FormData();
     formData.append("projectTitle", projectTitle);
@@ -861,6 +931,7 @@ export default function Home() {
     setProjectId(payload.projectId);
     setAnalysis(payload.analysis);
     setAnalysisMarkdown(payload.markdown);
+    setMediaMeta(payload.mediaMeta);
     await refreshPlanHistory(payload.projectId);
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
@@ -1460,6 +1531,7 @@ export default function Home() {
             <CardContent>
               {analysis ? (
                 <div className="space-y-5">
+                  {mediaMeta ? <MediaMetaPanel mediaMeta={mediaMeta} /> : null}
                   <div className="grid gap-3 md:grid-cols-3">
                     <div className="rounded-lg border bg-background p-3">
                       <p className="text-xs text-muted-foreground">内容承诺</p>
