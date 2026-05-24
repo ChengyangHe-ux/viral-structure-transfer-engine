@@ -11,6 +11,7 @@ type Args = {
   out: string;
   compositionId: string;
   title?: string;
+  quality: "high" | "draft";
 };
 
 function parseArgs(argv: string[]): Args {
@@ -22,6 +23,7 @@ function parseArgs(argv: string[]): Args {
     if (item === "--out") args.out = argv[index + 1];
     if (item === "--composition") args.compositionId = argv[index + 1];
     if (item === "--title") args.title = argv[index + 1];
+    if (item === "--quality") args.quality = argv[index + 1] as Args["quality"];
   }
 
   if (!args.input) throw new Error("Missing --input <plan.json>");
@@ -31,6 +33,7 @@ function parseArgs(argv: string[]): Args {
     out: args.out,
     compositionId: args.compositionId || "VideoFromPlan",
     title: args.title,
+    quality: args.quality === "draft" ? "draft" : "high",
   };
 }
 
@@ -82,6 +85,17 @@ async function main() {
     binariesDirectory,
   });
 
+  const qualitySettings =
+    args.quality === "draft"
+      ? ({
+          crf: 30,
+          x264Preset: "veryfast",
+        } as const)
+      : ({
+          crf: 18,
+          x264Preset: "medium",
+        } as const);
+
   await renderMedia({
     composition,
     serveUrl: bundled,
@@ -89,6 +103,9 @@ async function main() {
     outputLocation: resolvedOut,
     inputProps: { plan, title: args.title || title || "爆款结构迁移引擎（结构演示稿）" },
     binariesDirectory,
+    overwrite: true,
+    pixelFormat: "yuv420p",
+    ...qualitySettings,
   });
 
   console.log(`[video:render] OK: ${resolvedOut}`);

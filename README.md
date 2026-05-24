@@ -28,7 +28,7 @@ npm run cases:generate
 ## 一键生成演示视频（Remotion）
 
 ```bash
-npm run video:render -- --input cases/generated/demo-学习平板.json --out renders/demo.mp4 --title "学习平板结构演示稿"
+npm run video:render -- --input cases/generated/demo-学习平板.json --out renders/demo.mp4 --title "学习平板结构演示稿" --quality high
 ```
 
 ## AI 配置

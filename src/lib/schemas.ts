@@ -175,6 +175,7 @@ export const refinePlanRequestSchema = z.object({
 export type MediaMeta = z.infer<typeof mediaMetaSchema>;
 export type VideoStructureAnalysis = z.infer<typeof videoStructureAnalysisSchema>;
 export type MigratedVideoPlan = z.infer<typeof migratedVideoPlanSchema>;
+export type PlanBeat = z.infer<typeof planBeatSchema>;
 export type PlanVersion = z.infer<typeof planVersionSchema>;
 export type PlanEvaluation = z.infer<typeof planEvaluationSchema>;
 export type MaterialAdaptation = z.infer<typeof materialAdaptationSchema>;

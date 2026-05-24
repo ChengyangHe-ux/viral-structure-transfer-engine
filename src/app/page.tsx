@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
+  ArrowDown,
+  ArrowUp,
   BarChart3,
   CheckCircle2,
   ClipboardList,
@@ -15,12 +17,12 @@ import {
   Loader2,
   PackageCheck,
   PencilLine,
+  Plus,
   RefreshCw,
-  Sparkles,
   Trophy,
+  Trash2,
   Upload,
   Video,
-  WandSparkles,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -42,7 +44,9 @@ import {
   materialFitText,
   type MigrationMapRow,
 } from "@/lib/mapping";
+import { diffPlans } from "@/lib/plan-diff";
 import { buildTimelineSegments } from "@/lib/timeline";
+import { insertBeatAfter, moveBeat, removeBeat } from "@/lib/plan-edit";
 import type {
   MediaMeta,
   MaterialAdaptation,
@@ -102,17 +106,17 @@ type StatusState =
   | { type: "error"; message: string };
 
 const samplePlaceholder =
-  "粘贴样例视频观察、口播转写或人工拆解。例如：开头 2 秒先给对比结果，中段连续展示 3 个使用场景，结尾引导收藏领取清单。";
+  "粘贴样例视频观察 / 口播转写 / 人工拆解。建议写成“时间段 + 发生了什么”。例如：0-2s 先抛结果对比；2-10s 连续 3 个使用场景；结尾引导收藏领取清单。";
 
 const briefPlaceholder =
-  "描述你要迁移到的新主题/商品/素材。例如：面向大学生的 AI 简历优化工具，主打 10 分钟生成岗位匹配版简历。";
+  "描述你要迁移到的新主题/商品 Brief（目标人群 + 场景 + 核心卖点 + 结尾动作）。例如：面向大学生的简历优化工具，主打 10 分钟生成岗位匹配版简历，结尾引导“收藏+私信关键词”。";
 
 function statusIcon(type: StatusState["type"]) {
   if (type === "loading") return <Loader2 className="animate-spin" />;
   if (type === "success") return <CheckCircle2 />;
   if (type === "warning") return <AlertCircle />;
   if (type === "error") return <AlertCircle />;
-  return <Sparkles />;
+  return <PackageCheck />;
 }
 
 function downloadExport(projectId: string, format: "md" | "json", planId?: string | null) {
@@ -265,6 +269,53 @@ function EditableVersionPanel({
       <div className="space-y-3">
         {version.scriptBeats.map((beat, index) => (
           <div className="rounded-lg border bg-background p-3" key={`${beat.timeRange}-${index}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
+              <Badge variant="outline">第 {index + 1} 段</Badge>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onChange(moveBeat(version, index, "up"))}
+                  disabled={index === 0 || saving}
+                  title="上移"
+                >
+                  <ArrowUp className="size-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onChange(moveBeat(version, index, "down"))}
+                  disabled={index === version.scriptBeats.length - 1 || saving}
+                  title="下移"
+                >
+                  <ArrowDown className="size-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onChange(insertBeatAfter(version, index))}
+                  disabled={saving}
+                  title="在下方新增一段"
+                >
+                  <Plus className="size-4" />
+                  新增
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onChange(removeBeat(version, index))}
+                  disabled={version.scriptBeats.length <= 3 || saving}
+                  title="删除当前段（至少保留 3 段）"
+                >
+                  <Trash2 className="size-4" />
+                  删除
+                </Button>
+              </div>
+            </div>
             <div className="grid gap-3 md:grid-cols-[140px_1fr] md:items-start">
               <div className="space-y-2">
                 <Label>时间段</Label>
@@ -675,10 +726,29 @@ export default function Home() {
   const [editMode, setEditMode] = useState(false);
   const [draftVersion, setDraftVersion] = useState<PlanVersion | null>(null);
   const [savingPlan, setSavingPlan] = useState(false);
+  const [nlEditInstruction, setNlEditInstruction] = useState("");
+  const [nlEditApplying, setNlEditApplying] = useState(false);
+  const [nlEditFeedback, setNlEditFeedback] = useState<{
+    applied: string[];
+    warnings: string[];
+  } | null>(null);
+  const [nlEditPreview, setNlEditPreview] = useState<{
+    plan: MigratedVideoPlan;
+    applied: string[];
+    warnings: string[];
+    diff: ReturnType<typeof diffPlans>;
+    sourcePlanId: string | null;
+  } | null>(null);
   const [status, setStatus] = useState<StatusState>({
     type: "idle",
-    message: "上传样例或填入观察文本后即可开始拆解。",
+    message: "先准备一个样例（链接/文件/观察文本），再把它的结构迁移到你的新主题。",
   });
+
+  const progressStage = useMemo(() => {
+    if (plan) return 3;
+    if (analysis) return 2;
+    return 1;
+  }, [analysis, plan]);
 
   const activePlanVersion = useMemo(
     () => plan?.versions[Math.min(activeVersion, plan.versions.length - 1)],
@@ -738,6 +808,8 @@ export default function Home() {
     setActiveVersion(0);
     setEditMode(false);
     setDraftVersion(null);
+    setNlEditFeedback(null);
+    setNlEditPreview(null);
     setStatus({
       type: "success",
       message: `已加载：${payload.versionName}`,
@@ -761,6 +833,9 @@ export default function Home() {
     setActiveVersion(0);
     setEditMode(false);
     setDraftVersion(null);
+    setNlEditInstruction("");
+    setNlEditFeedback(null);
+    setNlEditPreview(null);
 
     const formData = new FormData();
     formData.append("projectTitle", projectTitle);
@@ -843,6 +918,96 @@ export default function Home() {
     }
   }
 
+  async function handleNlEditAction(mode: "preview" | "apply") {
+    if (!projectId || !plan) {
+      setStatus({ type: "error", message: "请先生成方案后再编辑。" });
+      return;
+    }
+    if (!nlEditInstruction.trim()) {
+      setStatus({ type: "error", message: "请输入自然语言编辑指令。" });
+      return;
+    }
+
+    setNlEditApplying(true);
+    setStatus({
+      type: "loading",
+      message: mode === "preview" ? "正在预览自然语言编辑效果..." : "正在应用自然语言编辑到当前方案...",
+    });
+    try {
+      const response = await fetch(`/api/projects/${projectId}/nl-edit-plan`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          instruction: nlEditInstruction,
+          planId: mode === "apply" && nlEditPreview?.sourcePlanId ? nlEditPreview.sourcePlanId : activePlanId,
+          note: `nl-${activePlanVersion?.versionName ?? "plan"}`,
+          dryRun: mode === "preview",
+          basePlanId: mode === "apply" && nlEditPreview?.sourcePlanId ? nlEditPreview.sourcePlanId : null,
+        }),
+      });
+      const data = (await response.json()) as {
+        projectId: string;
+        planId?: string;
+        sourcePlanId?: string;
+        plan?: MigratedVideoPlan;
+        markdown?: string;
+        applied?: string[];
+        warnings?: string[];
+        diff?: ReturnType<typeof diffPlans>;
+        dryRun?: boolean;
+        expectedBasePlanId?: string;
+        actualBasePlanId?: string;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          throw new Error("基线版本已变化，请先重新点一次“预览”。");
+        }
+        throw new Error(data.error || "自然语言编辑失败");
+      }
+
+      if (mode === "preview") {
+        if (data.plan) {
+          setNlEditPreview({
+            plan: data.plan,
+            applied: data.applied ?? [],
+            warnings: data.warnings ?? [],
+            diff: data.diff ?? [],
+            sourcePlanId: data.sourcePlanId ?? null,
+          });
+        }
+        setStatus({
+          type: (data.warnings?.length ?? 0) ? "warning" : "success",
+          message: `预览完成：应用 ${data.applied?.length ?? 0} 条，提示 ${data.warnings?.length ?? 0} 条。`,
+        });
+        return;
+      }
+
+      if (data.plan) setPlan(data.plan);
+      if (data.planId) setActivePlanId(data.planId);
+      setEditMode(false);
+      setDraftVersion(null);
+      setNlEditFeedback({
+        applied: data.applied ?? [],
+        warnings: data.warnings ?? [],
+      });
+      setNlEditPreview(null);
+      await refreshPlanHistory(data.projectId);
+      setStatus({
+        type: (data.warnings?.length ?? 0) ? "warning" : "success",
+        message: `已保存自然语言编辑稿：应用 ${data.applied?.length ?? 0} 条，提示 ${data.warnings?.length ?? 0} 条。`,
+      });
+    } catch (error) {
+      setStatus({
+        type: "error",
+        message: error instanceof Error ? error.message : "自然语言编辑失败",
+      });
+    } finally {
+      setNlEditApplying(false);
+    }
+  }
+
   function applyDemoPreset(preset: (typeof demoPresets)[number]) {
     setProjectTitle(preset.projectTitle);
     setSampleTitle(preset.sampleTitle);
@@ -861,6 +1026,9 @@ export default function Home() {
     setActiveVersion(0);
     setEditMode(false);
     setDraftVersion(null);
+    setNlEditInstruction("");
+    setNlEditFeedback(null);
+    setNlEditPreview(null);
     setStatus({
       type: "idle",
       message: `已载入演示预设：${preset.label}。`,
@@ -900,12 +1068,14 @@ export default function Home() {
     setActiveVersion(0);
     setEditMode(false);
     setDraftVersion(null);
+    setNlEditFeedback(null);
+    setNlEditPreview(null);
     await refreshPlanHistory(payload.projectId);
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
-        ? "未检测到可用 AI 密钥，已使用本地演示策略生成脚本。"
-        : "迁移方案生成完成。",
+        ? "当前为离线演示模式：已用本地策略生成脚本（比赛现场也能跑通）。"
+        : "迁移脚本已生成，可直接编辑并导出。",
     });
   }
 
@@ -940,12 +1110,14 @@ export default function Home() {
     setActiveVersion(0);
     setEditMode(false);
     setDraftVersion(null);
+    setNlEditFeedback(null);
+    setNlEditPreview(null);
     await refreshPlanHistory(payload.projectId);
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
-        ? "未检测到可用 AI 密钥，已使用本地演示策略完成修订。"
-        : "方案已按自然语言指令修订。",
+        ? "当前为离线演示模式：已用本地策略完成修订。"
+        : "已按你的自然语言指令更新方案。",
     });
   }
 
@@ -956,14 +1128,16 @@ export default function Home() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">AIGC 系统</Badge>
-                <Badge variant="secondary">比赛 MVP</Badge>
+                <Badge variant="secondary">比赛演示版</Badge>
+                <Badge variant="outline">结构迁移</Badge>
+                <Badge variant="outline">可编辑时间线</Badge>
+                <Badge variant="outline">可出片视频</Badge>
               </div>
               <h1 className="mt-3 text-2xl font-semibold tracking-normal text-foreground sm:text-3xl">
                 爆款结构迁移引擎
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                从优质样例中抽象创作结构，再迁移到新主题或商品，生成可编辑的视频方案脚本。
+                把“样例为什么好用”拆成可复用结构，再迁移到你的新主题：生成能编辑、能导出、能一键渲染的视频方案稿。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -988,19 +1162,29 @@ export default function Home() {
             </div>
           </div>
 
-          <div
-            className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${
-              status.type === "error"
-                ? "border-red-200 bg-red-50 text-red-800"
-                : status.type === "warning"
-                  ? "border-amber-200 bg-amber-50 text-amber-900"
-                  : status.type === "success"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                    : "border-border bg-background text-muted-foreground"
-            }`}
-          >
-            <span className="[&_svg]:size-4">{statusIcon(status.type)}</span>
-            <span>{status.message}</span>
+          <div className="flex flex-col gap-3 rounded-lg border bg-background/60 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Badge variant={progressStage >= 1 ? "success" : "outline"}>1. 样例拆解</Badge>
+              <ArrowRight className="hidden size-4 text-muted-foreground md:block" />
+              <Badge variant={progressStage >= 2 ? "success" : "outline"}>2. 迁移脚本</Badge>
+              <ArrowRight className="hidden size-4 text-muted-foreground md:block" />
+              <Badge variant={progressStage >= 3 ? "success" : "outline"}>3. 编辑出片</Badge>
+            </div>
+
+            <div
+              className={`flex items-start gap-3 text-sm ${
+                status.type === "error"
+                  ? "text-red-800"
+                  : status.type === "warning"
+                    ? "text-amber-900"
+                    : status.type === "success"
+                      ? "text-emerald-800"
+                      : "text-muted-foreground"
+              }`}
+            >
+              <span className="[&_svg]:size-4">{statusIcon(status.type)}</span>
+              <span className="leading-6">{status.message}</span>
+            </div>
           </div>
         </div>
       </section>
@@ -1081,8 +1265,8 @@ export default function Home() {
                 />
               </div>
               <Button className="w-full" onClick={handleAnalyze}>
-                {status.type === "loading" ? <Loader2 className="animate-spin" /> : <WandSparkles />}
-                拆解样例结构
+                {status.type === "loading" ? <Loader2 className="animate-spin" /> : <ClipboardList />}
+                拆解成结构卡片
               </Button>
             </CardContent>
           </Card>
@@ -1180,18 +1364,73 @@ export default function Home() {
             </Card>
           ) : null}
 
+          {projectId && plan ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Video className="size-4 text-primary" />
+                  一键出片
+                </CardTitle>
+                <CardDescription>
+                  先导出 JSON（右上角按钮），再用 Remotion 渲染成竖屏 mp4。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-lg border bg-background p-3 text-sm leading-6 text-muted-foreground">
+                  <div className="text-xs font-medium text-foreground">推荐命令</div>
+                  <div className="mt-2 font-mono text-xs">
+                    npm run video:render -- --input plan.json --out renders/demo.mp4 --quality high
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                    onClick={async () => {
+                      const cmd =
+                        "npm run video:render -- --input plan.json --out renders/demo.mp4 --quality high";
+                      try {
+                        await navigator.clipboard.writeText(cmd);
+                        setStatus({ type: "success", message: "已复制渲染命令（把导出的 JSON 命名为 plan.json 即可）。" });
+                      } catch {
+                        setStatus({ type: "warning", message: "复制失败：请手动复制命令（某些浏览器权限限制）。" });
+                      }
+                    }}
+                  >
+                    <ClipboardList />
+                    复制命令
+                  </Button>
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                    onClick={() => downloadExport(projectId, "json", activePlanId)}
+                  >
+                    <FileJson />
+                    导出 JSON
+                  </Button>
+                </div>
+                <p className="text-xs leading-6 text-muted-foreground">
+                  提示：导出文件保存为 <span className="font-mono">plan.json</span>，就能直接跑上面的命令；需要更快预览可把
+                  <span className="font-mono"> --quality high</span> 改成 <span className="font-mono">draft</span>。
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <PencilLine className="size-4 text-primary" />
                 自然语言编辑
               </CardTitle>
-              <CardDescription>用一句话调整当前方案，系统会保留结构并重写版本。</CardDescription>
+              <CardDescription>用一句话提需求，生成一个“改动后的新版本”并自动入库。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <Textarea
                 disabled={!plan}
-                placeholder="例如：开头更强一点，语气更像真实学姐种草，并补充可信证据。"
+                placeholder="例如：把开头改成“先给结果再解释”，并把证据写得更可信（数据/对比/用户反馈）。"
                 value={refineInstruction}
                 onChange={(event) => setRefineInstruction(event.target.value)}
               />
@@ -1352,11 +1591,155 @@ export default function Home() {
                     />
                   ) : null}
 
+                  <div className="space-y-3 rounded-lg border bg-background p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          自然语言微调（离线）
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          一句话改细节并保存为新版本：支持封面/文案标题、话题标签、按段落改字段、按秒延长/缩短时间段。
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleNlEditAction("preview")}
+                          disabled={nlEditApplying || !nlEditInstruction.trim()}
+                        >
+                          {nlEditApplying ? (
+                            <Loader2 className="animate-spin" />
+                          ) : (
+                            <BarChart3 className="size-4" />
+                          )}
+                          预览
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => handleNlEditAction("apply")}
+                          disabled={nlEditApplying || !nlEditInstruction.trim()}
+                        >
+                          {nlEditApplying ? (
+                            <Loader2 className="animate-spin" />
+                          ) : (
+                            <PencilLine className="size-4" />
+                          )}
+                          保存新稿
+                        </Button>
+                      </div>
+                    </div>
+                    <Textarea
+                      value={nlEditInstruction}
+                      onChange={(event) => setNlEditInstruction(event.target.value)}
+                      placeholder="第2段口播改为 给出更具体的步骤；封面标题：10分钟做出岗位匹配简历；话题=简历优化 AI求职 #大学生；第1段延长1秒"
+                      className="min-h-[92px]"
+                    />
+                    {nlEditPreview ? (
+                      <div className="rounded-lg border bg-accent/20 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-semibold text-foreground">预览结果（未保存）</p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>
+                              评分：{plan?.evaluation?.overallScore ?? "--"} →{" "}
+                              {nlEditPreview.plan.evaluation?.overallScore ?? "--"}
+                            </span>
+                            <Button type="button" size="sm" variant="outline" onClick={() => setNlEditPreview(null)}>
+                              关闭预览
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="mt-2 grid gap-3 md:grid-cols-2">
+                          <div>
+                            <p className="text-xs font-semibold text-foreground">将应用</p>
+                            <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+                              {(nlEditPreview.applied.length ? nlEditPreview.applied : ["（无）"]).map(
+                                (item, index) => (
+                                  <li key={`preview-applied-${index}`}>{item}</li>
+                                ),
+                              )}
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-foreground">提示</p>
+                            <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+                              {(nlEditPreview.warnings.length ? nlEditPreview.warnings : ["（无）"]).map(
+                                (item, index) => (
+                                  <li key={`preview-warning-${index}`}>{item}</li>
+                                ),
+                              )}
+                            </ul>
+                          </div>
+                        </div>
+                        <div className="mt-3 rounded-lg border bg-background/70 p-3">
+                          <p className="text-xs font-semibold text-foreground">差异摘要</p>
+                          <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+                            {(() => {
+                              const items = nlEditPreview.diff.length
+                                ? nlEditPreview.diff
+                                : plan
+                                  ? diffPlans(plan, nlEditPreview.plan)
+                                  : [];
+                              if (items.length === 0) return ["（无）"];
+                              return items.slice(0, 12).map((item) => {
+                                if (item.kind === "beats-count") {
+                                  return `${item.versionName}：段落数 ${item.before} → ${item.after}`;
+                                }
+                                if (item.kind === "hashtags") {
+                                  return `${item.versionName}：话题 ${item.before.join(" ")} → ${item.after.join(" ")}`;
+                                }
+                                if (item.kind === "version") {
+                                  return `${item.versionName}：${item.field} ${item.before} → ${item.after}`;
+                                }
+                                return `${item.versionName}：第${item.beatIndex + 1}段.${item.field} ${item.before} → ${item.after}`;
+                              });
+                            })().map((line, index) => (
+                              <li key={`diff-${index}`}>{line}</li>
+                            ))}
+                          </ul>
+                          {(nlEditPreview.diff.length ? nlEditPreview.diff : plan ? diffPlans(plan, nlEditPreview.plan) : []).length > 12 ? (
+                            <p className="mt-2 text-[11px] text-muted-foreground">
+                              已省略部分差异（当前最多展示 12 条）。
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                    {nlEditFeedback ? (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="rounded-lg border bg-accent/30 p-3">
+                          <p className="text-xs font-semibold text-foreground">已应用</p>
+                          <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+                            {(nlEditFeedback.applied.length
+                              ? nlEditFeedback.applied
+                              : ["（无）"]
+                            ).map((item, index) => (
+                              <li key={`applied-${index}`}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="rounded-lg border bg-accent/30 p-3">
+                          <p className="text-xs font-semibold text-foreground">提示</p>
+                          <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+                            {(nlEditFeedback.warnings.length
+                              ? nlEditFeedback.warnings
+                              : ["（无）"]
+                            ).map((item, index) => (
+                              <li key={`warning-${index}`}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
                   <VersionTimeline version={activePlanVersion} />
                 </div>
               ) : (
                 <div className="flex min-h-[360px] flex-col items-center justify-center rounded-lg border border-dashed bg-background px-6 text-center">
-                  <Sparkles className="size-8 text-muted-foreground" />
+                  <Trophy className="size-8 text-muted-foreground" />
                   <p className="mt-3 text-sm font-medium">等待迁移方案</p>
                   <p className="mt-1 max-w-md text-sm leading-6 text-muted-foreground">
                     完成样例拆解并填写 Brief 后，系统会生成稳妥转化、强 Hook、内容种草等版本。
