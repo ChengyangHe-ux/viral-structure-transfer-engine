@@ -30,6 +30,22 @@ npm run submission:check
 
 该命令会检查工作区是否干净、关键文档是否齐全、以及是否存在被误提交的 `.env`/数据库/构建产物等；随后运行 `lint`/`test`/`build`，用于提交前的稳定性验证。
 
+## 打包提交物（可选）
+
+若比赛要求提交压缩包，可用下列命令生成只包含 Git 追踪文件的提交包（自动先跑 `submission:check`）：
+
+```bash
+npm run submission:pack
+```
+
+产物会输出到 `submissions/`（已在 `.gitignore` 中忽略）。
+
+如需把演示视频一并塞进压缩包，可加参数：
+
+```bash
+npm run submission:pack -- --include-demo-video renders/demo.mp4
+```
+
 ## 离线案例生成（推荐）
 
 ```bash

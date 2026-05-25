@@ -13,6 +13,7 @@
     "media:install-binaries": "tsx scripts/install-media-binaries.ts",
     "verify": "npm run lint && npm run test && npm run build",
     "submission:check": "node scripts/submission-check.mjs && npm run verify",
+    "submission:pack": "node scripts/submission-pack.mjs",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },
