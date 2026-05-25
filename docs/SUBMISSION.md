@@ -45,6 +45,7 @@ npm run video:render -- --input cases/generated/demo-学习平板.json --out ren
 ```
 
 说明：这里生成的是“结构占位演示稿”（字幕卡/结构标签/时间线节奏），后续可在剪辑软件中替换为真实素材或 AIGC 画面。
+提示：首次渲染前执行一次 `npm run media:install-binaries`（安装/链接 Remotion compositor + ffmpeg/ffprobe）。
 
 ## 本地样例素材导入（建议演示用）
 

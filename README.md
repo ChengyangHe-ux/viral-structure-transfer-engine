@@ -31,11 +31,13 @@ npm run cases:generate
 npm run video:render -- --input cases/generated/demo-学习平板.json --out renders/demo.mp4 --title "学习平板结构演示稿" --quality high
 ```
 
+提示：首次渲染前先执行一次 `npm run media:install-binaries`（会安装/链接 Remotion compositor + ffmpeg/ffprobe）。
+
 ## 本地样例素材（可选）
 
 - 把 `mp4/mov` 放到 `data/uploads/`（已在 `.gitignore` 中，不会被提交）。
 - 打开页面后，可在“输入素材 → 本地已导入视频（data/uploads）”直接选择，无需重复上传。
-- 如需“自动读取时长/分辨率/抽帧”，先执行一次：`npm run media:install-binaries`（会在 `.remotion-binaries/` 放置 ffmpeg/ffprobe）。
+- 如需“自动读取时长/分辨率/抽帧”，先执行一次：`npm run media:install-binaries`（会在 `.remotion-binaries/` 放置 compositor + ffmpeg/ffprobe）。
 
 ## AI 配置
 

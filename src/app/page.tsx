@@ -817,6 +817,7 @@ export default function Home() {
   const [availableUploads, setAvailableUploads] = useState<
     Array<{ name: string; sizeBytes: number; modifiedAt: string }>
   >([]);
+  const [simpleMode, setSimpleMode] = useState(true);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<VideoStructureAnalysis | null>(null);
   const [plan, setPlan] = useState<MigratedVideoPlan | null>(null);
@@ -1268,7 +1269,15 @@ export default function Home() {
                 把“样例为什么好用”拆成可复用结构，再迁移到你的新主题：生成能编辑、能导出、能一键渲染的视频方案稿。
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={simpleMode}
+                  onChange={(event) => setSimpleMode(event.target.checked)}
+                />
+                简洁模式
+              </label>
               <Button
                 disabled={!projectId}
                 onClick={() => projectId && downloadExport(projectId, "md", activePlanId)}
@@ -1317,7 +1326,11 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="workspace-grid mx-auto grid max-w-7xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[390px_minmax(0,1fr)] lg:px-8">
+      <section
+        className={`workspace-grid mx-auto grid max-w-7xl gap-5 px-4 py-6 sm:px-6 lg:px-8 ${
+          simpleMode ? "lg:grid-cols-1" : "lg:grid-cols-[390px_minmax(0,1fr)]"
+        }`}
+      >
         <div className="control-rail space-y-5">
           <Card>
             <CardHeader>
@@ -1475,7 +1488,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          {projectId ? (
+          {projectId && !simpleMode ? (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1588,33 +1601,35 @@ export default function Home() {
             </Card>
           ) : null}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PencilLine className="size-4 text-primary" />
-                自然语言编辑
-              </CardTitle>
-              <CardDescription>用一句话提需求，生成一个“改动后的新版本”并自动入库。</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                disabled={!plan}
-                placeholder="例如：把开头改成“先给结果再解释”，并把证据写得更可信（数据/对比/用户反馈）。"
-                value={refineInstruction}
-                onChange={(event) => setRefineInstruction(event.target.value)}
-              />
-              <Button
-                className="w-full"
-                disabled={!plan || status.type === "loading"}
-                onClick={handleRefinePlan}
-                type="button"
-                variant="outline"
-              >
-                {status.type === "loading" ? <Loader2 className="animate-spin" /> : <PencilLine />}
-                应用修改
-              </Button>
-            </CardContent>
-          </Card>
+          {!simpleMode ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PencilLine className="size-4 text-primary" />
+                  自然语言编辑
+                </CardTitle>
+                <CardDescription>用一句话提需求，生成一个“改动后的新版本”并自动入库。</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Textarea
+                  disabled={!plan}
+                  placeholder="例如：把开头改成“先给结果再解释”，并把证据写得更可信（数据/对比/用户反馈）。"
+                  value={refineInstruction}
+                  onChange={(event) => setRefineInstruction(event.target.value)}
+                />
+                <Button
+                  className="w-full"
+                  disabled={!plan || status.type === "loading"}
+                  onClick={handleRefinePlan}
+                  type="button"
+                  variant="outline"
+                >
+                  {status.type === "loading" ? <Loader2 className="animate-spin" /> : <PencilLine />}
+                  应用修改
+                </Button>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
 
         <div className="result-rail space-y-5">
@@ -1713,13 +1728,13 @@ export default function Home() {
 
                   {plan.evaluation ? <EvaluationPanel evaluation={plan.evaluation} /> : null}
 
-                  {plan.materialAdaptation ? (
+                  {!simpleMode && plan.materialAdaptation ? (
                     <MaterialAdaptationPanel adaptation={plan.materialAdaptation} />
                   ) : null}
 
-                  <TimelineOverview rows={activeMigrationRows} />
+                  {!simpleMode ? <TimelineOverview rows={activeMigrationRows} /> : null}
 
-                  {analysis ? (
+                  {!simpleMode && analysis ? (
                     <MigrationMappingPanel
                       analysis={analysis}
                       plan={plan}

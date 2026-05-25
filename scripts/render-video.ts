@@ -100,6 +100,7 @@ async function main() {
     composition,
     serveUrl: bundled,
     codec: "h264",
+    audioCodec: "mp3",
     outputLocation: resolvedOut,
     inputProps: { plan, title: args.title || title || "爆款结构迁移引擎（结构演示稿）" },
     binariesDirectory,
