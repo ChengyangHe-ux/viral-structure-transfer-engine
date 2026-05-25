@@ -121,6 +121,7 @@ export function ProductCommercial15({
       />
 
       <WaterLines frame={frame} />
+      <SceneImageStacks frame={frame} productName={productName} />
       <BottleHero frame={frame} productName={productName} />
       <TopBrand productName={productName} />
       <HookScene frame={frame} fps={fps} title={title} />
@@ -173,18 +174,22 @@ function AquaBackdrop({ frame }: { frame: number }) {
 
 function BottleHero({ frame, productName }: { frame: number; productName: string }) {
   const float = Math.sin(frame / 34) * 10;
-  const turn = interpolate(frame, [0, 450], [-2.2, 2.2]);
+  const turn = interpolate(frame, [0, 150, 270, 360, 450], [-2.2, 1.8, -1.2, 2.6, 0.6]);
   const shine = interpolate(frame % 120, [0, 70, 120], [-90, 160, 260]);
+  const right = interpolate(frame, [0, 120, 270, 360, 450], [-26, -118, -62, 54, 118]);
+  const top = interpolate(frame, [0, 120, 270, 360, 450], [330, 245, 310, 255, 165]);
+  const scale = interpolate(frame, [0, 120, 270, 360, 450], [1, 0.86, 0.92, 0.98, 0.74]);
 
   return (
     <div
       style={{
         position: "absolute",
-        right: -26,
-        top: 330 + float,
+        right,
+        top: top + float,
         width: 430,
         height: 1030,
-        transform: `rotate(${turn}deg)`,
+        transform: `rotate(${turn}deg) scale(${scale})`,
+        transformOrigin: "center top",
         filter: "drop-shadow(0 42px 72px rgba(0, 31, 36, 0.34))",
       }}
     >
@@ -257,6 +262,221 @@ function BottleHero({ frame, productName }: { frame: number; productName: string
         </div>
       </div>
     </div>
+  );
+}
+
+const visualScenes = [
+  {
+    sceneIndex: 0,
+    tiles: [
+      { kind: "pack", label: "冰感瓶身", x: 66, y: 180, w: 245, h: 330, rotate: -4, delay: 0 },
+      { kind: "splash", label: "清冽水花", x: 330, y: 245, w: 260, h: 210, rotate: 3, delay: 8 },
+      { kind: "macro", label: "凝露细节", x: 120, y: 530, w: 300, h: 240, rotate: 2, delay: 15 },
+    ],
+  },
+  {
+    sceneIndex: 1,
+    tiles: [
+      { kind: "mountain", label: "天然水源", x: 420, y: 330, w: 292, h: 248, rotate: -5, delay: 0 },
+      { kind: "mineral", label: "矿物质感", x: 120, y: 520, w: 250, h: 280, rotate: 4, delay: 10 },
+      { kind: "splash", label: "入口轻盈", x: 420, y: 635, w: 220, h: 190, rotate: 6, delay: 18 },
+    ],
+  },
+  {
+    sceneIndex: 2,
+    tiles: [
+      { kind: "commute", label: "通勤", x: 610, y: 260, w: 300, h: 230, rotate: 3, delay: 0 },
+      { kind: "gym", label: "运动", x: 575, y: 530, w: 260, h: 255, rotate: -5, delay: 12 },
+      { kind: "desk", label: "办公", x: 650, y: 830, w: 250, h: 210, rotate: 4, delay: 24 },
+    ],
+  },
+  {
+    sceneIndex: 3,
+    tiles: [
+      { kind: "macro", label: "口感清透", x: 480, y: 260, w: 300, h: 300, rotate: 5, delay: 0 },
+      { kind: "splash", label: "不甜不腻", x: 125, y: 480, w: 280, h: 230, rotate: -4, delay: 8 },
+      { kind: "mineral", label: "随时补水", x: 520, y: 665, w: 250, h: 250, rotate: -2, delay: 18 },
+    ],
+  },
+  {
+    sceneIndex: 4,
+    tiles: [
+      { kind: "pack", label: "单瓶装", x: 620, y: 230, w: 230, h: 315, rotate: -5, delay: 0 },
+      { kind: "pack", label: "家庭装", x: 785, y: 470, w: 210, h: 285, rotate: 5, delay: 8 },
+      { kind: "splash", label: "尝鲜优惠", x: 540, y: 705, w: 260, h: 200, rotate: 2, delay: 16 },
+    ],
+  },
+] as const;
+
+function SceneImageStacks({
+  frame,
+  productName,
+}: {
+  frame: number;
+  productName: string;
+}) {
+  return (
+    <>
+      {visualScenes.map((scene) => (
+        <div
+          key={scene.sceneIndex}
+          style={{
+            position: "absolute",
+            inset: 0,
+            opacity: sceneOpacity(frame, scene.sceneIndex),
+          }}
+        >
+          {scene.tiles.map((tile, index) => (
+            <VisualTile
+              key={`${scene.sceneIndex}-${tile.kind}-${index}`}
+              frame={frame}
+              sceneIndex={scene.sceneIndex}
+              productName={productName}
+              {...tile}
+            />
+          ))}
+        </div>
+      ))}
+    </>
+  );
+}
+
+function VisualTile({
+  frame,
+  sceneIndex,
+  productName,
+  kind,
+  label,
+  x,
+  y,
+  w,
+  h,
+  rotate,
+  delay,
+}: {
+  frame: number;
+  sceneIndex: number;
+  productName: string;
+  kind: "pack" | "splash" | "macro" | "mountain" | "mineral" | "commute" | "gym" | "desk";
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotate: number;
+  delay: number;
+}) {
+  const local = sceneFrame(frame, sceneIndex);
+  const appear = interpolate(local, [delay, delay + 16], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+  const drift = interpolate(local, [0, scenes[sceneIndex]!.to - scenes[sceneIndex]!.from], [0, -18]);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: x,
+        top: y + drift,
+        width: w,
+        height: h,
+        borderRadius: 8,
+        overflow: "hidden",
+        opacity: appear * 0.92,
+        transform: `translateY(${interpolate(appear, [0, 1], [46, 0])}px) scale(${interpolate(appear, [0, 1], [0.92, 1])}) rotate(${rotate}deg)`,
+        boxShadow: "0 24px 70px rgba(2, 40, 45, 0.28)",
+        border: "1px solid rgba(255,255,255,0.45)",
+        background: "rgba(240,255,252,0.2)",
+      }}
+    >
+      <TileArt kind={kind} productName={productName} />
+      <div
+        style={{
+          position: "absolute",
+          left: 14,
+          right: 14,
+          bottom: 14,
+          padding: "10px 12px",
+          borderRadius: 4,
+          background: "rgba(7,48,55,0.66)",
+          color: "#F8FFFD",
+          fontSize: 18,
+          fontWeight: 760,
+          backdropFilter: "blur(8px)",
+        }}
+      >
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function TileArt({
+  kind,
+  productName,
+}: {
+  kind: "pack" | "splash" | "macro" | "mountain" | "mineral" | "commute" | "gym" | "desk";
+  productName: string;
+}) {
+  if (kind === "pack") {
+    return (
+      <AbsoluteFill style={{ background: "linear-gradient(180deg, #EFFFFB, #7ABFC2)" }}>
+        <div style={{ position: "absolute", left: "36%", top: 34, width: "28%", height: "70%", borderRadius: 42, background: "rgba(255,255,255,0.48)", border: "1px solid rgba(255,255,255,0.78)" }} />
+        <div style={{ position: "absolute", left: "31%", top: "46%", width: "38%", height: 54, borderRadius: 4, background: "#F8FFFD", color: "#073037", fontSize: 15, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center" }}>{productName}</div>
+      </AbsoluteFill>
+    );
+  }
+
+  if (kind === "mountain") {
+    return (
+      <AbsoluteFill style={{ background: "linear-gradient(180deg, #DDF8F6 0%, #8BC9CC 58%, #1F666D 100%)" }}>
+        <div style={{ position: "absolute", left: -20, right: -20, bottom: 0, height: "58%", clipPath: "polygon(0 62%, 22% 18%, 40% 52%, 58% 12%, 78% 58%, 100% 25%, 100% 100%, 0 100%)", background: "rgba(7,48,55,0.5)" }} />
+        <div style={{ position: "absolute", left: -10, right: -10, bottom: 0, height: "38%", background: "rgba(255,255,255,0.24)" }} />
+      </AbsoluteFill>
+    );
+  }
+
+  if (kind === "commute" || kind === "gym" || kind === "desk") {
+    const accent = kind === "gym" ? "#D6F1EA" : kind === "desk" ? "#F3FFFC" : "#C3E8E5";
+    return (
+      <AbsoluteFill style={{ background: `linear-gradient(145deg, ${accent}, #2A747B)` }}>
+        <div style={{ position: "absolute", left: 26, top: 32, width: 92, height: 92, borderRadius: 8, background: "rgba(255,255,255,0.36)" }} />
+        <div style={{ position: "absolute", right: 24, top: 52, width: 112, height: 160, borderRadius: 8, border: "2px solid rgba(255,255,255,0.56)" }} />
+        <div style={{ position: "absolute", left: 28, right: 28, bottom: 50, height: 5, background: "rgba(255,255,255,0.55)" }} />
+        <div style={{ position: "absolute", left: 28, width: 140, bottom: 72, height: 5, background: "rgba(255,255,255,0.35)" }} />
+      </AbsoluteFill>
+    );
+  }
+
+  return (
+    <AbsoluteFill
+      style={{
+        background:
+          kind === "macro"
+            ? "radial-gradient(circle at 50% 35%, rgba(255,255,255,0.88), rgba(139,213,212,0.7) 38%, #2A747B 100%)"
+            : kind === "mineral"
+              ? "linear-gradient(135deg, #F1FFFC, #73BFC3 45%, #15505A)"
+              : "radial-gradient(circle at 35% 32%, rgba(255,255,255,0.9), rgba(178,232,229,0.5) 28%, #2A747B 100%)",
+      }}
+    >
+      {[0, 1, 2, 3, 4].map((index) => (
+        <div
+          key={index}
+          style={{
+            position: "absolute",
+            left: `${18 + index * 15}%`,
+            top: `${20 + (index % 2) * 22}%`,
+            width: 34 + index * 9,
+            height: 34 + index * 9,
+            borderRadius: 999,
+            border: "1px solid rgba(255,255,255,0.56)",
+            background: "rgba(255,255,255,0.18)",
+          }}
+        />
+      ))}
+    </AbsoluteFill>
   );
 }
 
