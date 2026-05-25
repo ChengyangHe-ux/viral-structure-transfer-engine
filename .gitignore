@@ -8,6 +8,7 @@ coverage
 *.tsbuildinfo
 /renders/
 /submissions/
+/public/render-sources/
 *.mp4
 .remotion-binaries/
 .env

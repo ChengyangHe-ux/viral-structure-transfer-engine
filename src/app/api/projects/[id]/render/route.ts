@@ -11,10 +11,12 @@ import { migratedVideoPlanSchema } from "@/lib/schemas";
 export const runtime = "nodejs";
 
 type RenderQuality = "high" | "draft";
+type RenderMode = "structure" | "commercial";
 
 type RequestBody = {
   planId?: string | null;
   quality?: RenderQuality;
+  mode?: RenderMode;
   title?: string;
 };
 
@@ -65,6 +67,7 @@ export async function POST(
 
     const plan = migratedVideoPlanSchema.parse(record.data);
     const quality: RenderQuality = body.quality === "draft" ? "draft" : "high";
+    const mode: RenderMode = body.mode === "commercial" ? "commercial" : "structure";
     const title = normalizeText(body.title) ?? project.title ?? "爆款结构迁移引擎（结构演示稿）";
 
     const renderId = randomUUID();
@@ -86,6 +89,15 @@ export async function POST(
       title,
       "--quality",
       quality,
+      ...(mode === "commercial"
+        ? [
+            "--composition",
+            "ProductCommercial15",
+            "--product-name",
+            "天然矿泉水",
+            ...(project.mediaPath ? ["--source-video", project.mediaPath] : []),
+          ]
+        : []),
     ]);
 
     return NextResponse.json({
@@ -94,6 +106,7 @@ export async function POST(
       renderId,
       downloadUrl: `/api/renders/${renderId}`,
       quality,
+      mode,
     });
   } catch (error) {
     return NextResponse.json(

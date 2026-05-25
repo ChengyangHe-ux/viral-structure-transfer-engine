@@ -1,5 +1,9 @@
 import { Composition } from "remotion";
 
+import {
+  ProductCommercial15,
+  type ProductCommercial15Props,
+} from "@/remotion/product-commercial-15";
 import { VideoFromPlan, type VideoFromPlanProps } from "@/remotion/video-from-plan";
 import { calculateVideoFramesFromPlan } from "@/remotion/video-metadata";
 
@@ -24,6 +28,19 @@ export function RemotionRoot() {
           title: "爆款结构迁移引擎（结构演示稿）",
           plan: null,
         } satisfies VideoFromPlanProps}
+      />
+      <Composition
+        id="ProductCommercial15"
+        component={ProductCommercial15}
+        fps={30}
+        width={1080}
+        height={1920}
+        durationInFrames={30 * 15}
+        defaultProps={{
+          title: "这一口，很清冽",
+          productName: "天然矿泉水",
+          sourceVideoPath: null,
+        } satisfies ProductCommercial15Props}
       />
     </>
   );
