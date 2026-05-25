@@ -46,6 +46,12 @@ npm run video:render -- --input cases/generated/demo-学习平板.json --out ren
 
 说明：这里生成的是“结构占位演示稿”（字幕卡/结构标签/时间线节奏），后续可在剪辑软件中替换为真实素材或 AIGC 画面。
 
+## 本地样例素材导入（建议演示用）
+
+- 将样例 `mp4/mov` 放入 `data/uploads/`（已被 `.gitignore` 忽略）。
+- 页面“输入素材”支持直接选择本地已导入视频，用于拆解结构与抽帧，无需重复上传。
+- 如需自动读取视频元数据与抽帧，执行一次：`npm run media:install-binaries`。
+
 ## 评分覆盖
 
 | 评分项 | 项目对应能力 | 演示位置 |

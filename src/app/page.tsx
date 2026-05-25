@@ -813,6 +813,10 @@ export default function Home() {
   const [targetBrief, setTargetBrief] = useState("");
   const [userMaterials, setUserMaterials] = useState("");
   const [sampleFile, setSampleFile] = useState<File | null>(null);
+  const [localUploadName, setLocalUploadName] = useState("");
+  const [availableUploads, setAvailableUploads] = useState<
+    Array<{ name: string; sizeBytes: number; modifiedAt: string }>
+  >([]);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<VideoStructureAnalysis | null>(null);
   const [plan, setPlan] = useState<MigratedVideoPlan | null>(null);
@@ -849,6 +853,22 @@ export default function Home() {
     if (analysis) return 2;
     return 1;
   }, [analysis, plan]);
+
+  async function loadUploads() {
+    try {
+      const response = await fetch("/api/uploads");
+      const payload = (await response.json()) as {
+        files?: Array<{ name: string; sizeBytes: number; modifiedAt: string }>;
+      };
+      if (!response.ok) {
+        setAvailableUploads([]);
+        return;
+      }
+      setAvailableUploads(payload.files || []);
+    } catch {
+      setAvailableUploads([]);
+    }
+  }
 
   const activePlanVersion = useMemo(
     () => plan?.versions[Math.min(activeVersion, plan.versions.length - 1)],
@@ -917,10 +937,15 @@ export default function Home() {
   }
 
   async function handleAnalyze() {
-    if (!sampleNotes.trim() && !sampleFile && !sampleUrl.trim()) {
+    if (
+      !sampleNotes.trim() &&
+      !sampleFile &&
+      !sampleUrl.trim() &&
+      !localUploadName.trim()
+    ) {
       setStatus({
         type: "error",
-        message: "请至少提供样例视频文件、链接或人工观察文本。",
+        message: "请至少提供样例视频文件、本地导入视频、链接或人工观察文本。",
       });
       return;
     }
@@ -942,6 +967,7 @@ export default function Home() {
     formData.append("projectTitle", projectTitle);
     formData.append("sampleTitle", sampleTitle);
     formData.append("sampleUrl", sampleUrl);
+    formData.append("localUploadName", localUploadName);
     formData.append("sampleNotes", sampleNotes || "用户上传了样例视频，请结合视频元数据和常见短视频结构进行拆解。");
     formData.append("targetBrief", targetBrief);
     if (sampleFile) {
@@ -1335,12 +1361,53 @@ export default function Home() {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="localUploadName">本地已导入视频（data/uploads）</Label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <select
+                      id="localUploadName"
+                      className="flex h-10 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      value={localUploadName}
+                      onFocus={() => {
+                        if (availableUploads.length === 0) void loadUploads();
+                      }}
+                      onChange={(event) => {
+                        setLocalUploadName(event.target.value);
+                        setSampleFile(null);
+                      }}
+                    >
+                      <option value="">（不使用本地导入）</option>
+                      {availableUploads.map((file) => (
+                        <option key={file.name} value={file.name}>
+                          {file.name} ({(file.sizeBytes / 1024 / 1024).toFixed(1)} MB)
+                        </option>
+                      ))}
+                    </select>
+                    <Button onClick={loadUploads} size="sm" type="button" variant="outline">
+                      刷新
+                    </Button>
+                  </div>
+                  {availableUploads.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      未检测到本地导入的视频文件。可把 mp4/mov 放到 data/uploads（已在 .gitignore 中）。
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      选择后将直接读取本地文件生成元数据与抽帧，无需重复上传。
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="sampleFile">样例视频文件</Label>
                 <Input
                   id="sampleFile"
                   type="file"
                   accept="video/*"
-                  onChange={(event) => setSampleFile(event.target.files?.[0] || null)}
+                  onChange={(event) => {
+                    setSampleFile(event.target.files?.[0] || null);
+                    setLocalUploadName("");
+                  }}
                 />
                 {sampleFile ? (
                   <p className="text-xs text-muted-foreground">

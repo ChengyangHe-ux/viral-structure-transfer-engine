@@ -174,6 +174,7 @@ export const analyzeSampleRequestSchema = z.object({
   projectTitle: z.string().min(1).default("爆款结构迁移项目"),
   sampleTitle: z.string().min(1).default("未命名样例"),
   sampleUrl: z.string().url().optional().or(z.literal("")),
+  localUploadName: z.string().optional().or(z.literal("")),
   sampleNotes: z.string().min(1),
   targetBrief: z.string().default(""),
 });

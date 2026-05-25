@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import { mkdir, writeFile } from "fs/promises";
+import { access, mkdir, readdir, stat, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 
@@ -33,13 +33,28 @@ function runCommand(command: string, args: string[]) {
   });
 }
 
-async function commandAvailable(command: string) {
+async function fileExists(filePath: string) {
   try {
-    await runCommand(command, ["-version"]);
+    await access(filePath);
     return true;
   } catch {
     return false;
   }
+}
+
+async function resolveBinary(command: "ffprobe" | "ffmpeg") {
+  try {
+    await runCommand(command, ["-version"]);
+    return command;
+  } catch {
+    // fallthrough
+  }
+
+  const binariesDirectory = path.resolve(process.cwd(), ".remotion-binaries");
+  const localCandidate = path.join(binariesDirectory, command);
+  if (await fileExists(localCandidate)) return localCandidate;
+
+  return null;
 }
 
 function safeFileName(name: string) {
@@ -65,14 +80,51 @@ export async function saveUploadedVideo(file: File) {
   return filePath;
 }
 
+export async function listUploadedVideos() {
+  await mkdir(uploadDir, { recursive: true });
+  const entries = await readdir(uploadDir, { withFileTypes: true });
+  const videos = entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .filter((name) => /\.(mp4|mov|m4v|webm)$/i.test(name))
+    .sort((a, b) => a.localeCompare(b));
+
+  const withStats = await Promise.all(
+    videos.map(async (name) => {
+      const filePath = path.join(uploadDir, name);
+      const fileStat = await stat(filePath);
+      return {
+        name,
+        sizeBytes: fileStat.size,
+        modifiedAt: fileStat.mtime.toISOString(),
+      };
+    }),
+  );
+
+  return withStats;
+}
+
+export async function resolveUploadedVideoPath(uploadName: string) {
+  const trimmed = uploadName.trim();
+  const base = path.basename(trimmed);
+  if (!base || base !== trimmed) {
+    throw new Error("Invalid upload name.");
+  }
+  const fullPath = path.join(uploadDir, base);
+  if (!(await fileExists(fullPath))) {
+    throw new Error("Upload not found.");
+  }
+  return fullPath;
+}
+
 export async function inspectMedia(filePath: string): Promise<MediaMeta> {
-  const hasFfprobe = await commandAvailable("ffprobe");
-  if (!hasFfprobe) {
+  const ffprobe = await resolveBinary("ffprobe");
+  if (!ffprobe) {
     return mediaMetaSchema.parse({ sourceKind: "upload", previewFrames: [] });
   }
 
   try {
-    const { stdout } = await runCommand("ffprobe", [
+    const { stdout } = await runCommand(ffprobe, [
       "-v",
       "error",
       "-show_streams",
@@ -109,8 +161,8 @@ export async function inspectMedia(filePath: string): Promise<MediaMeta> {
 }
 
 export async function extractPreviewFrames(filePath: string, duration?: number) {
-  const hasFfmpeg = await commandAvailable("ffmpeg");
-  if (!hasFfmpeg) {
+  const ffmpeg = await resolveBinary("ffmpeg");
+  if (!ffmpeg) {
     return [];
   }
 
@@ -122,7 +174,7 @@ export async function extractPreviewFrames(filePath: string, duration?: number) 
     const frameId = `${randomUUID()}.jpg`;
     const framePath = path.join(frameDir, frameId);
     try {
-      await runCommand("ffmpeg", [
+      await runCommand(ffmpeg, [
         "-y",
         "-ss",
         String(Math.max(0, offset)),

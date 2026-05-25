@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { analyzeSample } from "@/lib/ai";
 import { prisma } from "@/lib/db";
-import { extractPreviewFrames, inspectMedia, saveUploadedVideo } from "@/lib/media";
+import {
+  extractPreviewFrames,
+  inspectMedia,
+  resolveUploadedVideoPath,
+  saveUploadedVideo,
+} from "@/lib/media";
 import {
   analyzeSampleRequestSchema,
   mediaMetaSchema,
@@ -11,6 +16,11 @@ import {
 import { renderAnalysisMarkdown } from "@/lib/markdown";
 
 export const runtime = "nodejs";
+
+function normalizeText(value: unknown) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return trimmed ? trimmed : null;
+}
 
 async function parseRequest(request: NextRequest) {
   const contentType = request.headers.get("content-type") || "";
@@ -22,6 +32,7 @@ async function parseRequest(request: NextRequest) {
       projectTitle: formData.get("projectTitle")?.toString() || undefined,
       sampleTitle: formData.get("sampleTitle")?.toString() || undefined,
       sampleUrl: formData.get("sampleUrl")?.toString() || undefined,
+      localUploadName: formData.get("localUploadName")?.toString() || undefined,
       sampleNotes: formData.get("sampleNotes")?.toString() || undefined,
       targetBrief: formData.get("targetBrief")?.toString() || "",
     });
@@ -37,6 +48,18 @@ async function parseRequest(request: NextRequest) {
       };
     }
 
+    const localUploadName = normalizeText(parsed.localUploadName);
+    if (localUploadName) {
+      const mediaPath = await resolveUploadedVideoPath(localUploadName);
+      const inspected = await inspectMedia(mediaPath);
+      const previewFrames = await extractPreviewFrames(mediaPath, inspected.durationSeconds);
+      return {
+        ...parsed,
+        mediaPath,
+        mediaMeta: mediaMetaSchema.parse({ ...inspected, previewFrames, sourceKind: "upload" }),
+      };
+    }
+
     return {
       ...parsed,
       mediaPath: null,
@@ -49,6 +72,17 @@ async function parseRequest(request: NextRequest) {
 
   const body = await request.json();
   const parsed = analyzeSampleRequestSchema.parse(body);
+  const localUploadName = normalizeText(parsed.localUploadName);
+  if (localUploadName) {
+    const mediaPath = await resolveUploadedVideoPath(localUploadName);
+    const inspected = await inspectMedia(mediaPath);
+    const previewFrames = await extractPreviewFrames(mediaPath, inspected.durationSeconds);
+    return {
+      ...parsed,
+      mediaPath,
+      mediaMeta: mediaMetaSchema.parse({ ...inspected, previewFrames, sourceKind: "upload" }),
+    };
+  }
   return {
     ...parsed,
     mediaPath: null,
