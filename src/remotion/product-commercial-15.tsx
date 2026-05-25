@@ -81,7 +81,7 @@ export function ProductCommercial15({
         overflow: "hidden",
       }}
     >
-      <AquaBackdrop frame={frame} />
+      <SceneStageBackdrops frame={frame} />
       {videoSrc ? (
         <Video
           src={videoSrc}
@@ -93,9 +93,10 @@ export function ProductCommercial15({
             width: "100%",
             height: "100%",
             objectFit: "cover",
-            opacity: 0.1,
+            opacity: 0.04,
             transform: `scale(${1.18 + progress * 0.07}) translateY(${interpolate(progress, [0, 1], [0, -18])}px)`,
             filter: "blur(28px) saturate(1.28) contrast(1.08) brightness(1.04)",
+            mixBlendMode: "overlay",
           }}
         />
       ) : (
@@ -107,23 +108,12 @@ export function ProductCommercial15({
         />
       )}
 
-      <AbsoluteFill
-        style={{
-          background:
-            "linear-gradient(180deg, rgba(4,18,23,0.26) 0%, rgba(4,18,23,0.03) 34%, rgba(4,18,23,0.24) 70%, rgba(4,18,23,0.72) 100%)",
-        }}
-      />
-      <AbsoluteFill
-        style={{
-          background:
-            "linear-gradient(90deg, rgba(5, 41, 49, 0.48) 0%, rgba(5, 41, 49, 0.08) 42%, rgba(255,255,255,0.06) 100%)",
-        }}
-      />
+      <SceneToneOverlays frame={frame} />
 
       <WaterLines frame={frame} />
       <SceneImageStacks frame={frame} productName={productName} />
       <BottleHero frame={frame} productName={productName} />
-      <TopBrand productName={productName} />
+      <TopBrand frame={frame} productName={productName} />
       <HookScene frame={frame} fps={fps} title={title} />
       <SourceScene frame={frame} />
       <ScenarioScene frame={frame} />
@@ -135,40 +125,186 @@ export function ProductCommercial15({
   );
 }
 
-function AquaBackdrop({ frame }: { frame: number }) {
+function SceneStageBackdrops({ frame }: { frame: number }) {
   const drift = interpolate(frame, [0, 450], [-80, 90]);
+  const stageProgress = (sceneIndex: number) => inOut(frame, sceneIndex);
 
   return (
     <AbsoluteFill>
-      <AbsoluteFill
-        style={{
-          background:
-            "linear-gradient(180deg, #F3FFFC 0%, #BDE4E1 38%, #4A8586 72%, #0B343A 100%)",
-        }}
-      />
-      <AbsoluteFill
-        style={{
-          background:
-            "linear-gradient(145deg, rgba(255,255,255,0.58), rgba(255,255,255,0) 44%), linear-gradient(25deg, rgba(24,108,121,0.34), rgba(255,255,255,0) 48%)",
-        }}
-      />
-      {[0, 1, 2, 3].map((index) => (
-        <div
-          key={index}
+      <AbsoluteFill style={{ opacity: sceneOpacity(frame, 0) }}>
+        <AbsoluteFill
           style={{
-            position: "absolute",
-            left: -170 + index * 280 + drift * (index % 2 ? -0.25 : 0.2),
-            top: 260 + index * 220,
-            width: 760,
-            height: 2,
             background:
-              "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.42), rgba(255,255,255,0))",
-            transform: `rotate(${-14 + index * 5}deg)`,
-            opacity: 0.55,
+              "linear-gradient(180deg, #F7FFFD 0%, #C7E8E5 46%, #2D747A 100%)",
           }}
         />
-      ))}
+        <div
+          style={{
+            position: "absolute",
+            left: -90,
+            top: 210,
+            width: 850,
+            height: 850,
+            borderRadius: 999,
+            background:
+              "radial-gradient(circle, rgba(255,255,255,0.58), rgba(255,255,255,0.12) 42%, rgba(255,255,255,0) 70%)",
+            transform: `translate(${stageProgress(0) * 34}px, ${stageProgress(0) * -18}px)`,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 66,
+            right: 66,
+            top: 180,
+            height: 6,
+            background:
+              "linear-gradient(90deg, rgba(255,255,255,0.5), rgba(255,255,255,0.04))",
+          }}
+        />
+      </AbsoluteFill>
+
+      <AbsoluteFill style={{ opacity: sceneOpacity(frame, 1) }}>
+        <AbsoluteFill
+          style={{
+            background:
+              "linear-gradient(180deg, #E7FAF7 0%, #8ACBCB 52%, #164A55 100%)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: -70,
+            right: -80,
+            bottom: 0,
+            height: 760,
+            clipPath:
+              "polygon(0 56%, 18% 18%, 33% 48%, 50% 9%, 67% 48%, 82% 20%, 100% 58%, 100% 100%, 0 100%)",
+            background:
+              "linear-gradient(180deg, rgba(255,255,255,0.52), rgba(13,75,84,0.72))",
+            transform: `translateY(${stageProgress(1) * -26}px)`,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: -220 + drift * 0.2,
+            top: 600,
+            width: 1320,
+            height: 210,
+            borderRadius: "50%",
+            border: "2px solid rgba(255,255,255,0.22)",
+          }}
+        />
+      </AbsoluteFill>
+
+      <AbsoluteFill style={{ opacity: sceneOpacity(frame, 2) }}>
+        <AbsoluteFill
+          style={{
+            background:
+              "linear-gradient(180deg, #F3FFFC 0%, #B8E2DE 42%, #1F5E67 100%)",
+          }}
+        />
+        {[0, 1, 2].map((index) => (
+          <div
+            key={index}
+            style={{
+              position: "absolute",
+              left: 76 + index * 300,
+              top: 180 + index * 92,
+              width: 245,
+              height: 1120,
+              borderRadius: 10,
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0.04))",
+              border: "1px solid rgba(255,255,255,0.2)",
+              transform: `translateY(${stageProgress(2) * (index % 2 ? -42 : 32)}px) rotate(${index === 1 ? -3 : 3}deg)`,
+            }}
+          />
+        ))}
+      </AbsoluteFill>
+
+      <AbsoluteFill style={{ opacity: sceneOpacity(frame, 3) }}>
+        <AbsoluteFill
+          style={{
+            background:
+              "radial-gradient(circle at 48% 28%, #FFFFFF 0%, #CFF3EF 18%, #6FB9BE 47%, #0C3A43 100%)",
+          }}
+        />
+        {[0, 1, 2, 3, 4, 5].map((index) => (
+          <div
+            key={index}
+            style={{
+              position: "absolute",
+              left: 80 + ((index * 167) % 820),
+              top: 230 + ((index * 211) % 980),
+              width: 116 + index * 18,
+              height: 116 + index * 18,
+              borderRadius: 999,
+              border: "2px solid rgba(255,255,255,0.38)",
+              background: "rgba(255,255,255,0.08)",
+              transform: `translateY(${Math.sin((frame + index * 24) / 26) * 18}px)`,
+            }}
+          />
+        ))}
+      </AbsoluteFill>
+
+      <AbsoluteFill style={{ opacity: sceneOpacity(frame, 4) }}>
+        <AbsoluteFill
+          style={{
+            background:
+              "linear-gradient(180deg, #F8FFFC 0%, #D9EEEA 55%, #B4D2CE 100%)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 180,
+            height: 560,
+            background:
+              "linear-gradient(180deg, rgba(255,255,255,0.88), rgba(255,255,255,0.08))",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 64,
+            right: 64,
+            top: 720,
+            height: 2,
+            background: "rgba(7,48,55,0.18)",
+            boxShadow: "0 32px 90px rgba(7,48,55,0.22)",
+          }}
+        />
+      </AbsoluteFill>
     </AbsoluteFill>
+  );
+}
+
+function SceneToneOverlays({ frame }: { frame: number }) {
+  return (
+    <>
+      <AbsoluteFill
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(4,18,23,0.08) 0%, rgba(4,18,23,0.02) 34%, rgba(4,18,23,0.18) 70%, rgba(4,18,23,0.62) 100%)",
+          opacity:
+            sceneOpacity(frame, 0) +
+            sceneOpacity(frame, 1) * 0.9 +
+            sceneOpacity(frame, 2) * 1.05 +
+            sceneOpacity(frame, 3) * 1.15,
+        }}
+      />
+      <AbsoluteFill
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(5, 41, 49, 0.42) 0%, rgba(5, 41, 49, 0.05) 42%, rgba(255,255,255,0.06) 100%)",
+          opacity: 1 - sceneOpacity(frame, 4) * 0.72,
+        }}
+      />
+    </>
   );
 }
 
@@ -480,7 +616,11 @@ function TileArt({
   );
 }
 
-function TopBrand({ productName }: { productName: string }) {
+function TopBrand({ frame, productName }: { frame: number; productName: string }) {
+  const cta = sceneOpacity(frame, 4);
+  const color = cta > 0.35 ? "rgba(7,48,55,0.84)" : "rgba(250,255,253,0.92)";
+  const subColor = cta > 0.35 ? "rgba(7,48,55,0.62)" : "rgba(250,255,253,0.74)";
+
   return (
     <div
       style={{
@@ -493,11 +633,11 @@ function TopBrand({ productName }: { productName: string }) {
         alignItems: "center",
         fontSize: 24,
         fontWeight: 650,
-        color: "rgba(250,255,253,0.92)",
+        color,
       }}
     >
       <div>{productName}</div>
-      <div style={{ fontSize: 18, fontWeight: 500, opacity: 0.74 }}>15s CLEAN WATER CUT</div>
+      <div style={{ fontSize: 18, fontWeight: 500, color: subColor }}>15s CLEAN WATER CUT</div>
     </div>
   );
 }
