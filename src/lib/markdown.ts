@@ -55,6 +55,20 @@ ${plan.strategySummary}
 ### 继承的样例结构
 ${list(plan.inheritedStructure)}
 
+${plan.retrievedTechniques.length ? `### RAG 剪辑技巧命中
+
+生成前先用 Brief、用户素材和样例结构检索本地剪辑技巧库，再把命中技巧写入脚本节奏、画面建议和制作备注。
+
+| 技巧 | 类别 | 命中原因 | 应用方式 | 预期效果 |
+| --- | --- | --- | --- | --- |
+${plan.retrievedTechniques
+  .map(
+    (technique) =>
+      `| ${technique.title} | ${technique.category} | ${technique.whyMatched.join("；")} | ${technique.application} | ${technique.expectedImpact} |`,
+  )
+  .join("\n")}
+` : ""}
+
 ${plan.materialAdaptation ? `### 素材缺口与补全
 
 - 素材充分度：${plan.materialAdaptation.sufficiencyScore}/100

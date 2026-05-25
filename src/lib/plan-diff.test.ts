@@ -55,6 +55,7 @@ function basePlan(): MigratedVideoPlan {
       },
     ],
     evaluationChecklist: ["x"],
+    retrievedTechniques: [],
     productionNotes: [],
   };
 }
@@ -75,4 +76,3 @@ describe("diffPlans", () => {
     );
   });
 });
-

@@ -4,6 +4,10 @@ import { createFallbackAnalysis, createFallbackPlan } from "@/lib/fallbacks";
 import { attachPlanEvaluation } from "@/lib/evaluation";
 import { attachMaterialAdaptation } from "@/lib/materials";
 import {
+  attachEditingTechniquesToPlan,
+  retrieveEditingTechniques,
+} from "@/lib/editing-techniques";
+import {
   migratedVideoPlanSchema,
   videoStructureAnalysisSchema,
 } from "@/lib/schemas";
@@ -29,9 +33,17 @@ describe("structured output schemas", () => {
       userMaterials: "有界面截图、操作流程和领取入口。",
       analysis,
     });
+    const planWithTechniques = attachEditingTechniquesToPlan({
+      plan: basePlan,
+      techniques: retrieveEditingTechniques({
+        targetBrief: basePlan.targetBrief,
+        userMaterials: "有界面截图、操作流程和领取入口。",
+        analysis,
+      }),
+    });
     const plan = attachPlanEvaluation(
       attachMaterialAdaptation({
-        plan: basePlan,
+        plan: planWithTechniques,
         targetBrief: basePlan.targetBrief,
         userMaterials: "有界面截图、操作流程和领取入口。",
       }),
@@ -41,6 +53,7 @@ describe("structured output schemas", () => {
     const parsed = migratedVideoPlanSchema.parse(plan);
     expect(parsed.versions).toHaveLength(3);
     expect(parsed.versions[0].scriptBeats[0]).toHaveProperty("replaceableAssets");
+    expect(parsed.retrievedTechniques.length).toBeGreaterThan(0);
     expect(parsed.materialAdaptation?.slots.length).toBeGreaterThan(0);
     expect(parsed.evaluation?.overallScore).toBeGreaterThan(0);
   });

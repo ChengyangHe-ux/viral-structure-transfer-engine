@@ -158,6 +158,19 @@ export const materialAdaptationSchema = z.object({
   timelineAdjustment: z.string().min(1),
 });
 
+export const retrievedEditingTechniqueSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  category: z.string().min(1),
+  tags: z.array(z.string().min(1)).default([]),
+  useCase: z.string().min(1),
+  application: z.string().min(1),
+  expectedImpact: z.string().min(1),
+  whyMatched: z.array(z.string().min(1)).default([]),
+  score: z.number().min(0).default(0),
+  source: z.string().min(1).default("本地剪辑技巧库"),
+});
+
 export const migratedVideoPlanSchema = z.object({
   projectTitle: z.string().min(1),
   targetBrief: z.string().min(4),
@@ -165,6 +178,7 @@ export const migratedVideoPlanSchema = z.object({
   inheritedStructure: z.array(z.string().min(1)),
   versions: z.array(planVersionSchema).min(1),
   evaluationChecklist: z.array(z.string().min(1)),
+  retrievedTechniques: z.array(retrievedEditingTechniqueSchema).default([]),
   materialAdaptation: materialAdaptationSchema.optional(),
   evaluation: planEvaluationSchema.optional(),
   productionNotes: z.array(z.string().min(1)).default([]),
@@ -198,3 +212,4 @@ export type PlanBeat = z.infer<typeof planBeatSchema>;
 export type PlanVersion = z.infer<typeof planVersionSchema>;
 export type PlanEvaluation = z.infer<typeof planEvaluationSchema>;
 export type MaterialAdaptation = z.infer<typeof materialAdaptationSchema>;
+export type RetrievedEditingTechnique = z.infer<typeof retrievedEditingTechniqueSchema>;

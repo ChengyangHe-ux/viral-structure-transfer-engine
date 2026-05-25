@@ -13,6 +13,11 @@ import {
   createFallbackPlan,
   createRefinedFallbackPlan,
 } from "@/lib/fallbacks";
+import {
+  attachEditingTechniquesToPlan,
+  formatEditingTechniquesForPrompt,
+  retrieveEditingTechniques,
+} from "@/lib/editing-techniques";
 import { attachPlanEvaluation } from "@/lib/evaluation";
 import { attachMaterialAdaptation } from "@/lib/materials";
 import { describeMediaForPrompt } from "@/lib/media";
@@ -74,8 +79,19 @@ export async function generateMigratedPlan(input: {
   direction: string;
   analysis: VideoStructureAnalysis;
 }) {
+  const retrievedTechniques = retrieveEditingTechniques({
+    targetBrief: input.targetBrief,
+    userMaterials: input.userMaterials,
+    direction: input.direction,
+    analysis: input.analysis,
+    limit: 5,
+  });
+
   if (!hasAiConfig()) {
-    const plan = createFallbackPlan(input);
+    const plan = attachEditingTechniquesToPlan({
+      plan: createFallbackPlan(input),
+      techniques: retrievedTechniques,
+    });
     const adaptedPlan = attachMaterialAdaptation({
       plan,
       targetBrief: input.targetBrief,
@@ -104,14 +120,22 @@ export async function generateMigratedPlan(input: {
 样例结构分析：
 ${JSON.stringify(input.analysis, null, 2)}
 
+剪辑技巧库 RAG 命中（必须应用到脚本节奏、画面建议、包装和制作备注中）：
+${formatEditingTechniquesForPrompt(retrievedTechniques)}
+
 要求：
 1. 每个版本都必须包含时间段、镜头目的、画面建议、口播/字幕、包装风格、卖点意图、转场/节奏、可替换素材、风险提示。
 2. 必须考虑素材是否足够支撑目标结构；缺素材时用结构重排、文案/字幕补全、包装补全、AIGC 生成建议或现有素材复用补足。
 3. 方案应可被创作者直接二次编辑。
-4. 输出侧重结构迁移，不要复刻样例中的具体人物、台词和画面。`,
+4. 输出侧重结构迁移，不要复刻样例中的具体人物、台词和画面。
+5. retrievedTechniques 字段必须保留上述 RAG 命中项，productionNotes 至少写出 3 条具体剪辑执行提醒。`,
+    });
+    const plan = attachEditingTechniquesToPlan({
+      plan: result.object,
+      techniques: retrievedTechniques,
     });
     const adaptedPlan = attachMaterialAdaptation({
-      plan: result.object,
+      plan,
       targetBrief: input.targetBrief,
       userMaterials: input.userMaterials,
     });
@@ -122,7 +146,10 @@ ${JSON.stringify(input.analysis, null, 2)}
       aiError: null,
     };
   } catch (error) {
-    const plan = createFallbackPlan(input);
+    const plan = attachEditingTechniquesToPlan({
+      plan: createFallbackPlan(input),
+      techniques: retrievedTechniques,
+    });
     const adaptedPlan = attachMaterialAdaptation({
       plan,
       targetBrief: input.targetBrief,
@@ -171,8 +198,15 @@ ${JSON.stringify(input.plan, null, 2)}
 要求：保留可迁移结构，不复刻样例内容；输出完整多版本方案，而不是局部补丁。`,
     });
 
+    const nextPlan = input.plan.retrievedTechniques.length
+      ? attachEditingTechniquesToPlan({
+          plan: result.object,
+          techniques: input.plan.retrievedTechniques,
+        })
+      : result.object;
+
     return {
-      plan: attachPlanEvaluation(result.object, input.analysis),
+      plan: attachPlanEvaluation(nextPlan, input.analysis),
       usedFallback: false,
       aiError: null,
     };

@@ -55,6 +55,7 @@ function basePlan(): MigratedVideoPlan {
       },
     ],
     evaluationChecklist: ["Hook 是否具体"],
+    retrievedTechniques: [],
     productionNotes: [],
   };
 }

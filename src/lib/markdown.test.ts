@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { createFallbackAnalysis, createFallbackPlan } from "@/lib/fallbacks";
+import {
+  attachEditingTechniquesToPlan,
+  retrieveEditingTechniques,
+} from "@/lib/editing-techniques";
 import { attachPlanEvaluation } from "@/lib/evaluation";
 import { attachMaterialAdaptation } from "@/lib/materials";
 import {
@@ -32,9 +36,17 @@ describe("markdown rendering", () => {
       userMaterials: "有产品界面截图、操作录屏和领取链接。",
       analysis,
     });
+    const planWithTechniques = attachEditingTechniquesToPlan({
+      plan: basePlan,
+      techniques: retrieveEditingTechniques({
+        targetBrief: basePlan.targetBrief,
+        userMaterials: "有产品界面截图、操作录屏和领取链接。",
+        analysis,
+      }),
+    });
     const plan = attachPlanEvaluation(
       attachMaterialAdaptation({
-        plan: basePlan,
+        plan: planWithTechniques,
         targetBrief: basePlan.targetBrief,
         userMaterials: "有产品界面截图、操作录屏和领取链接。",
       }),
@@ -45,6 +57,7 @@ describe("markdown rendering", () => {
     expect(markdown).toContain("口播/字幕");
     expect(markdown).toContain("可替换素材");
     expect(markdown).toContain("稳妥转化版");
+    expect(markdown).toContain("RAG 剪辑技巧命中");
     expect(markdown).toContain("素材缺口与补全");
     expect(markdown).toContain("质量诊断");
   });

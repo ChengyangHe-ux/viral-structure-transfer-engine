@@ -53,6 +53,7 @@ import type {
   MigratedVideoPlan,
   PlanEvaluation,
   PlanVersion,
+  RetrievedEditingTechnique,
   VideoStructureAnalysis,
 } from "@/lib/schemas";
 
@@ -631,6 +632,54 @@ function MaterialAdaptationPanel({
   );
 }
 
+function EditingTechniquePanel({
+  techniques,
+}: {
+  techniques: RetrievedEditingTechnique[];
+}) {
+  if (!techniques.length) return null;
+
+  return (
+    <div className="space-y-4 rounded-lg border bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">RAG 技巧库</Badge>
+            <Badge variant="outline">命中 {techniques.length} 条</Badge>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            生成前用 Brief、素材线索和样例结构检索剪辑技巧库，把“怎么剪”注入到脚本、转场、字幕和制作备注里。
+          </p>
+        </div>
+        <Database className="size-8 shrink-0 text-primary" />
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        {techniques.map((technique) => (
+          <div className="rounded-lg border bg-background p-3" key={technique.id}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">{technique.title}</p>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{technique.category}</Badge>
+                <span className="text-xs font-semibold text-primary">{Math.round(technique.score)}</span>
+              </div>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              {technique.whyMatched.join("；")}
+            </p>
+            <p className="mt-2 text-xs leading-5 text-foreground">
+              应用：{technique.application}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              预期：{technique.expectedImpact}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function completionStrategyText(strategy: string) {
   if (strategy === "structure-reorder") return "结构重排";
   if (strategy === "copy-caption") return "文案/字幕补全";
@@ -851,11 +900,7 @@ export default function Home() {
   });
   const [renderingVideo, setRenderingVideo] = useState(false);
 
-  const progressStage = useMemo(() => {
-    if (plan) return 3;
-    if (analysis) return 2;
-    return 1;
-  }, [analysis, plan]);
+  const hasTechniqueHits = Boolean(plan?.retrievedTechniques.length);
 
   async function loadUploads() {
     try {
@@ -1303,11 +1348,13 @@ export default function Home() {
 
           <div className="flex flex-col gap-3 rounded-lg border bg-background/60 px-4 py-3">
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <Badge variant={progressStage >= 1 ? "success" : "outline"}>1. 样例拆解</Badge>
+              <Badge variant={analysis ? "success" : "secondary"}>1. 样例拆解</Badge>
               <ArrowRight className="hidden size-4 text-muted-foreground md:block" />
-              <Badge variant={progressStage >= 2 ? "success" : "outline"}>2. 迁移脚本</Badge>
+              <Badge variant={hasTechniqueHits ? "success" : "outline"}>2. RAG 技巧检索</Badge>
               <ArrowRight className="hidden size-4 text-muted-foreground md:block" />
-              <Badge variant={progressStage >= 3 ? "success" : "outline"}>3. 编辑出片</Badge>
+              <Badge variant={plan ? "success" : "outline"}>3. 迁移脚本</Badge>
+              <ArrowRight className="hidden size-4 text-muted-foreground md:block" />
+              <Badge variant={plan ? "success" : "outline"}>4. 编辑出片</Badge>
             </div>
 
             <div
@@ -1477,6 +1524,15 @@ export default function Home() {
                   value={userMaterials}
                   onChange={(event) => setUserMaterials(event.target.value)}
                 />
+              </div>
+              <div className="rounded-lg border bg-accent/20 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">剪辑技巧库 RAG</Badge>
+                  <span className="text-xs font-semibold text-foreground">生成前检索</span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  系统会用 Brief、用户素材和样例节拍命中剪辑技巧，例如前 3 秒 Hook、B-roll 场景阶梯、卡点字幕、动作匹配转场和 CTA 收束。
+                </p>
               </div>
               <Button
                 className="w-full"
@@ -1818,6 +1874,8 @@ export default function Home() {
                       继承结构：{plan.inheritedStructure.join(" / ")}
                     </p>
                   </div>
+
+                  <EditingTechniquePanel techniques={plan.retrievedTechniques} />
 
                   {plan.evaluation ? <EvaluationPanel evaluation={plan.evaluation} /> : null}
 
