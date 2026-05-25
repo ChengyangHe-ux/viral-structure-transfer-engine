@@ -266,6 +266,7 @@ export function createFallbackPlan({
       "结尾是否只有一个清晰下一步",
     ],
     retrievedTechniques: [],
+    awardReadiness: undefined,
     productionNotes: [
       userMaterials?.trim()
         ? `用户素材线索：${userMaterials.trim().slice(0, 120)}`

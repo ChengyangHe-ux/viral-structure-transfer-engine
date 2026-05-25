@@ -171,6 +171,25 @@ export const retrievedEditingTechniqueSchema = z.object({
   source: z.string().min(1).default("本地剪辑技巧库"),
 });
 
+export const awardReadinessSchema = z.object({
+  goalStatement: z.string().min(1),
+  overallScore: z.number().int().min(0).max(100),
+  verdict: z.enum(["prize-ready", "submission-ready", "needs-polish"]),
+  criteria: z.array(
+    z.object({
+      key: z.string().min(1),
+      label: z.string().min(1),
+      score: z.number().int().min(0).max(100),
+      target: z.string().min(1),
+      evidence: z.string().min(1),
+      passed: z.boolean(),
+      suggestion: z.string().min(1),
+    }),
+  ),
+  nextActions: z.array(z.string().min(1)).default([]),
+  demoProof: z.array(z.string().min(1)).default([]),
+});
+
 export const migratedVideoPlanSchema = z.object({
   projectTitle: z.string().min(1),
   targetBrief: z.string().min(4),
@@ -179,6 +198,7 @@ export const migratedVideoPlanSchema = z.object({
   versions: z.array(planVersionSchema).min(1),
   evaluationChecklist: z.array(z.string().min(1)),
   retrievedTechniques: z.array(retrievedEditingTechniqueSchema).default([]),
+  awardReadiness: awardReadinessSchema.optional(),
   materialAdaptation: materialAdaptationSchema.optional(),
   evaluation: planEvaluationSchema.optional(),
   productionNotes: z.array(z.string().min(1)).default([]),
@@ -213,3 +233,4 @@ export type PlanVersion = z.infer<typeof planVersionSchema>;
 export type PlanEvaluation = z.infer<typeof planEvaluationSchema>;
 export type MaterialAdaptation = z.infer<typeof materialAdaptationSchema>;
 export type RetrievedEditingTechnique = z.infer<typeof retrievedEditingTechniqueSchema>;
+export type AwardReadiness = z.infer<typeof awardReadinessSchema>;

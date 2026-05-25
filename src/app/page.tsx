@@ -48,6 +48,7 @@ import { diffPlans } from "@/lib/plan-diff";
 import { buildTimelineSegments } from "@/lib/timeline";
 import { insertBeatAfter, moveBeat, removeBeat } from "@/lib/plan-edit";
 import type {
+  AwardReadiness,
   MediaMeta,
   MaterialAdaptation,
   MigratedVideoPlan,
@@ -566,6 +567,87 @@ function EvaluationPanel({ evaluation }: { evaluation: PlanEvaluation }) {
           ) : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function awardVerdictText(verdict: AwardReadiness["verdict"]) {
+  if (verdict === "prize-ready") return "大奖冲刺";
+  if (verdict === "submission-ready") return "可上交";
+  return "需继续打磨";
+}
+
+function awardVerdictVariant(verdict: AwardReadiness["verdict"]) {
+  if (verdict === "prize-ready") return "success";
+  if (verdict === "submission-ready") return "secondary";
+  return "warning";
+}
+
+function AwardReadinessPanel({
+  readiness,
+}: {
+  readiness: AwardReadiness;
+}) {
+  return (
+    <div className="space-y-4 rounded-lg border bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={awardVerdictVariant(readiness.verdict)}>
+              {awardVerdictText(readiness.verdict)}
+            </Badge>
+            <Badge variant="outline">大奖目标评分 {readiness.overallScore}/100</Badge>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {readiness.goalStatement}
+          </p>
+        </div>
+        <div className="min-w-[108px] rounded-lg border bg-background px-4 py-3 text-center">
+          <p className="text-xs text-muted-foreground">冲奖分</p>
+          <p className="mt-1 text-3xl font-semibold text-primary">
+            {readiness.overallScore}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-5">
+        {readiness.criteria.map((criterion) => (
+          <div className="rounded-lg border bg-background p-3" key={criterion.key}>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-foreground">{criterion.label}</p>
+              <span className="text-xs font-semibold text-primary">{criterion.score}</span>
+            </div>
+            <div className="mt-2 h-1.5 rounded-full bg-secondary">
+              <div
+                className="h-1.5 rounded-full bg-primary"
+                style={{ width: `${criterion.score}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              {criterion.evidence}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-lg border bg-background p-3">
+          <p className="text-xs font-semibold text-foreground">下一步冲奖动作</p>
+          <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+            {readiness.nextActions.map((action) => (
+              <li key={action}>{action}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-lg border bg-background p-3">
+          <p className="text-xs font-semibold text-foreground">答辩证明链</p>
+          <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+            {readiness.demoProof.slice(0, 5).map((proof) => (
+              <li key={proof}>{proof}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1876,6 +1958,10 @@ export default function Home() {
                   </div>
 
                   <EditingTechniquePanel techniques={plan.retrievedTechniques} />
+
+                  {plan.awardReadiness ? (
+                    <AwardReadinessPanel readiness={plan.awardReadiness} />
+                  ) : null}
 
                   {plan.evaluation ? <EvaluationPanel evaluation={plan.evaluation} /> : null}
 

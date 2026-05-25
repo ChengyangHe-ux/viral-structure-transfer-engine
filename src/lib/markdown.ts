@@ -69,6 +69,25 @@ ${plan.retrievedTechniques
   .join("\n")}
 ` : ""}
 
+${plan.awardReadiness ? `### 大奖目标看板
+
+- 目标：${plan.awardReadiness.goalStatement}
+- 冲奖评分：${plan.awardReadiness.overallScore}/100
+- 状态：${plan.awardReadiness.verdict}
+
+| 验收项 | 分数 | 目标 | 证据 | 建议 |
+| --- | --- | --- | --- | --- |
+${plan.awardReadiness.criteria
+  .map(
+    (criterion) =>
+      `| ${criterion.label} | ${criterion.score} | ${criterion.target} | ${criterion.evidence} | ${criterion.suggestion} |`,
+  )
+  .join("\n")}
+
+下一步冲奖动作：
+${list(plan.awardReadiness.nextActions)}
+` : ""}
+
 ${plan.materialAdaptation ? `### 素材缺口与补全
 
 - 素材充分度：${plan.materialAdaptation.sufficiencyScore}/100

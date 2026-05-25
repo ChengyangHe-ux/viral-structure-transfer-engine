@@ -54,6 +54,7 @@ describe("structured output schemas", () => {
     expect(parsed.versions).toHaveLength(3);
     expect(parsed.versions[0].scriptBeats[0]).toHaveProperty("replaceableAssets");
     expect(parsed.retrievedTechniques.length).toBeGreaterThan(0);
+    expect(parsed.awardReadiness?.goalStatement).toContain("比赛大奖目标");
     expect(parsed.materialAdaptation?.slots.length).toBeGreaterThan(0);
     expect(parsed.evaluation?.overallScore).toBeGreaterThan(0);
   });

@@ -41,6 +41,7 @@ describe("plan evaluation", () => {
     const evaluatedPlan = attachPlanEvaluation(plan, analysis);
 
     expect(evaluatedPlan.evaluation?.judgePitch).toContain("结构规则");
+    expect(evaluatedPlan.awardReadiness?.criteria).toHaveLength(5);
   });
 
   it("refines a plan from a natural-language instruction", () => {

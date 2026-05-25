@@ -5,6 +5,7 @@ import {
   type PlanVersion,
   type VideoStructureAnalysis,
 } from "@/lib/schemas";
+import { evaluateAwardReadiness } from "@/lib/award-readiness";
 import { alignStructure } from "@/lib/structure-alignment";
 
 function clampScore(score: number) {
@@ -193,8 +194,13 @@ export function attachPlanEvaluation(
   plan: MigratedVideoPlan,
   analysis?: VideoStructureAnalysis,
 ) {
-  return migratedVideoPlanSchema.parse({
+  const evaluatedPlan = {
     ...plan,
     evaluation: evaluatePlan(plan, analysis),
+  };
+
+  return migratedVideoPlanSchema.parse({
+    ...evaluatedPlan,
+    awardReadiness: evaluateAwardReadiness({ plan: evaluatedPlan, analysis }),
   });
 }

@@ -58,6 +58,7 @@ describe("markdown rendering", () => {
     expect(markdown).toContain("可替换素材");
     expect(markdown).toContain("稳妥转化版");
     expect(markdown).toContain("RAG 剪辑技巧命中");
+    expect(markdown).toContain("大奖目标看板");
     expect(markdown).toContain("素材缺口与补全");
     expect(markdown).toContain("质量诊断");
   });
