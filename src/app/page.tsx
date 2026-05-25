@@ -818,6 +818,7 @@ export default function Home() {
     Array<{ name: string; sizeBytes: number; modifiedAt: string }>
   >([]);
   const [simpleMode, setSimpleMode] = useState(true);
+  const [showAllSampleBeats, setShowAllSampleBeats] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<VideoStructureAnalysis | null>(null);
   const [plan, setPlan] = useState<MigratedVideoPlan | null>(null);
@@ -848,6 +849,7 @@ export default function Home() {
     type: "idle",
     message: "先准备一个样例（链接/文件/观察文本），再把它的结构迁移到你的新主题。",
   });
+  const [renderingVideo, setRenderingVideo] = useState(false);
 
   const progressStage = useMemo(() => {
     if (plan) return 3;
@@ -1554,34 +1556,94 @@ export default function Home() {
                   一键出片
                 </CardTitle>
                 <CardDescription>
-                  先导出 JSON（右上角按钮），再用 Remotion 渲染成竖屏 mp4。
+                  直接在页面渲染并下载 mp4（首次请先执行 npm run media:install-binaries）。
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="rounded-lg border bg-background p-3 text-sm leading-6 text-muted-foreground">
-                  <div className="text-xs font-medium text-foreground">推荐命令</div>
-                  <div className="mt-2 font-mono text-xs">
-                    npm run video:render -- --input plan.json --out renders/demo.mp4 --quality high
-                  </div>
-                </div>
                 <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
                     type="button"
-                    variant="outline"
+                    variant="default"
+                    disabled={renderingVideo || status.type === "loading"}
                     onClick={async () => {
-                      const cmd =
-                        "npm run video:render -- --input plan.json --out renders/demo.mp4 --quality high";
+                      if (!projectId) return;
+                      setRenderingVideo(true);
+                      setStatus({ type: "loading", message: "正在渲染视频（draft）..." });
                       try {
-                        await navigator.clipboard.writeText(cmd);
-                        setStatus({ type: "success", message: "已复制渲染命令（把导出的 JSON 命名为 plan.json 即可）。" });
-                      } catch {
-                        setStatus({ type: "warning", message: "复制失败：请手动复制命令（某些浏览器权限限制）。" });
+                        const response = await fetch(`/api/projects/${projectId}/render`, {
+                          method: "POST",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({
+                            planId: activePlanId,
+                            quality: "draft",
+                            title: projectTitle,
+                          }),
+                        });
+                        const data = (await response.json()) as {
+                          downloadUrl?: string;
+                          error?: string;
+                        };
+                        if (!response.ok || !data.downloadUrl) {
+                          throw new Error(data.error || "渲染失败");
+                        }
+                        window.location.href = data.downloadUrl;
+                        setStatus({ type: "success", message: "渲染完成，已开始下载。" });
+                      } catch (error) {
+                        setStatus({
+                          type: "error",
+                          message:
+                            error instanceof Error ? error.message : "渲染失败（请检查 media:install-binaries）",
+                        });
+                      } finally {
+                        setRenderingVideo(false);
                       }
                     }}
                   >
-                    <ClipboardList />
-                    复制命令
+                    {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
+                    渲染并下载（draft）
+                  </Button>
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                    disabled={renderingVideo || status.type === "loading"}
+                    onClick={async () => {
+                      if (!projectId) return;
+                      setRenderingVideo(true);
+                      setStatus({ type: "loading", message: "正在渲染视频（high）..." });
+                      try {
+                        const response = await fetch(`/api/projects/${projectId}/render`, {
+                          method: "POST",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({
+                            planId: activePlanId,
+                            quality: "high",
+                            title: projectTitle,
+                          }),
+                        });
+                        const data = (await response.json()) as {
+                          downloadUrl?: string;
+                          error?: string;
+                        };
+                        if (!response.ok || !data.downloadUrl) {
+                          throw new Error(data.error || "渲染失败");
+                        }
+                        window.location.href = data.downloadUrl;
+                        setStatus({ type: "success", message: "渲染完成，已开始下载。" });
+                      } catch (error) {
+                        setStatus({
+                          type: "error",
+                          message:
+                            error instanceof Error ? error.message : "渲染失败（请检查 media:install-binaries）",
+                        });
+                      } finally {
+                        setRenderingVideo(false);
+                      }
+                    }}
+                  >
+                    {renderingVideo ? <Loader2 className="animate-spin" /> : <Trophy />}
+                    渲染并下载（high）
                   </Button>
                   <Button
                     size="sm"
@@ -1594,8 +1656,7 @@ export default function Home() {
                   </Button>
                 </div>
                 <p className="text-xs leading-6 text-muted-foreground">
-                  提示：导出文件保存为 <span className="font-mono">plan.json</span>，就能直接跑上面的命令；需要更快预览可把
-                  <span className="font-mono"> --quality high</span> 改成 <span className="font-mono">draft</span>。
+                  提示：首次渲染前先执行一次 <span className="font-mono">npm run media:install-binaries</span>；draft 更快，high 更清晰更慢。
                 </p>
               </CardContent>
             </Card>
@@ -1662,8 +1723,39 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    {analysis.beatMap.map((beat) => (
+                  {simpleMode ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-foreground">节拍拆解（精简）</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          type="button"
+                          onClick={() => setShowAllSampleBeats(!showAllSampleBeats)}
+                        >
+                          {showAllSampleBeats ? "收起" : "展开全部"}
+                        </Button>
+                      </div>
+                      {(showAllSampleBeats ? analysis.beatMap : analysis.beatMap.slice(0, 4)).map((beat) => (
+                        <div className="timeline-row rounded-lg border bg-background/70 p-4" key={beat.timeRange}>
+                          <div>
+                            <Badge variant="outline">{beat.timeRange}</Badge>
+                            <p className="mt-2 text-xs font-medium text-muted-foreground">
+                              {beat.shotPurpose}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{beat.transferableRule}</p>
+                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                              {beat.visualObservation}；{beat.captionObservation}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {analysis.beatMap.map((beat) => (
                       <div className="timeline-row rounded-lg border bg-background/70 p-4" key={beat.timeRange}>
                         <div>
                           <Badge variant="outline">{beat.timeRange}</Badge>
@@ -1678,8 +1770,9 @@ export default function Home() {
                           </p>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex min-h-[260px] flex-col items-center justify-center rounded-lg border border-dashed bg-background px-6 text-center">
