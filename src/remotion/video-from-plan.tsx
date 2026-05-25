@@ -197,6 +197,8 @@ export function VideoFromPlan({ title, plan }: VideoFromPlanProps) {
                   <Sequence from={segment.startFrame} durationInFrames={sequenceDuration}>
                     <SegmentCard
                       segment={segment}
+                      sequenceStartFrame={segment.startFrame}
+                      sequenceDurationInFrames={sequenceDuration}
                       planTitle={plan?.strategySummary ?? ""}
                       evalMeta={
                         plan?.evaluation
@@ -263,6 +265,8 @@ export function VideoFromPlan({ title, plan }: VideoFromPlanProps) {
 
 function SegmentCard({
   segment,
+  sequenceStartFrame,
+  sequenceDurationInFrames,
   planTitle,
   evalMeta,
   width,
@@ -280,6 +284,8 @@ function SegmentCard({
     replaceableAssets: string;
     riskNotes: string;
   };
+  sequenceStartFrame: number;
+  sequenceDurationInFrames: number;
   planTitle: string;
   evalMeta: { overallScore: number; readiness: "ready" | "minor-edits" | "needs-work" } | null;
   width: number;
@@ -287,10 +293,30 @@ function SegmentCard({
 }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const enter = spring({ fps, frame, config: { damping: 220 } });
-  const translateY = interpolate(enter, [0, 1], [36, 0]);
-  const opacity = interpolate(enter, [0, 1], [0, 1]);
-  const glow = interpolate(frame, [0, Math.round(0.8 * fps)], [0.12, 0.3], {
+
+  // `useCurrentFrame()` is global; convert to sequence-local frame so every beat animates.
+  const localFrameRaw = frame - sequenceStartFrame;
+  const localFrame = clamp(localFrameRaw, 0, sequenceDurationInFrames);
+
+  const enter = spring({ fps, frame: localFrame, config: { damping: 160, mass: 0.9 } });
+  const exitT = interpolate(
+    localFrame,
+    [Math.max(0, sequenceDurationInFrames - Math.round(0.45 * fps)), sequenceDurationInFrames],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+
+  const translateY =
+    interpolate(enter, [0, 1], [44, 0], { extrapolateRight: "clamp" }) +
+    interpolate(exitT, [0, 1], [0, -18]);
+  const opacity =
+    interpolate(enter, [0, 1], [0, 1], { extrapolateRight: "clamp" }) *
+    interpolate(exitT, [0, 1], [1, 0]);
+  const scale =
+    interpolate(enter, [0, 1], [0.98, 1], { extrapolateRight: "clamp" }) *
+    interpolate(exitT, [0, 1], [1, 1.02]);
+
+  const glow = interpolate(localFrame, [0, Math.round(0.8 * fps)], [0.12, 0.34], {
     extrapolateRight: "clamp",
   });
 
@@ -301,17 +327,41 @@ function SegmentCard({
           height: height - 72 * 2 - 86,
           borderRadius: 30,
           border: "1px solid rgba(255,255,255,0.14)",
-          background: "rgba(255,255,255,0.07)",
+          background:
+            "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04) 55%, rgba(0,0,0,0.22))",
           boxShadow: "0 18px 50px rgba(0, 0, 0, 0.45)",
           padding: 44,
-          transform: `translateY(${translateY}px)`,
+          transform: `translateY(${translateY}px) scale(${scale})`,
           opacity,
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
           gap: 22,
+          position: "relative",
+          overflow: "hidden",
         }}
       >
+        <div
+          style={{
+            position: "absolute",
+            inset: -2,
+            opacity: 0.55,
+            background:
+              "radial-gradient(circle at 30% 20%, rgba(107, 92, 255, 0.38), transparent 55%), radial-gradient(circle at 80% 30%, rgba(32, 217, 255, 0.22), transparent 60%), radial-gradient(circle at 40% 95%, rgba(255, 122, 74, 0.2), transparent 62%)",
+            transform: `translateY(${interpolate(localFrame, [0, sequenceDurationInFrames], [18, -12])}px)`,
+          }}
+        />
+        <div
+          style={{
+            position: "relative",
+            zIndex: 1,
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: 22,
+          }}
+        >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 26 }}>
           <div style={{ maxWidth: width - 320 }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
@@ -399,6 +449,7 @@ function SegmentCard({
 
         <div style={{ fontSize: 16, opacity: 0.6 }}>
           结构演示稿：用 Beat 卡片把“可编辑时间线”直接变成可交付视频。
+        </div>
         </div>
       </div>
     </AbsoluteFill>
