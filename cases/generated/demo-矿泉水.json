@@ -1,15 +1,15 @@
 {
   "preset": {
-    "label": "学习平板",
-    "projectTitle": "学习平板种草脚本",
-    "sampleTitle": "教育产品测评样例",
-    "sampleNotes": "样例开头直接说“孩子不是不自律，是反馈太慢”，随后展示使用前后对比。中段按痛点拆成错题整理、学习计划、家长反馈三段，每段都先给结果画面再解释过程。包装上用圈选、箭头和进度条标记信息，结尾强调适合人群和试用入口。",
-    "targetBrief": "一款面向初中生家庭的学习平板，主打错题自动整理、学习计划生成和家长周报。",
-    "userMaterials": "已有素材：学习平板正面图 1 张、错题页截图 2 张、家长周报截图 1 张；缺少孩子真实使用过程和家长反馈视频。"
+    "label": "矿泉水",
+    "projectTitle": "高端矿泉水 15 秒介绍",
+    "sampleTitle": "饮品广告爆款样例",
+    "sampleNotes": "0-2 秒先给冰凉水滴、开盖声和喝下后的清爽表情，字幕强调“不是普通水，是清透感”。2-8 秒切换山泉、水滴微距、瓶身反光、运动后饮用和办公桌面。8-12 秒用水源、矿物质和口感证据卡片建立可信。12-15 秒回到瓶身主视觉、品牌主张和购买入口。",
+    "targetBrief": "一款高端矿泉水，15 秒短视频，面向通勤和运动人群，强调天然水源、清爽口感、瓶身高级感和购买行动。",
+    "userMaterials": "已有素材：瓶身特写、开盖水滴、山泉感背景、运动后饮用、办公桌面、购买入口；需要补充矿物质参数证据卡。"
   },
   "analysis": {
-    "sampleTitle": "教育产品测评样例",
-    "summary": "基于样例描述提炼出一套可迁移的短视频结构：先用强钩子制造停留，再用连续证据推进信任，最后用清晰行动指令完成转化。样例线索：样例开头直接说“孩子不是不自律，是反馈太慢”，随后展示使用前后对比。中段按痛点拆成错题整理、学习计划、家长反馈三段，每段都先给结果画面再解释过程。包装上用圈选、箭头和进度条标记信息，结尾强调适合人群和试用入口。",
+    "sampleTitle": "饮品广告爆款样例",
+    "summary": "基于样例描述提炼出一套可迁移的短视频结构：先用强钩子制造停留，再用连续证据推进信任，最后用清晰行动指令完成转化。样例线索：0-2 秒先给冰凉水滴、开盖声和喝下后的清爽表情，字幕强调“不是普通水，是清透感”。2-8 秒切换山泉、水滴微距、瓶身反光、运动后饮用和办公桌面。8-12 秒用水源、矿物质和口感证据卡片建立可信。12-15 秒回到瓶身主视觉、品牌主张和购买入口。",
     "targetAudience": "对结果敏感、浏览速度快、需要在前 3 秒被说服的短视频用户",
     "contentPromise": "用一个明确痛点或反差结果承诺，让用户相信继续看能得到具体收益",
     "hookPatterns": [
@@ -117,8 +117,8 @@
     ]
   },
   "plan": {
-    "projectTitle": "学习平板种草脚本",
-    "targetBrief": "一款面向初中生家庭的学习平板，主打错题自动整理、学习计划生成和家长周报。",
+    "projectTitle": "高端矿泉水 15 秒介绍",
+    "targetBrief": "一款高端矿泉水，15 秒短视频，面向通勤和运动人群，强调天然水源、清爽口感、瓶身高级感和购买行动。",
     "strategySummary": "迁移样例的「反差结论开场 + 结果画面前置 + 证据三连击 + 利益翻译 + 低门槛行动指令」结构，围绕目标 Brief 生成可编辑短视频脚本。",
     "inheritedStructure": [
       "反差结论开场",
@@ -136,9 +136,9 @@
           {
             "timeRange": "0-3s",
             "shotPurpose": "用反差或结果抢停留",
-            "visualSuggestion": "展示目标用户最想看到的结果画面，配合前后对比或近景细节",
-            "voiceoverOrSubtitle": "别再用老方法做一款面向初中生家庭的学习平板了，关键其实是这一点。",
-            "packagingStyle": "大字标题压底部，核心词高亮，开头 0.5 秒加音效点；RAG：每屏8-14字，关键词跟重拍弹出",
+            "visualSuggestion": "展示目标用户最想看到的结果画面，配合前后对比或近景细节；RAG：补0.4-0.8秒真实微距/手部/产品质感镜头",
+            "voiceoverOrSubtitle": "别再用老方法做一款高端矿泉水了，关键其实是这一点。",
+            "packagingStyle": "大字标题压底部，核心词高亮，开头 0.5 秒加音效点",
             "sellingPointIntent": "先建立继续观看的理由",
             "transitionAndRhythm": "第一镜头直接切结果，第二镜头切痛点，不做背景铺垫；RAG：0-2秒先给最强结果/反差，再解释原因",
             "replaceableAssets": "结果截图、商品特写、用户痛点场景、对比画面；结合用户已提供素材进行镜头编排",
@@ -147,9 +147,9 @@
           {
             "timeRange": "3-10s",
             "shotPurpose": "拆出第一个证据点",
-            "visualSuggestion": "用手势、圈选或屏幕录制标出最直观的功能/优势",
+            "visualSuggestion": "用手势、圈选或屏幕录制标出最直观的功能/优势；RAG：补0.4-0.8秒真实微距/手部/产品质感镜头",
             "voiceoverOrSubtitle": "第一，它把最麻烦的一步提前处理掉，用户不需要重新学习流程。",
-            "packagingStyle": "左侧贴纸标注“省一步”，右侧保留主体画面；RAG：每屏8-14字，关键词跟重拍弹出",
+            "packagingStyle": "左侧贴纸标注“省一步”，右侧保留主体画面",
             "sellingPointIntent": "降低理解成本",
             "transitionAndRhythm": "每 2 秒切一个细节，字幕跟随镜头同步出现",
             "replaceableAssets": "操作过程、使用前后对比、用户评价片段",
@@ -160,7 +160,7 @@
             "shotPurpose": "推进第二个证据点",
             "visualSuggestion": "展示真实使用场景，最好有人物或手部动作参与",
             "voiceoverOrSubtitle": "第二，它不是看起来高级，而是真的能在日常场景里少踩坑。",
-            "packagingStyle": "场景标签加小箭头，突出用户具体收益；RAG：每屏8-14字，关键词跟重拍弹出",
+            "packagingStyle": "场景标签加小箭头，突出用户具体收益",
             "sellingPointIntent": "把功能转成用户收益",
             "transitionAndRhythm": "音乐节奏稳定，卖点出现时轻微停顿",
             "replaceableAssets": "生活/工作场景、商品细节、结果页、数据卡片",
@@ -171,7 +171,7 @@
             "shotPurpose": "制造可信背书",
             "visualSuggestion": "放出用户反馈、参数、流程截图或专家/达人视角",
             "voiceoverOrSubtitle": "真正值得注意的是，它把效果、成本和上手门槛放在了一起解决。",
-            "packagingStyle": "三点并列卡片：效果、成本、门槛；RAG：每屏8-14字，关键词跟重拍弹出",
+            "packagingStyle": "三点并列卡片：效果、成本、门槛",
             "sellingPointIntent": "补足信任与决策理由",
             "transitionAndRhythm": "三连卡点，每个卡片 0.8 秒出现",
             "replaceableAssets": "评价截图、参数图、对比图、流程节点",
@@ -182,7 +182,7 @@
             "shotPurpose": "收束行动",
             "visualSuggestion": "回到最强结果画面，画面稳定，行动入口清晰；RAG：固定产品主视觉+一句主张+一个行动入口收束",
             "voiceoverOrSubtitle": "如果你也遇到这个问题，先收藏这条，再按这个结构试一次。",
-            "packagingStyle": "底部行动字幕，右上角保留品牌或主题标签；RAG：每屏8-14字，关键词跟重拍弹出",
+            "packagingStyle": "底部行动字幕，右上角保留品牌或主题标签",
             "sellingPointIntent": "把观看转成下一步动作",
             "transitionAndRhythm": "音乐收束，最后一屏停留 1 秒",
             "replaceableAssets": "封面图、商品图、二维码/入口、标题卡",
@@ -205,9 +205,9 @@
           {
             "timeRange": "0-3s",
             "shotPurpose": "用反差或结果抢停留",
-            "visualSuggestion": "先放失败/错误做法，再 0.8 秒切到正确结果",
-            "voiceoverOrSubtitle": "90% 的人做一款面向初中生家庭的学习平板，第一步就错了。",
-            "packagingStyle": "大字标题压底部，核心词高亮，开头 0.5 秒加音效点；RAG：每屏8-14字，关键词跟重拍弹出",
+            "visualSuggestion": "先放失败/错误做法，再 0.8 秒切到正确结果；RAG：补0.4-0.8秒真实微距/手部/产品质感镜头",
+            "voiceoverOrSubtitle": "90% 的人做一款高端矿泉水，第一步就错了。",
+            "packagingStyle": "大字标题压底部，核心词高亮，开头 0.5 秒加音效点",
             "sellingPointIntent": "先建立继续观看的理由",
             "transitionAndRhythm": "第一镜头直接切结果，第二镜头切痛点，不做背景铺垫；RAG：0-2秒先给最强结果/反差，再解释原因",
             "replaceableAssets": "结果截图、商品特写、用户痛点场景、对比画面；结合用户已提供素材进行镜头编排",
@@ -216,9 +216,9 @@
           {
             "timeRange": "3-10s",
             "shotPurpose": "拆出第一个证据点",
-            "visualSuggestion": "用手势、圈选或屏幕录制标出最直观的功能/优势",
+            "visualSuggestion": "用手势、圈选或屏幕录制标出最直观的功能/优势；RAG：补0.4-0.8秒真实微距/手部/产品质感镜头",
             "voiceoverOrSubtitle": "第一，它把最麻烦的一步提前处理掉，用户不需要重新学习流程。",
-            "packagingStyle": "左侧贴纸标注“省一步”，右侧保留主体画面；RAG：每屏8-14字，关键词跟重拍弹出",
+            "packagingStyle": "左侧贴纸标注“省一步”，右侧保留主体画面",
             "sellingPointIntent": "降低理解成本",
             "transitionAndRhythm": "每 2 秒切一个细节，字幕跟随镜头同步出现",
             "replaceableAssets": "操作过程、使用前后对比、用户评价片段",
@@ -229,7 +229,7 @@
             "shotPurpose": "推进第二个证据点",
             "visualSuggestion": "展示真实使用场景，最好有人物或手部动作参与",
             "voiceoverOrSubtitle": "第二，它不是看起来高级，而是真的能在日常场景里少踩坑。",
-            "packagingStyle": "场景标签加小箭头，突出用户具体收益；RAG：每屏8-14字，关键词跟重拍弹出",
+            "packagingStyle": "场景标签加小箭头，突出用户具体收益",
             "sellingPointIntent": "把功能转成用户收益",
             "transitionAndRhythm": "音乐节奏稳定，卖点出现时轻微停顿",
             "replaceableAssets": "生活/工作场景、商品细节、结果页、数据卡片",
@@ -240,7 +240,7 @@
             "shotPurpose": "制造可信背书",
             "visualSuggestion": "放出用户反馈、参数、流程截图或专家/达人视角",
             "voiceoverOrSubtitle": "真正值得注意的是，它把效果、成本和上手门槛放在了一起解决。",
-            "packagingStyle": "三点并列卡片：效果、成本、门槛；RAG：每屏8-14字，关键词跟重拍弹出",
+            "packagingStyle": "三点并列卡片：效果、成本、门槛",
             "sellingPointIntent": "补足信任与决策理由",
             "transitionAndRhythm": "三连卡点，每个卡片 0.8 秒出现",
             "replaceableAssets": "评价截图、参数图、对比图、流程节点",
@@ -251,7 +251,7 @@
             "shotPurpose": "收束行动",
             "visualSuggestion": "回到最强结果画面，画面稳定，行动入口清晰；RAG：固定产品主视觉+一句主张+一个行动入口收束",
             "voiceoverOrSubtitle": "如果你也遇到这个问题，先收藏这条，再按这个结构试一次。",
-            "packagingStyle": "底部行动字幕，右上角保留品牌或主题标签；RAG：每屏8-14字，关键词跟重拍弹出",
+            "packagingStyle": "底部行动字幕，右上角保留品牌或主题标签",
             "sellingPointIntent": "把观看转成下一步动作",
             "transitionAndRhythm": "音乐收束，最后一屏停留 1 秒",
             "replaceableAssets": "封面图、商品图、二维码/入口、标题卡",
@@ -274,9 +274,9 @@
           {
             "timeRange": "0-3s",
             "shotPurpose": "用反差或结果抢停留",
-            "visualSuggestion": "展示目标用户最想看到的结果画面，配合前后对比或近景细节",
-            "voiceoverOrSubtitle": "我试了一款面向初中生家庭的学习平板之后，最明显的变化是这个。",
-            "packagingStyle": "字幕更轻，保留人物/手部动作的真实感；RAG：每屏8-14字，关键词跟重拍弹出",
+            "visualSuggestion": "展示目标用户最想看到的结果画面，配合前后对比或近景细节；RAG：补0.4-0.8秒真实微距/手部/产品质感镜头",
+            "voiceoverOrSubtitle": "我试了一款高端矿泉水之后，最明显的变化是这个。",
+            "packagingStyle": "字幕更轻，保留人物/手部动作的真实感",
             "sellingPointIntent": "先建立继续观看的理由",
             "transitionAndRhythm": "第一镜头直接切结果，第二镜头切痛点，不做背景铺垫；RAG：0-2秒先给最强结果/反差，再解释原因",
             "replaceableAssets": "结果截图、商品特写、用户痛点场景、对比画面；结合用户已提供素材进行镜头编排",
@@ -285,9 +285,9 @@
           {
             "timeRange": "3-10s",
             "shotPurpose": "拆出第一个证据点",
-            "visualSuggestion": "用手势、圈选或屏幕录制标出最直观的功能/优势",
+            "visualSuggestion": "用手势、圈选或屏幕录制标出最直观的功能/优势；RAG：补0.4-0.8秒真实微距/手部/产品质感镜头",
             "voiceoverOrSubtitle": "第一，它把最麻烦的一步提前处理掉，用户不需要重新学习流程。",
-            "packagingStyle": "左侧贴纸标注“省一步”，右侧保留主体画面；RAG：每屏8-14字，关键词跟重拍弹出",
+            "packagingStyle": "左侧贴纸标注“省一步”，右侧保留主体画面",
             "sellingPointIntent": "降低理解成本",
             "transitionAndRhythm": "每 2 秒切一个细节，字幕跟随镜头同步出现",
             "replaceableAssets": "操作过程、使用前后对比、用户评价片段",
@@ -298,7 +298,7 @@
             "shotPurpose": "推进第二个证据点",
             "visualSuggestion": "展示真实使用场景，最好有人物或手部动作参与",
             "voiceoverOrSubtitle": "第二，它不是看起来高级，而是真的能在日常场景里少踩坑。",
-            "packagingStyle": "场景标签加小箭头，突出用户具体收益；RAG：每屏8-14字，关键词跟重拍弹出",
+            "packagingStyle": "场景标签加小箭头，突出用户具体收益",
             "sellingPointIntent": "把功能转成用户收益",
             "transitionAndRhythm": "音乐节奏稳定，卖点出现时轻微停顿",
             "replaceableAssets": "生活/工作场景、商品细节、结果页、数据卡片",
@@ -309,7 +309,7 @@
             "shotPurpose": "制造可信背书",
             "visualSuggestion": "放出用户反馈、参数、流程截图或专家/达人视角",
             "voiceoverOrSubtitle": "真正值得注意的是，它把效果、成本和上手门槛放在了一起解决。",
-            "packagingStyle": "三点并列卡片：效果、成本、门槛；RAG：每屏8-14字，关键词跟重拍弹出",
+            "packagingStyle": "三点并列卡片：效果、成本、门槛",
             "sellingPointIntent": "补足信任与决策理由",
             "transitionAndRhythm": "三连卡点，每个卡片 0.8 秒出现",
             "replaceableAssets": "评价截图、参数图、对比图、流程节点",
@@ -320,7 +320,7 @@
             "shotPurpose": "收束行动",
             "visualSuggestion": "回到最强结果画面，画面稳定，行动入口清晰；RAG：固定产品主视觉+一句主张+一个行动入口收束",
             "voiceoverOrSubtitle": "如果你也遇到这个问题，先收藏这条，再按这个结构试一次。",
-            "packagingStyle": "底部行动字幕，右上角保留品牌或主题标签；RAG：每屏8-14字，关键词跟重拍弹出",
+            "packagingStyle": "底部行动字幕，右上角保留品牌或主题标签",
             "sellingPointIntent": "把观看转成下一步动作",
             "transitionAndRhythm": "音乐收束，最后一屏停留 1 秒",
             "replaceableAssets": "封面图、商品图、二维码/入口、标题卡",
@@ -345,6 +345,25 @@
     ],
     "retrievedTechniques": [
       {
+        "id": "sensory-macro-product",
+        "title": "感官微距产品锚点",
+        "category": "画面质感",
+        "tags": [
+          "产品特写",
+          "微距",
+          "质感",
+          "真实素材"
+        ],
+        "useCase": "商品介绍不能一直停留在卡片或字幕，需要用可感知的真实细节建立高级感。",
+        "application": "在每个卖点前后插入 0.4-0.8 秒微距：开盖、水滴、瓶身反光、手持饮用或桌面冷凝水。",
+        "expectedImpact": "让画面从 PPT 感转为广告片质感，同时给转场提供可剪辑素材。",
+        "whyMatched": [
+          "命中关键词：产品 / 矿泉水 / 水 / 瓶 / 瓶身"
+        ],
+        "score": 83,
+        "source": "本地剪辑技巧库 · Product Shot"
+      },
+      {
         "id": "result-first-cold-open",
         "title": "结果前置冷开场",
         "category": "Hook",
@@ -364,25 +383,6 @@
         "source": "本地剪辑技巧库 · Hook"
       },
       {
-        "id": "benefit-ladder-copy",
-        "title": "功能到利益阶梯",
-        "category": "卖点推进",
-        "tags": [
-          "卖点",
-          "利益翻译",
-          "结构推进",
-          "消费品"
-        ],
-        "useCase": "商品介绍如果只报参数会无聊，需要把功能转换成用户当下能感受到的收益。",
-        "application": "按“是什么 → 为什么可信 → 用起来怎样 → 适合谁”推进，每段只说一个利益点。",
-        "expectedImpact": "让文案从说明书变成种草逻辑。",
-        "whyMatched": [
-          "命中关键词：卖点 / 功能 / 推进 / 结构 / 适合"
-        ],
-        "score": 62,
-        "source": "本地剪辑技巧库 · Copy"
-      },
-      {
         "id": "clean-final-shelf-cta",
         "title": "干净货架式 CTA",
         "category": "CTA",
@@ -396,29 +396,10 @@
         "application": "最后 1.5-2 秒固定产品主视觉 + 一句主张 + 一个低门槛行动，音乐收束不再切新信息。",
         "expectedImpact": "提高记忆点和交付完整度，避免结尾散掉。",
         "whyMatched": [
-          "命中关键词：结尾 / 入口 / 行动 / 转化 / 行动指令"
+          "命中关键词：结尾 / 购买 / 入口 / 行动 / 品牌"
         ],
-        "score": 49,
+        "score": 65,
         "source": "本地剪辑技巧库 · CTA"
-      },
-      {
-        "id": "beat-synced-caption-bursts",
-        "title": "卡点短字幕爆破",
-        "category": "字幕节奏",
-        "tags": [
-          "字幕密度",
-          "卡点",
-          "关键词",
-          "节奏"
-        ],
-        "useCase": "短视频字幕要像剪辑节拍的一部分，而不是完整段落说明。",
-        "application": "每屏控制 8-14 个汉字，重拍只放关键词；解释句拆成 2-3 次弹出，结论词用更强对比。",
-        "expectedImpact": "降低阅读压力，让卖点跟音乐和镜头动作同步。",
-        "whyMatched": [
-          "命中关键词：字幕 / 短句 / 关键词"
-        ],
-        "score": 34,
-        "source": "本地剪辑技巧库 · Caption"
       },
       {
         "id": "proof-card-insert",
@@ -434,10 +415,29 @@
         "application": "在中段加入 0.8-1.2 秒证据卡：参数/来源/用户反馈，只呈现一个可信点并标注待补素材。",
         "expectedImpact": "增强转化说服力，同时保留合规边界。",
         "whyMatched": [
-          "命中关键词：证据 / 证明"
+          "命中关键词：证据 / 参数 / 可信 / 证明 / 矿物质"
         ],
-        "score": 25,
+        "score": 65,
         "source": "本地剪辑技巧库 · Proof"
+      },
+      {
+        "id": "benefit-ladder-copy",
+        "title": "功能到利益阶梯",
+        "category": "卖点推进",
+        "tags": [
+          "卖点",
+          "利益翻译",
+          "结构推进",
+          "消费品"
+        ],
+        "useCase": "商品介绍如果只报参数会无聊，需要把功能转换成用户当下能感受到的收益。",
+        "application": "按“是什么 → 为什么可信 → 用起来怎样 → 适合谁”推进，每段只说一个利益点。",
+        "expectedImpact": "让文案从说明书变成种草逻辑。",
+        "whyMatched": [
+          "命中关键词：卖点 / 功能 / 推进 / 结构 / 人群"
+        ],
+        "score": 54,
+        "source": "本地剪辑技巧库 · Copy"
       }
     ],
     "awardReadiness": {
@@ -466,11 +466,11 @@
         {
           "key": "production-ready",
           "label": "成片生产可执行",
-          "score": 86,
+          "score": 83,
           "target": "每段都具备画面、包装、转场、可替换素材，素材缺口有补全策略。",
-          "evidence": "时间线镜头 15 段；完整生产字段 15/15；素材充分度 74/100。",
-          "passed": true,
-          "suggestion": "可以进入一键出片或人工剪辑替换素材。"
+          "evidence": "时间线镜头 15 段；完整生产字段 15/15；素材充分度 61/100。",
+          "passed": false,
+          "suggestion": "优先补齐真实素材槽位，并减少只有字幕卡的段落。"
         },
         {
           "key": "editable-workflow",
@@ -486,13 +486,13 @@
           "label": "上交证据完整",
           "score": 89,
           "target": "导出稿能自证目标、方法、评分、缺口、风险和下一步。",
-          "evidence": "质量评分 93/100；制作备注 7 条；样例节拍 4 段。",
+          "evidence": "质量评分 91/100；制作备注 7 条；样例节拍 4 段。",
           "passed": true,
           "suggestion": "导出 Markdown/JSON 可作为上交说明附件。"
         }
       ],
       "nextActions": [
-        "保持当前主链路，录屏时重点展示 RAG 技巧命中、结构映射和一键出片。"
+        "优先补齐真实素材槽位，并减少只有字幕卡的段落。"
       ],
       "demoProof": [
         "展示样例拆解：Hook、节奏、字幕、包装、卖点推进。",
@@ -503,18 +503,18 @@
       ]
     },
     "materialAdaptation": {
-      "providedMaterialsSummary": "已有素材：学习平板正面图 1 张、错题页截图 2 张、家长周报截图 1 张；缺少孩子真实使用过程和家长反馈视频。",
-      "sufficiencyScore": 74,
-      "missingSlotCount": 2,
+      "providedMaterialsSummary": "已有素材：瓶身特写、开盖水滴、山泉感背景、运动后饮用、办公桌面、购买入口；需要补充矿物质参数证据卡。",
+      "sufficiencyScore": 61,
+      "missingSlotCount": 3,
       "slots": [
         {
           "slotId": "hook",
           "slotName": "开头吸引镜头",
           "requiredFor": "承接样例的前 3 秒 Hook，制造停留。",
           "requiredMaterial": "结果画面、强反差画面、问题现场或高冲突截图。",
-          "matchedMaterial": "从输入中识别到与“开头 / 结果 / 对比”相关的素材线索。",
-          "fit": "matched",
-          "impact": "可直接支撑目标结构。",
+          "matchedMaterial": "当前输入中没有足够素材线索直接支撑该槽位。",
+          "fit": "missing",
+          "impact": "如果不补全，会影响视频结构完整度和可信度。",
           "completionStrategy": "visual-packaging",
           "completionPlan": "用标题条、强字幕和前后对比卡片补足开头冲击；必要时将中段结果画面前置。"
         },
@@ -534,9 +534,9 @@
           "slotName": "使用过程镜头",
           "requiredFor": "证明卖点不是口号，展示从问题到结果的过程。",
           "requiredMaterial": "操作录屏、使用步骤、拍摄过程、工作流或现场演示。",
-          "matchedMaterial": "从输入中识别到与“使用 / 过程 / 操作”相关的素材线索。",
-          "fit": "matched",
-          "impact": "可直接支撑目标结构。",
+          "matchedMaterial": "当前输入中没有足够素材线索直接支撑该槽位。",
+          "fit": "missing",
+          "impact": "如果不补全，会影响视频结构完整度和可信度。",
           "completionStrategy": "structure-reorder",
           "completionPlan": "降低过程镜头占比，改成“三步字幕解释 + 局部放大 + 结果回看”的结构。"
         },
@@ -567,9 +567,9 @@
           "slotName": "结尾 CTA 镜头",
           "requiredFor": "完成转化或行动指令，让视频有明确收束。",
           "requiredMaterial": "购买入口、二维码、链接、店铺页、收藏提示或领取入口。",
-          "matchedMaterial": "当前输入中没有足够素材线索直接支撑该槽位。",
-          "fit": "missing",
-          "impact": "如果不补全，会影响视频结构完整度和可信度。",
+          "matchedMaterial": "从输入中识别到与“入口 / 链接 / 二维码”相关的素材线索。",
+          "fit": "matched",
+          "impact": "可直接支撑目标结构。",
           "completionStrategy": "reuse-existing",
           "completionPlan": "复用主体画面做定格结尾，叠加行动字幕和入口占位，减少对新增镜头的依赖。"
         }
@@ -577,7 +577,7 @@
       "timelineAdjustment": "缺失槽位优先用字幕卡、卖点卡片、局部放大和结构重排补足，减少对新增拍摄的依赖。"
     },
     "evaluation": {
-      "overallScore": 93,
+      "overallScore": 91,
       "readiness": "ready",
       "bestVersion": "稳妥转化版",
       "structureAlignment": {
@@ -622,8 +622,8 @@
         {
           "key": "material-adaptation",
           "label": "素材适配",
-          "score": 74,
-          "evidence": "识别 2 个素材缺口，并给出槽位级补全策略。",
+          "score": 61,
+          "evidence": "识别 3 个素材缺口，并给出槽位级补全策略。",
           "suggestion": "优先补齐缺失槽位，或用字幕卡、包装卡片和结构重排补足。"
         },
         {
@@ -663,12 +663,12 @@
       "judgePitch": "系统把爆款样例拆成可验证的结构规则，再迁移成多版本可编辑脚本，并用评分诊断说明哪一版最适合生产。"
     },
     "productionNotes": [
+      "RAG剪辑技巧「感官微距产品锚点」：在每个卖点前后插入 0.4-0.8 秒微距：开盖、水滴、瓶身反光、手持饮用或桌面冷凝水。",
       "RAG剪辑技巧「结果前置冷开场」：0-2 秒直接展示最强结果/对比，字幕只留一句结论，再用后续镜头证明它为什么成立。",
-      "RAG剪辑技巧「功能到利益阶梯」：按“是什么 → 为什么可信 → 用起来怎样 → 适合谁”推进，每段只说一个利益点。",
       "RAG剪辑技巧「干净货架式 CTA」：最后 1.5-2 秒固定产品主视觉 + 一句主张 + 一个低门槛行动，音乐收束不再切新信息。",
-      "RAG剪辑技巧「卡点短字幕爆破」：每屏控制 8-14 个汉字，重拍只放关键词；解释句拆成 2-3 次弹出，结论词用更强对比。",
       "RAG剪辑技巧「证据卡片插入」：在中段加入 0.8-1.2 秒证据卡：参数/来源/用户反馈，只呈现一个可信点并标注待补素材。",
-      "用户素材线索：已有素材：学习平板正面图 1 张、错题页截图 2 张、家长周报截图 1 张；缺少孩子真实使用过程和家长反馈视频。",
+      "RAG剪辑技巧「功能到利益阶梯」：按“是什么 → 为什么可信 → 用起来怎样 → 适合谁”推进，每段只说一个利益点。",
+      "用户素材线索：已有素材：瓶身特写、开盖水滴、山泉感背景、运动后饮用、办公桌面、购买入口；需要补充矿物质参数证据卡。",
       "如果后续进入二期视频合成，可直接把 scriptBeats 转成 Remotion/FFmpeg 时间线"
     ]
   }

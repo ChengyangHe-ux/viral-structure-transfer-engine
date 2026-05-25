@@ -30,7 +30,15 @@ npm run dev
 npm run submission:check
 ```
 
-该命令会检查工作区是否干净、关键文档是否齐全、以及是否存在被误提交的 `.env`/数据库/构建产物等；随后运行 `lint`/`test`/`build`，用于提交前的稳定性验证。
+该命令会检查工作区是否干净、关键文档是否齐全、以及是否存在被误提交的 `.env`/数据库/构建产物等；随后运行 `award:check` 和 `lint`/`test`/`build`，用于提交前的稳定性与冲奖说服力验证。
+
+也可以单独运行冲奖案例校验：
+
+```bash
+npm run award:check
+```
+
+当前离线演示案例（AI 简历、学习平板、咖啡新品、矿泉水）都必须在“大奖目标看板”达到 90+，否则提交前应先补强结构、RAG 技巧命中、真实素材证据或答辩证明链。
 
 ## 打包提交物（可选）
 
@@ -54,7 +62,7 @@ npm run submission:pack -- --include-demo-video renders/demo.mp4
 npm run cases:generate
 ```
 
-该命令会基于 `src/lib/demo-presets.ts` 生成 `cases/generated/*`，用于在无模型密钥时也能展示“样例拆解 → 结构迁移 → 映射 → 质量诊断”的完整链路，并提供可复现实验材料。
+该命令会基于 `src/lib/demo-presets.ts` 生成 `cases/generated/*`，用于在无模型密钥时也能展示“样例拆解 → RAG 剪辑技巧 → 结构迁移 → 大奖目标看板 → 映射 → 质量诊断”的完整链路，并提供可复现实验材料。
 
 ## 一键生成演示视频（Remotion，可选加分项）
 

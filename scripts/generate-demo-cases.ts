@@ -2,10 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { demoPresets } from "../src/lib/demo-presets";
-import { createFallbackAnalysis, createFallbackPlan } from "../src/lib/fallbacks";
-import { attachPlanEvaluation } from "../src/lib/evaluation";
-import { attachMaterialAdaptation } from "../src/lib/materials";
-import { renderProjectMarkdown } from "../src/lib/markdown";
+import { buildOfflineDemoCase } from "../src/lib/offline-demo-case";
 
 function slugify(input: string) {
   return input
@@ -25,7 +22,13 @@ async function main() {
     "# 生成案例（离线可复现）",
     "",
     "这些案例由 `npm run cases:generate` 根据 `src/lib/demo-presets.ts` 生成。",
-    "生成过程只使用本地 fallback 规则，不依赖模型密钥，便于比赛现场离线演示与快速校验。",
+    "生成过程只使用本地 fallback + RAG 剪辑技巧库，不依赖模型密钥，便于比赛现场离线演示与快速校验。",
+    "",
+    "## 冲奖目标",
+    "",
+    "- 90+：大奖冲刺，可作为主演示案例。",
+    "- 82-89：可上交，但建议继续补强真实素材或剪辑证据。",
+    "- 低于 82：需要先补结构、素材或答辩证据。",
     "",
     "## 列表",
     "",
@@ -37,31 +40,7 @@ async function main() {
     const mdPath = path.join(outDir, `${baseName}.md`);
     const jsonPath = path.join(outDir, `${baseName}.json`);
 
-    const analysis = createFallbackAnalysis({
-      sampleTitle: preset.sampleTitle,
-      sampleNotes: preset.sampleNotes,
-    });
-
-    const plan = attachPlanEvaluation(
-      attachMaterialAdaptation({
-        plan: createFallbackPlan({
-          projectTitle: preset.projectTitle,
-          targetBrief: preset.targetBrief,
-          userMaterials: preset.userMaterials,
-          analysis,
-        }),
-        targetBrief: preset.targetBrief,
-        userMaterials: preset.userMaterials,
-      }),
-      analysis,
-    );
-
-    const markdown = renderProjectMarkdown({
-      title: preset.projectTitle,
-      analysis,
-      plan,
-      source: "cases/generated (auto)",
-    });
+    const { analysis, plan, markdown } = buildOfflineDemoCase(preset);
 
     await writeFile(mdPath, markdown, "utf8");
     await writeFile(
@@ -70,11 +49,12 @@ async function main() {
       "utf8",
     );
 
-    indexLines.push(`- ${preset.label}：./${path.basename(mdPath)}`);
+    indexLines.push(
+      `- ${preset.label}：./${path.basename(mdPath)}（大奖目标 ${plan.awardReadiness?.overallScore ?? "--"}/100，${plan.retrievedTechniques.map((technique) => technique.title).slice(0, 3).join(" / ")}）`,
+    );
   }
 
   await writeFile(path.join(outDir, "README.md"), `${indexLines.join("\n")}\n`, "utf8");
 }
 
 await main();
-
