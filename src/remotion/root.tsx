@@ -8,6 +8,10 @@ import {
   HighQualityShort,
   type HighQualityShortProps,
 } from "@/remotion/templates/high-quality-short";
+import {
+  CoffeeLaunchShort,
+  type CoffeeLaunchShortProps,
+} from "@/remotion/templates/coffee-launch-short";
 import { VideoFromPlan, type VideoFromPlanProps } from "@/remotion/video-from-plan";
 import { calculateVideoFramesFromPlan } from "@/remotion/video-metadata";
 
@@ -67,6 +71,28 @@ export function RemotionRoot() {
           productName: "天然矿泉水",
           sourceVideoPath: null,
         } satisfies ProductCommercial15Props}
+      />
+      <Composition
+        id="CoffeeLaunchShort"
+        component={CoffeeLaunchShort}
+        fps={30}
+        width={1080}
+        height={1920}
+        durationInFrames={30 * 38}
+        calculateMetadata={async ({ props }) => {
+          const renderTimeline = (props.renderTimeline ??
+            null) as CoffeeLaunchShortProps["renderTimeline"];
+          return {
+            durationInFrames: renderTimeline?.totalFrames
+              ? renderTimeline.totalFrames
+              : 30 * 38,
+          };
+        }}
+        defaultProps={{
+          title: "咖啡新品高质量有声版",
+          plan: null,
+          renderTimeline: null,
+        } satisfies CoffeeLaunchShortProps}
       />
     </>
   );

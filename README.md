@@ -46,10 +46,10 @@ npm run video:render -- --input cases/generated/demo-学习平板.json --out ren
 ## 高质量有声成片（拿奖主版本）
 
 ```bash
-npm run video:render -- --input cases/generated/demo-学习平板.json --out renders/hq-draft.mp4 --composition HighQualityShort --quality draft --title "学习平板结构迁移高质量有声版"
+npm run video:render -- --input cases/generated/demo-咖啡新品.json --out renders/coffee-launch-short-high.mp4 --composition CoffeeLaunchShort --quality high --title "咖啡新品高质量有声版"
 ```
 
-`HighQualityShort` 会把方案脚本转换成受控 `RenderTimeline`，再由 Remotion 渲染动态字幕、素材槽位、节奏进度和本地合成音频床。最新本地验证结果：1080x1920、30fps、38 秒，音频为 MP3 / 48kHz / stereo，`mean_volume` 约 -19.1 dB。
+`CoffeeLaunchShort` 是当前主推展示案例，比通用结构稿更像短视频广告：有冷萃杯、液体倒入、冰块、果香卡片、通勤场景、试饮反馈占位和限时 CTA。最新高质量本地验证结果：1080x1920、30fps、38 秒，视频码率约 2.03 Mbps，音频为 MP3 / 48kHz / stereo，`mean_volume` 约 -18.7 dB。
 
 ## 本地样例素材（可选）
 
@@ -83,6 +83,7 @@ ASR_PROVIDER="manual"
 - 生成 9:16 竖屏分镜预览，把每段脚本拆成画面层、字幕层、包装层和素材状态。
 - 一键渲染 1080x1920 竖屏视频预览，把脚本 beat 变成短视频式画面、字幕和素材缺口提示。
 - 生成高质量有声 Remotion 成片：`RenderTimeline` 驱动动态字幕、素材槽位、节奏提示和可听见音频。
+- 咖啡新品专用成片模板会把结构迁移变成更像商业短视频的视觉表达。
 - 展示样例节拍到新方案镜头的迁移映射，串起结构规则、素材槽位和补全动作。
 - 自动给出质量评分、推荐主版本和优先修改建议。
 - 自动生成“大奖目标看板”，把冲奖目标拆成结构迁移、RAG 可解释、成片可执行、现场可控和上交证据 5 个评分项。

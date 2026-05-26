@@ -78,10 +78,10 @@ npm run video:render -- --input cases/generated/demo-学习平板.json --out ren
 ## 高质量有声成片（主推荐）
 
 ```bash
-npm run video:render -- --input cases/generated/demo-学习平板.json --out renders/hq-draft.mp4 --composition HighQualityShort --quality draft --title "学习平板结构迁移高质量有声版"
+npm run video:render -- --input cases/generated/demo-咖啡新品.json --out renders/coffee-launch-short-high.mp4 --composition CoffeeLaunchShort --quality high --title "咖啡新品高质量有声版"
 ```
 
-本命令会从方案 JSON 自动构建 `RenderTimeline`，生成临时 WAV 音频床，再由 Remotion 输出 MP4。当前验证结果：视频 1080x1920 / 30fps / 38 秒，音频 MP3 / 48kHz / stereo，`mean_volume` 约 -19.1 dB，`max_volume` 约 -3.8 dB。抽帧验证文件位于本机 `renders/hq-draft-04s.png`、`renders/hq-draft-14s.png`、`renders/hq-draft-28s.png`。
+本命令会从方案 JSON 自动构建 `RenderTimeline`，生成临时 WAV 音频床，再由 Remotion 输出 MP4。当前主推案例换成“咖啡新品”，画面包含冷萃杯、液体倒入、冰块、果香卡片、通勤场景、试饮反馈占位和限时 CTA。当前高质量验证结果：视频 1080x1920 / 30fps / 38 秒，视频码率约 2.03 Mbps，音频 MP3 / 48kHz / stereo，`mean_volume` 约 -18.7 dB，`max_volume` 约 -3.4 dB。抽帧验证文件位于本机 `renders/coffee-launch-high-02s.png`、`renders/coffee-launch-high-12s.png`、`renders/coffee-launch-high-27s.png`。
 
 ## 本地样例素材导入（建议演示用）
 
@@ -103,7 +103,7 @@ npm run video:render -- --input cases/generated/demo-学习平板.json --out ren
 | 迁移过程可视化 | 样例节拍 -> 新方案镜头 -> 素材槽位 -> 补全动作 | “迁移映射” |
 | 结果可验证 | 秒级时间线草案、9:16 分镜预览、Remotion 竖屏成片预览、版本切换、Markdown/JSON 导出 | “时间线草案”“竖屏分镜预览”、`npm run video:render` 和导出按钮 |
 | 画面包装能力 | 字幕、标题条、卖点卡片、转场、封面标题 | 每个脚本 beat 的包装字段 |
-| 有声视频效果 | `HighQualityShort` 渲染动态字幕、素材槽位、节奏进度和合成音频床 | `npm run video:render -- --composition HighQualityShort` |
+| 有声视频效果 | `CoffeeLaunchShort` 渲染冷萃杯、液体倒入、冰块、通勤场景、动态字幕和合成音频床 | `npm run video:render -- --composition CoffeeLaunchShort` |
 | 多版本生成 | 稳妥转化版、强 Hook 版、内容种草版 | 版本切换按钮 |
 | 真实素材适配 | 用户素材文本解析和结构槽位匹配 | “迁移 Brief / 用户素材” |
 | 人工可调 | 自然语言编辑当前方案 | “自然语言编辑” |

@@ -104,8 +104,8 @@ export async function POST(
           ]
         : mode === "high-quality"
           ? [
-              "--composition",
-              "HighQualityShort",
+            "--composition",
+            /咖啡|冷萃|coffee/i.test(plan.projectTitle) ? "CoffeeLaunchShort" : "HighQualityShort",
               "--audio-mode",
               "auto",
               ...(project.mediaPath ? ["--source-video", project.mediaPath] : []),

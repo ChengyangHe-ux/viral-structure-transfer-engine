@@ -201,8 +201,9 @@ async function main() {
   const { plan, renderTimeline, title } = await loadPlanJson(resolvedInput);
   const { sourceVideoPath, cleanupPath } = await prepareStaticSourceVideo(args.sourceVideo);
   const cleanupPaths = [cleanupPath].filter(Boolean) as string[];
+  const highQualityCompositionIds = new Set(["HighQualityShort", "CoffeeLaunchShort"]);
   const highQualityInput =
-    args.compositionId === "HighQualityShort"
+    highQualityCompositionIds.has(args.compositionId)
       ? await buildHighQualityInput({
           plan,
           renderTimeline,
