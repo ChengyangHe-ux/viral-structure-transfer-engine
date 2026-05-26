@@ -11,7 +11,7 @@ import { migratedVideoPlanSchema } from "@/lib/schemas";
 export const runtime = "nodejs";
 
 type RenderQuality = "high" | "draft";
-type RenderMode = "structure" | "commercial";
+type RenderMode = "structure" | "commercial" | "high-quality";
 
 type RequestBody = {
   planId?: string | null;
@@ -67,7 +67,12 @@ export async function POST(
 
     const plan = migratedVideoPlanSchema.parse(record.data);
     const quality: RenderQuality = body.quality === "draft" ? "draft" : "high";
-    const mode: RenderMode = body.mode === "commercial" ? "commercial" : "structure";
+    const mode: RenderMode =
+      body.mode === "commercial"
+        ? "commercial"
+        : body.mode === "high-quality"
+          ? "high-quality"
+          : "structure";
     const title = normalizeText(body.title) ?? project.title ?? "爆款结构迁移引擎（结构演示稿）";
 
     const renderId = randomUUID();
@@ -97,6 +102,14 @@ export async function POST(
             "天然矿泉水",
             ...(project.mediaPath ? ["--source-video", project.mediaPath] : []),
           ]
+        : mode === "high-quality"
+          ? [
+              "--composition",
+              "HighQualityShort",
+              "--audio-mode",
+              "auto",
+              ...(project.mediaPath ? ["--source-video", project.mediaPath] : []),
+            ]
         : []),
     ]);
 

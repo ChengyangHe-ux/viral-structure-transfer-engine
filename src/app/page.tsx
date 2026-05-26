@@ -1895,6 +1895,49 @@ export default function Home() {
                     size="sm"
                     type="button"
                     variant="outline"
+                    disabled={renderingVideo || status.type === "loading"}
+                    onClick={async () => {
+                      if (!projectId) return;
+                      setRenderingVideo(true);
+                      setStatus({ type: "loading", message: "正在渲染高质量有声视频..." });
+                      try {
+                        const response = await fetch(`/api/projects/${projectId}/render`, {
+                          method: "POST",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({
+                            planId: activePlanId,
+                            quality: "draft",
+                            mode: "high-quality",
+                            title: projectTitle,
+                          }),
+                        });
+                        const data = (await response.json()) as {
+                          downloadUrl?: string;
+                          error?: string;
+                        };
+                        if (!response.ok || !data.downloadUrl) {
+                          throw new Error(data.error || "渲染失败");
+                        }
+                        window.location.href = data.downloadUrl;
+                        setStatus({ type: "success", message: "高质量有声视频已生成，开始下载。" });
+                      } catch (error) {
+                        setStatus({
+                          type: "error",
+                          message:
+                            error instanceof Error ? error.message : "渲染失败（请检查 media:install-binaries）",
+                        });
+                      } finally {
+                        setRenderingVideo(false);
+                      }
+                    }}
+                  >
+                    {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
+                    高质量有声
+                  </Button>
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant="outline"
                     onClick={() => downloadExport(projectId, "json", activePlanId)}
                   >
                     <FileJson />
