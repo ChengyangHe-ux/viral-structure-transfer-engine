@@ -230,6 +230,9 @@ async function main() {
 
   try {
     const entry = path.resolve(process.cwd(), "src", "remotion", "index.ts");
+    const chromiumOptions = highQualityCompositionIds.has(args.compositionId)
+      ? ({ gl: "angle" } as const)
+      : undefined;
     const bundled = await bundle({
       entryPoint: entry,
       webpackOverride: (config) => ({
@@ -249,6 +252,7 @@ async function main() {
       id: args.compositionId,
       inputProps,
       binariesDirectory,
+      chromiumOptions,
     });
 
     const qualitySettings =
@@ -270,6 +274,7 @@ async function main() {
       outputLocation: resolvedOut,
       inputProps,
       binariesDirectory,
+      chromiumOptions,
       overwrite: true,
       pixelFormat: "yuv420p",
       ...qualitySettings,

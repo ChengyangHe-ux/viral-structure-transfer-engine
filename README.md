@@ -49,7 +49,7 @@ npm run video:render -- --input cases/generated/demo-学习平板.json --out ren
 npm run video:render -- --input cases/generated/demo-咖啡新品.json --out renders/coffee-launch-short-high.mp4 --composition CoffeeLaunchShort --quality high --title "咖啡新品高质量有声版"
 ```
 
-`CoffeeLaunchShort` 是当前主推展示案例，比通用结构稿更像短视频广告：有冷萃杯、液体倒入、冰块、果香卡片、通勤场景、试饮反馈占位和限时 CTA。最新高质量本地验证结果：1080x1920、30fps、38 秒，视频码率约 2.03 Mbps，音频为 MP3 / 48kHz / stereo，`mean_volume` 约 -18.7 dB。
+`CoffeeLaunchShort` 是当前主推展示案例，比通用结构稿更像短视频广告：有冷萃杯、液体倒入、冰块、果香卡片、通勤场景、试饮反馈、限时 CTA、WebGL 漏光转场、运动模糊和颗粒层。最新高质量本地验证结果：1080x1920、30fps、38 秒，视频码率约 5.01 Mbps，音频为 MP3 / 48kHz / stereo，`mean_volume` 约 -18.5 dB，`max_volume` 约 -3.2 dB。
 
 ## 本地样例素材（可选）
 

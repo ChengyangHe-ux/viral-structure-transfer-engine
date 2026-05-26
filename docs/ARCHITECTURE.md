@@ -29,8 +29,9 @@
 
 - `RenderTimeline` 是模型和渲染器之间的协议层，字段包含 `scenes`、`captionTokens`、`visualLayers`、`audioCues`、`materialFit` 和 `completionPlan`。
 - LLM 或本地 fallback 只能生成结构化 JSON，服务端用 Zod 校验后才交给 Remotion。
-- Remotion 只渲染项目白名单组件，例如动态字幕、素材卡、真实视频层、节奏进度和 CTA 场景。
-- `scripts/render-video.ts` 默认会为 `HighQualityShort` 生成临时 WAV 音频床，渲染完成后删除临时音频文件。
+- Remotion 只渲染项目白名单组件，例如动态字幕、素材卡、真实视频层、节奏进度、CTA 场景、漏光转场、运动模糊和颗粒层。
+- `scripts/render-video.ts` 默认会为 `HighQualityShort` / `CoffeeLaunchShort` 生成临时 WAV 音频床，渲染完成后删除临时音频文件。
+- 高质量 Remotion 渲染会设置 `chromiumOptions: { gl: "angle" }`，保证 `@remotion/light-leaks` 的 WebGL 漏光效果在本地 SSR 渲染中可用。
 
 ### AIGC 视觉素材
 

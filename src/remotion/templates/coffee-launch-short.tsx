@@ -1,5 +1,6 @@
-import { createTikTokStyleCaptions } from "@remotion/captions";
-import { useMemo } from "react";
+import { LightLeak } from "@remotion/light-leaks";
+import { CameraMotionBlur, Trail } from "@remotion/motion-blur";
+import { noise2D } from "@remotion/noise";
 import {
   AbsoluteFill,
   Audio,
@@ -21,11 +22,11 @@ export type CoffeeLaunchShortProps = {
 };
 
 const stageColors = [
-  { bg: "#07111D", accent: "#FFB84D", second: "#72E2D1", label: "冷萃反差" },
-  { bg: "#081A22", accent: "#72E2D1", second: "#F8D27A", label: "原料证据" },
-  { bg: "#112034", accent: "#9AD3FF", second: "#FF8DA5", label: "通勤场景" },
-  { bg: "#101724", accent: "#F8D27A", second: "#72E2D1", label: "口感背书" },
-  { bg: "#1D1222", accent: "#FF8DA5", second: "#FFB84D", label: "限时转化" },
+  { bg: "#060A0E", accent: "#FFB84D", second: "#72E2D1", label: "新品冷萃", tag: "LOW SUGAR" },
+  { bg: "#07141A", accent: "#72E2D1", second: "#F8D27A", label: "果香证据", tag: "REAL TASTE" },
+  { bg: "#0B1526", accent: "#9AD3FF", second: "#FF8DA5", label: "通勤场景", tag: "ON THE WAY" },
+  { bg: "#11151E", accent: "#F8D27A", second: "#72E2D1", label: "试饮口碑", tag: "SOCIAL PROOF" },
+  { bg: "#1C101F", accent: "#FF8DA5", second: "#FFB84D", label: "限时上新", tag: "TRY TODAY" },
 ] as const;
 
 function clamp(value: number, min: number, max: number) {
@@ -46,7 +47,7 @@ export function CoffeeLaunchShort({ title, renderTimeline }: CoffeeLaunchShortPr
   return (
     <AbsoluteFill
       style={{
-        background: "#07111D",
+        background: "#05080C",
         color: "#FFFFFF",
         fontFamily:
           'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "PingFang SC", "Microsoft YaHei", Arial',
@@ -57,13 +58,13 @@ export function CoffeeLaunchShort({ title, renderTimeline }: CoffeeLaunchShortPr
         <Audio
           src={staticFile(renderTimeline.audioBedPath)}
           volume={(frame) => {
-            const fadeIn = interpolate(frame, [0, 36], [0, 0.9], {
+            const fadeIn = interpolate(frame, [0, 36], [0, 0.92], {
               extrapolateLeft: "clamp",
               extrapolateRight: "clamp",
             });
             const fadeOut = interpolate(
               frame,
-              [renderTimeline.totalFrames - 54, renderTimeline.totalFrames],
+              [renderTimeline.totalFrames - 64, renderTimeline.totalFrames],
               [1, 0],
               {
                 extrapolateLeft: "clamp",
@@ -74,13 +75,17 @@ export function CoffeeLaunchShort({ title, renderTimeline }: CoffeeLaunchShortPr
           }}
         />
       ) : null}
+
       {renderTimeline.scenes.map((scene) => (
         <Sequence from={scene.startFrame} durationInFrames={scene.durationFrames} key={scene.id}>
           <CoffeeScene scene={scene} totalScenes={renderTimeline.scenes.length} />
         </Sequence>
       ))}
+
+      <CoffeeTransitionLeaks timeline={renderTimeline} />
       <CoffeeCover timeline={renderTimeline} />
-      <Sequence from={Math.max(0, renderTimeline.totalFrames - 72)} durationInFrames={72}>
+
+      <Sequence from={Math.max(0, renderTimeline.totalFrames - 84)} durationInFrames={84}>
         <CoffeeFinal timeline={renderTimeline} />
       </Sequence>
     </AbsoluteFill>
@@ -90,8 +95,8 @@ export function CoffeeLaunchShort({ title, renderTimeline }: CoffeeLaunchShortPr
 function CoffeeCover({ timeline }: { timeline: RenderTimeline }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const pop = spring({ frame, fps, config: { damping: 180, mass: 0.8 } });
-  const opacity = interpolate(frame, [0, 8, 34, 48], [1, 1, 1, 0], {
+  const pop = spring({ frame, fps, config: { damping: 170, mass: 0.7 } });
+  const opacity = interpolate(frame, [0, 10, 32, 44], [1, 1, 0.86, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -101,54 +106,81 @@ function CoffeeCover({ timeline }: { timeline: RenderTimeline }) {
       style={{
         opacity,
         background:
-          "radial-gradient(circle at 50% 36%, rgba(255,184,77,0.48), rgba(255,184,77,0) 34%), linear-gradient(180deg, #08121F 0%, #142B35 58%, #07111D 100%)",
+          "radial-gradient(circle at 54% 36%, rgba(255,184,77,0.5), rgba(255,184,77,0) 34%), linear-gradient(180deg, #07111D 0%, #14323A 58%, #05080C 100%)",
       }}
     >
-      <CoffeeTexture />
+      <CoffeeTexture intensity={0.36} />
+      <MacroLiquidPlate frame={frame} palette={stageColors[0]} />
       <div
         style={{
           position: "absolute",
-          left: 72,
-          right: 72,
+          left: 70,
+          right: 70,
           top: 82,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          color: "#CFE8EA",
-          fontSize: 22,
-          fontWeight: 800,
+          color: "#EAF7F5",
+          fontSize: 21,
+          fontWeight: 860,
         }}
       >
-        <span>LOW SUGAR COLD BREW</span>
-        <span>{timeline.scenes.length} SCENES</span>
+        <span>FRESH COLD BREW</span>
+        <span>38S / SOUND ON</span>
       </div>
       <div
         style={{
           position: "absolute",
-          left: 92,
-          right: 92,
-          bottom: 154,
-          transform: `translateY(${interpolate(pop, [0, 1], [56, 0])}px)`,
+          left: 76,
+          right: 76,
+          bottom: 148,
+          transform: `translateY(${interpolate(pop, [0, 1], [64, 0])}px)`,
         }}
       >
-        <div style={{ fontSize: 28, color: "#72E2D1", fontWeight: 900 }}>咖啡新品主推案例</div>
         <div
           style={{
-            marginTop: 22,
-            fontSize: 86,
-            lineHeight: 0.96,
-            fontWeight: 960,
-            letterSpacing: 0,
+            fontSize: 30,
+            color: "#72E2D1",
+            fontWeight: 940,
+            textShadow: "0 12px 44px rgba(114,226,209,0.28)",
           }}
         >
-          {compact(timeline.coverTitle, 20)}
+          低糖果香冷萃
         </div>
-        <div style={{ marginTop: 28, fontSize: 30, color: "#DDE8EE", lineHeight: 1.34 }}>
-          清爽果香 / 低负担 / 通勤场景 / 限时口味
+        <div
+          style={{
+            marginTop: 18,
+            fontSize: 92,
+            lineHeight: 0.95,
+            fontWeight: 980,
+            letterSpacing: 0,
+            textShadow: "0 32px 100px rgba(0,0,0,0.5)",
+          }}
+        >
+          {compact(timeline.coverTitle, 18)}
+        </div>
+        <div style={{ marginTop: 28, fontSize: 28, color: "#DDE8EE", lineHeight: 1.32 }}>
+          冰感微距 / 果香证据 / 通勤提神 / 限时转化
         </div>
       </div>
-      <CoffeeHeroProduct frame={frame} palette={stageColors[0]} large />
+      <CoffeeHeroProduct frame={frame} palette={stageColors[0]} large left={390} top={242} />
     </AbsoluteFill>
+  );
+}
+
+function CoffeeTransitionLeaks({ timeline }: { timeline: RenderTimeline }) {
+  return (
+    <>
+      {timeline.scenes.slice(1).map((scene) => (
+        <LightLeak
+          durationInFrames={30}
+          from={Math.max(0, scene.startFrame - 15)}
+          hueShift={scene.index % 2 === 0 ? 215 : 28}
+          key={`leak-${scene.id}`}
+          seed={scene.index * 17 + 9}
+        />
+      ))}
+    </>
   );
 }
 
@@ -156,17 +188,35 @@ function CoffeeScene({ scene, totalScenes }: { scene: RenderScene; totalScenes: 
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const palette = stageColors[scene.index % stageColors.length]!;
-  const enter = spring({ fps, frame, config: { damping: 160, mass: 0.82 } });
+  const enter = spring({ fps, frame, config: { damping: 150, mass: 0.8 } });
   const progress = clamp(frame / scene.durationFrames, 0, 1);
+  const cameraPush = interpolate(progress, [0, 1], [1.035, 1.105]);
+  const cameraY = interpolate(enter, [0, 1], [36, 0]) + Math.sin(frame / 46) * 8;
 
   return (
     <AbsoluteFill
       style={{
-        background: `linear-gradient(180deg, ${palette.bg} 0%, #061018 100%)`,
+        background: `radial-gradient(circle at 72% 18%, ${palette.accent}36, transparent 30%), linear-gradient(180deg, ${palette.bg} 0%, #05080C 100%)`,
       }}
     >
-      <CoffeeTexture />
+      <CoffeeTexture intensity={0.24} />
       <MovingLight frame={frame} palette={palette} />
+
+      <CameraMotionBlur samples={5} shutterAngle={165}>
+        <div
+          style={{
+            position: "absolute",
+            inset: -46,
+            transform: `translateY(${cameraY}px) scale(${cameraPush})`,
+            transformOrigin: "50% 52%",
+          }}
+        >
+          <CoffeeVisual scene={scene} frame={frame} progress={progress} palette={palette} />
+        </div>
+      </CameraMotionBlur>
+
+      <ForegroundOccluders frame={frame} palette={palette} />
+
       <div
         style={{
           position: "absolute",
@@ -176,62 +226,91 @@ function CoffeeScene({ scene, totalScenes }: { scene: RenderScene; totalScenes: 
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          color: "#EAF1F7",
+          color: "#F7FCFF",
+          opacity: interpolate(progress, [0, 0.08, 0.92, 1], [0, 1, 1, 0.32], {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+          }),
         }}
       >
         <div>
-          <div style={{ fontSize: 20, opacity: 0.7 }}>Scene {scene.index + 1}</div>
-          <div style={{ marginTop: 8, fontSize: 34, fontWeight: 920 }}>{palette.label}</div>
+          <div style={{ fontSize: 19, fontWeight: 850, color: palette.second }}>{palette.tag}</div>
+          <div style={{ marginTop: 8, fontSize: 35, fontWeight: 960 }}>{palette.label}</div>
         </div>
         <div
           style={{
-            width: 128,
-            height: 46,
-            borderRadius: 999,
-            border: "1px solid rgba(255,255,255,0.28)",
-            background: "rgba(255,255,255,0.12)",
+            width: 106,
+            height: 106,
+            borderRadius: "50%",
+            border: "1px solid rgba(255,255,255,0.34)",
+            background: "rgba(0,0,0,0.18)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: 20,
-            fontWeight: 900,
+            fontSize: 24,
+            fontWeight: 940,
+            boxShadow: `0 0 34px ${palette.accent}33`,
           }}
         >
-          {String(scene.index + 1).padStart(2, "0")} / {String(totalScenes).padStart(2, "0")}
+          {String(scene.index + 1).padStart(2, "0")}
         </div>
       </div>
 
       <div
         style={{
           position: "absolute",
-          left: 56,
-          right: 56,
-          top: 178,
-          height: 970,
-          transform: `translateY(${interpolate(enter, [0, 1], [46, 0])}px)`,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 520,
+          background: "linear-gradient(180deg, transparent, rgba(5,8,12,0.72) 34%, rgba(5,8,12,0.96))",
         }}
-      >
-        <CoffeeVisual scene={scene} frame={frame} progress={progress} palette={palette} />
-      </div>
-
+      />
       <div
         style={{
           position: "absolute",
           left: 70,
           right: 70,
-          bottom: 138,
-          padding: "28px 30px",
-          borderRadius: 24,
-          background: "rgba(5, 10, 18, 0.82)",
-          border: `1px solid ${palette.accent}`,
-          boxShadow: `0 24px 90px rgba(0,0,0,0.36), 0 0 42px ${palette.accent}33`,
+          bottom: 116,
+          transform: `translateY(${interpolate(progress, [0, 0.16, 1], [38, 0, -10], {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+          })}px)`,
         }}
       >
-        <div style={{ fontSize: 56, lineHeight: 1.08, fontWeight: 960, letterSpacing: 0 }}>
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "10px 16px",
+            borderRadius: 999,
+            background: `${palette.accent}22`,
+            color: palette.second,
+            fontSize: 20,
+            fontWeight: 900,
+          }}
+        >
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: palette.accent }} />
+          {scene.focus}
+        </div>
+        <div
+          style={{
+            marginTop: 18,
+            fontSize: 58,
+            lineHeight: 1.02,
+            fontWeight: 980,
+            letterSpacing: 0,
+            maxWidth: 940,
+            overflowWrap: "anywhere",
+            textShadow: "0 22px 78px rgba(0,0,0,0.65)",
+          }}
+        >
           <CoffeeCaption scene={scene} />
         </div>
       </div>
-      <CoffeeProgress scene={scene} palette={palette} />
+
+      <CoffeeProgress scene={scene} palette={palette} totalScenes={totalScenes} />
     </AbsoluteFill>
   );
 }
@@ -251,7 +330,7 @@ function CoffeeVisual({
   if (scene.index === 1) return <IngredientCoffee frame={frame} progress={progress} palette={palette} />;
   if (scene.index === 2) return <CommuteCoffee frame={frame} progress={progress} palette={palette} />;
   if (scene.index === 3) return <ProofCoffee frame={frame} progress={progress} palette={palette} />;
-  return <CtaCoffee frame={frame} progress={progress} palette={palette} scene={scene} />;
+  return <CtaCoffee frame={frame} progress={progress} palette={palette} />;
 }
 
 function HookCoffee({
@@ -265,33 +344,15 @@ function HookCoffee({
 }) {
   return (
     <>
-      <div
-        style={{
-          position: "absolute",
-          left: 28,
-          right: 28,
-          top: 20,
-          height: 658,
-          borderRadius: 42,
-          background:
-            "linear-gradient(155deg, rgba(255,255,255,0.18), rgba(255,255,255,0.06) 44%, rgba(0,0,0,0.18))",
-          border: "1px solid rgba(255,255,255,0.2)",
-          overflow: "hidden",
-        }}
-      >
-        <LiquidPour frame={frame} palette={palette} />
-        <CoffeeHeroProduct frame={frame} palette={palette} />
-        <CitrusSlice frame={frame} left={654} top={120} />
-        <IceCube frame={frame} left={165} top={118} delay={0} />
-        <IceCube frame={frame} left={742} top={390} delay={12} />
-      </div>
-      <BigClaim
-        text="不是甜，是干净的香"
-        left={44}
-        top={700}
-        palette={palette}
-        progress={progress}
-      />
+      <MacroLiquidPlate frame={frame} palette={palette} />
+      <LiquidPour frame={frame} palette={palette} left={470} top={-24} height={510} />
+      <CoffeeHeroProduct frame={frame} palette={palette} large left={396} top={328} />
+      <CitrusSlice frame={frame} left={705} top={160} scale={1.08} />
+      <IceCube frame={frame} left={132} top={188} delay={0} scale={1.15} />
+      <IceCube frame={frame} left={782} top={520} delay={12} scale={0.88} />
+      <FloatingTastePill text="果香" left={108} top={612} palette={palette} progress={progress} />
+      <FloatingTastePill text="低糖" left={724} top={736} palette={palette} progress={progress} delay={0.12} />
+      <CleanHeadline text="不是甜，是干净的香" left={70} top={1010} palette={palette} progress={progress} />
     </>
   );
 }
@@ -306,47 +367,57 @@ function IngredientCoffee({
   palette: (typeof stageColors)[number];
 }) {
   const cards = [
-    ["果香冷萃", "清爽入口", palette.accent],
-    ["低糖负担", "下午也轻", "#9AD3FF"],
-    ["冰杯成品", "即拿即走", palette.second],
+    ["01", "果香冷萃", "先给味觉记忆点", palette.accent],
+    ["02", "低糖负担", "再解决喝咖啡顾虑", "#9AD3FF"],
+    ["03", "冰杯成品", "最后给可拍可买场景", palette.second],
   ];
+
   return (
     <>
+      <IngredientRings frame={frame} palette={palette} />
       <div style={{ position: "absolute", inset: 0 }}>
-        {cards.map((card, index) => (
-          <div
-            key={card[0]}
-            style={{
-              position: "absolute",
-              left: 36 + index * 306,
-              top: 70 + Math.sin((frame + index * 18) / 20) * 12,
-              width: 260,
-              height: 530,
-              borderRadius: 34,
-              background: "rgba(255,255,255,0.92)",
-              color: "#111827",
-              padding: 26,
-              boxShadow: "0 30px 92px rgba(0,0,0,0.26)",
-              transform: `translateY(${interpolate(progress, [0, 1], [34, -8])}px)`,
-            }}
-          >
+        {cards.map((card, index) => {
+          const shift = interpolate(progress, [0, 1], [72 - index * 18, -18 + index * 8]);
+          return (
             <div
+              key={card[1]}
               style={{
-                height: 230,
-                borderRadius: 24,
-                background: `radial-gradient(circle at 52% 46%, ${card[2]}, rgba(255,255,255,0.82) 54%, rgba(17,24,39,0.12))`,
-                position: "relative",
+                position: "absolute",
+                left: 74 + index * 304,
+                top: 168 + Math.sin((frame + index * 21) / 22) * 18 + shift,
+                width: 268,
+                height: 660,
+                borderRadius: 36,
+                background:
+                  "linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.72) 62%, rgba(255,255,255,0.28))",
+                color: "#111827",
+                padding: 22,
+                boxShadow: `0 34px 108px rgba(0,0,0,0.34), 0 0 46px ${card[3]}44`,
+                transform: `rotate(${[-5, 3, -2][index]}deg)`,
                 overflow: "hidden",
               }}
             >
-              <CoffeeBeanCluster frame={frame + index * 20} />
+              <div
+                style={{
+                  height: 320,
+                  borderRadius: 28,
+                  background: `radial-gradient(circle at 48% 44%, ${card[3]}, rgba(255,255,255,0.9) 54%, rgba(17,24,39,0.12))`,
+                  position: "relative",
+                  overflow: "hidden",
+                }}
+              >
+                <CoffeeBeanCluster frame={frame + index * 20} />
+                {index === 0 ? <CitrusSlice frame={frame} left={62} top={54} scale={0.54} /> : null}
+                {index === 2 ? <IceCube frame={frame} left={70} top={102} delay={8} scale={0.58} /> : null}
+              </div>
+              <div style={{ marginTop: 26, fontSize: 22, color: card[3], fontWeight: 960 }}>{card[0]}</div>
+              <div style={{ marginTop: 10, fontSize: 35, fontWeight: 960 }}>{card[1]}</div>
+              <div style={{ marginTop: 14, fontSize: 21, color: "#4B5563", lineHeight: 1.25 }}>{card[2]}</div>
             </div>
-            <div style={{ marginTop: 30, fontSize: 34, fontWeight: 940 }}>{card[0]}</div>
-            <div style={{ marginTop: 12, fontSize: 22, color: "#4B5563" }}>{card[1]}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-      <BigClaim text="三类镜头，证明一杯够清爽" left={44} top={675} palette={palette} progress={progress} />
+      <CleanHeadline text="卖点不是罗列，是按购买阻力推进" left={66} top={1020} palette={palette} progress={progress} />
     </>
   );
 }
@@ -362,67 +433,36 @@ function CommuteCoffee({
 }) {
   return (
     <>
+      <CommuteWindow frame={frame} palette={palette} />
+      <Trail layers={5} lagInFrames={2} trailOpacity={0.18}>
+        <CoffeeHeroProduct frame={frame} palette={palette} large left={462} top={380} />
+      </Trail>
+      <HandSilhouette frame={frame} />
       <div
         style={{
           position: "absolute",
-          left: 28,
-          right: 28,
-          top: 42,
-          height: 610,
-          borderRadius: 42,
-          background:
-            "linear-gradient(180deg, rgba(154,211,255,0.16), rgba(255,255,255,0.08)), linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
-          border: "1px solid rgba(255,255,255,0.2)",
-          overflow: "hidden",
+          left: 76,
+          top: 286,
+          width: 336,
+          padding: "28px 26px",
+          borderRadius: 30,
+          background: "rgba(255,255,255,0.9)",
+          color: "#111827",
+          boxShadow: "0 30px 90px rgba(0,0,0,0.28)",
+          transform: `translateX(${interpolate(progress, [0, 1], [-28, 18])}px) rotate(-3deg)`,
         }}
       >
-        {[0, 1, 2, 3, 4].map((item) => (
-          <div
-            key={item}
-            style={{
-              position: "absolute",
-              left: -200 + ((frame * (2.5 + item * 0.4)) % 1280),
-              top: 100 + item * 86,
-              width: 280,
-              height: 4,
-              background: "rgba(255,255,255,0.24)",
-            }}
-          />
-        ))}
-        <div
-          style={{
-            position: "absolute",
-            left: 70,
-            right: 70,
-            top: 92,
-            height: 260,
-            borderRadius: 28,
-            border: "2px solid rgba(255,255,255,0.28)",
-          }}
-        />
-        <CoffeeHeroProduct frame={frame} palette={palette} compact />
-        <div
-          style={{
-            position: "absolute",
-            right: 62,
-            bottom: 72,
-            width: 300,
-            padding: "24px 26px",
-            borderRadius: 24,
-            background: "rgba(255,255,255,0.92)",
-            color: "#111827",
-            boxShadow: "0 28px 78px rgba(0,0,0,0.24)",
-          }}
-        >
-          <div style={{ fontSize: 22, color: palette.accent, fontWeight: 940 }}>COMMUTE FIT</div>
-          <div style={{ marginTop: 10, fontSize: 34, fontWeight: 940, lineHeight: 1.05 }}>
-            低负担
-            <br />
-            不抢味
-          </div>
+        <div style={{ fontSize: 21, color: palette.accent, fontWeight: 960 }}>SCENE FIT</div>
+        <div style={{ marginTop: 12, fontSize: 43, fontWeight: 980, lineHeight: 1.02 }}>
+          早八
+          <br />
+          一口清醒
+        </div>
+        <div style={{ marginTop: 18, fontSize: 21, color: "#4B5563", lineHeight: 1.26 }}>
+          冰感不腻，路上就能喝。
         </div>
       </div>
-      <BigClaim text="通勤路上，也能有一口清醒" left={44} top={685} palette={palette} progress={progress} />
+      <CleanHeadline text="把产品放进真实使用路线上" left={66} top={1014} palette={palette} progress={progress} />
     </>
   );
 }
@@ -437,32 +477,36 @@ function ProofCoffee({
   palette: (typeof stageColors)[number];
 }) {
   const comments = ["清爽果香更明显", "甜感低，回味干净", "冰杯出片很稳"];
+
   return (
     <>
       <FlavorWave frame={frame} palette={palette} />
+      <CoffeeHeroProduct frame={frame} palette={palette} large left={560} top={318} />
       {comments.map((comment, index) => (
         <div
           key={comment}
           style={{
             position: "absolute",
-            left: 90 + index * 58,
-            top: 95 + index * 156,
-            width: 650,
-            height: 112,
-            borderRadius: 26,
+            left: 78 + index * 34,
+            top: 230 + index * 170,
+            width: 600,
+            minHeight: 126,
+            borderRadius: 30,
             background: "rgba(255,255,255,0.92)",
             color: "#111827",
             padding: "24px 28px",
-            boxShadow: "0 24px 70px rgba(0,0,0,0.2)",
-            transform: `translateX(${interpolate(progress, [0, 1], [34, -12])}px)`,
+            boxShadow: "0 28px 86px rgba(0,0,0,0.24)",
+            transform: `translateX(${interpolate(progress, [0, 1], [-48 + index * 10, 18 - index * 8])}px) rotate(${[-3, 2, -1][index]}deg)`,
           }}
         >
-          <div style={{ fontSize: 20, color: "#6B7280", fontWeight: 800 }}>试饮反馈占位</div>
-          <div style={{ marginTop: 8, fontSize: 34, fontWeight: 940 }}>{comment}</div>
+          <div style={{ display: "flex", gap: 7, color: "#FFB84D", fontSize: 25, fontWeight: 960 }}>
+            {"★★★★★".slice(0, 4 + (index % 2))}
+          </div>
+          <div style={{ marginTop: 10, fontSize: 34, lineHeight: 1.05, fontWeight: 960 }}>{comment}</div>
+          <div style={{ marginTop: 10, fontSize: 18, color: "#6B7280", fontWeight: 800 }}>试饮反馈 / 可替换真实评论</div>
         </div>
       ))}
-      <CoffeeHeroProduct frame={frame} palette={palette} compact right />
-      <BigClaim text="真实发布前，评价必须可追溯" left={44} top={688} palette={palette} progress={progress} />
+      <CleanHeadline text="评价卡片只保留能转化的证据" left={66} top={1022} palette={palette} progress={progress} />
     </>
   );
 }
@@ -471,55 +515,54 @@ function CtaCoffee({
   frame,
   progress,
   palette,
-  scene,
 }: {
   frame: number;
   progress: number;
   palette: (typeof stageColors)[number];
-  scene: RenderScene;
 }) {
   return (
     <>
+      <StorePoster frame={frame} palette={palette} />
+      <CoffeeHeroProduct frame={frame} palette={palette} large left={330} top={420} />
       <div
         style={{
           position: "absolute",
-          left: 34,
-          right: 34,
-          top: 34,
-          height: 650,
-          borderRadius: 42,
-          background:
-            "linear-gradient(160deg, rgba(255,141,165,0.22), rgba(255,184,77,0.12) 52%, rgba(255,255,255,0.06))",
-          border: "1px solid rgba(255,255,255,0.22)",
-          overflow: "hidden",
+          right: 78,
+          top: 236,
+          width: 326,
+          padding: "26px 26px 30px",
+          borderRadius: 32,
+          background: "rgba(255,255,255,0.94)",
+          color: "#111827",
+          boxShadow: "0 36px 104px rgba(0,0,0,0.32)",
+          transform: `translateY(${interpolate(progress, [0, 1], [44, -12])}px) rotate(3deg)`,
         }}
       >
-        <CoffeeHeroProduct frame={frame} palette={palette} large />
-        <div
-          style={{
-            position: "absolute",
-            right: 64,
-            top: 84,
-            width: 310,
-            padding: "24px 24px 26px",
-            borderRadius: 26,
-            background: "rgba(255,255,255,0.94)",
-            color: "#111827",
-            boxShadow: "0 30px 86px rgba(0,0,0,0.24)",
-          }}
-        >
-          <div style={{ fontSize: 22, color: palette.accent, fontWeight: 940 }}>LIMITED FLAVOR</div>
-          <div style={{ marginTop: 14, fontSize: 42, lineHeight: 1, fontWeight: 960 }}>
-            夏季
-            <br />
-            冷萃
-          </div>
-          <div style={{ marginTop: 20, fontSize: 20, color: "#4B5563", lineHeight: 1.28 }}>
-            {compact(scene.completionPlan, 34)}
-          </div>
+        <div style={{ fontSize: 21, color: palette.accent, fontWeight: 960 }}>LIMITED DROP</div>
+        <div style={{ marginTop: 12, fontSize: 46, lineHeight: 0.98, fontWeight: 980 }}>
+          今日
+          <br />
+          去试一杯
+        </div>
+        <div style={{ marginTop: 18, fontSize: 20, color: "#4B5563", lineHeight: 1.28 }}>
+          低糖果香冷萃，限时上新。
         </div>
       </div>
-      <BigClaim text="先收藏，再去门店试这杯" left={44} top={688} palette={palette} progress={progress} />
+      <div
+        style={{
+          position: "absolute",
+          left: 76,
+          bottom: 396,
+          width: 170,
+          height: 170,
+          borderRadius: 24,
+          background:
+            "repeating-linear-gradient(90deg, #111827 0 14px, #fff 14px 27px), repeating-linear-gradient(0deg, transparent 0 13px, rgba(255,255,255,0.35) 13px 25px)",
+          border: "12px solid rgba(255,255,255,0.9)",
+          boxShadow: "0 26px 78px rgba(0,0,0,0.3)",
+        }}
+      />
+      <CleanHeadline text="结尾只给一个动作：收藏，再到店" left={66} top={1018} palette={palette} progress={progress} />
     </>
   );
 }
@@ -527,70 +570,94 @@ function CtaCoffee({
 function CoffeeHeroProduct({
   frame,
   palette,
-  compact: isCompact = false,
-  right = false,
   large = false,
+  left = 370,
+  top = 128,
 }: {
   frame: number;
   palette: (typeof stageColors)[number];
-  compact?: boolean;
-  right?: boolean;
   large?: boolean;
+  left?: number;
+  top?: number;
 }) {
-  const scale = large ? 1.12 : isCompact ? 0.78 : 1;
-  const cupLeft = right ? 560 : large ? 350 : 370;
-  const cupTop = large ? 194 : isCompact ? 170 : 128;
+  const scale = large ? 1.2 : 1;
   const bob = Math.sin(frame / 18) * 8;
+  const shine = 22 + Math.sin(frame / 19) * 14;
 
   return (
     <div
       style={{
         position: "absolute",
-        left: cupLeft,
-        top: cupTop + bob,
-        width: 280,
-        height: 420,
-        transform: `scale(${scale}) rotate(${Math.sin(frame / 50) * 1.8}deg)`,
+        left,
+        top: top + bob,
+        width: 282,
+        height: 452,
+        transform: `scale(${scale}) rotate(${Math.sin(frame / 54) * 1.6}deg)`,
         transformOrigin: "50% 70%",
       }}
     >
       <div
         style={{
           position: "absolute",
+          left: 17,
+          top: 396,
+          width: 250,
+          height: 48,
+          borderRadius: "50%",
+          background: "rgba(0,0,0,0.32)",
+          filter: "blur(14px)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
           left: 52,
           top: 0,
-          width: 176,
-          height: 52,
+          width: 178,
+          height: 56,
           borderRadius: "50%",
-          background: "rgba(255,255,255,0.88)",
-          border: "5px solid rgba(255,255,255,0.96)",
+          background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(223,248,255,0.78))",
+          border: "5px solid rgba(255,255,255,0.94)",
+          boxShadow: "0 10px 34px rgba(255,255,255,0.2)",
         }}
       />
       <div
         style={{
           position: "absolute",
           left: 42,
-          top: 24,
-          width: 196,
-          height: 342,
-          clipPath: "polygon(7% 0, 93% 0, 82% 100%, 18% 100%)",
-          borderRadius: 24,
+          top: 28,
+          width: 198,
+          height: 356,
+          clipPath: "polygon(6% 0, 94% 0, 82% 100%, 18% 100%)",
+          borderRadius: 28,
           background:
-            "linear-gradient(180deg, rgba(255,255,255,0.82), rgba(255,255,255,0.56) 18%, rgba(96,55,34,0.88) 52%, rgba(16,24,39,0.92) 100%)",
-          boxShadow: "0 34px 88px rgba(0,0,0,0.35)",
+            "linear-gradient(180deg, rgba(255,255,255,0.82), rgba(244,252,255,0.55) 20%, rgba(108,64,37,0.9) 54%, rgba(15,23,42,0.94) 100%)",
+          boxShadow: "0 38px 104px rgba(0,0,0,0.42)",
           overflow: "hidden",
         }}
       >
         <div
           style={{
             position: "absolute",
-            left: 22,
-            right: 22,
-            top: 140 + Math.sin(frame / 14) * 8,
-            height: 68,
+            left: shine,
+            top: 8,
+            width: 28,
+            height: 318,
+            borderRadius: 999,
+            background: "linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.05))",
+            filter: "blur(1px)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 20,
+            right: 20,
+            top: 132 + Math.sin(frame / 14) * 8,
+            height: 72,
             borderRadius: "50%",
             background: `linear-gradient(90deg, ${palette.accent}, ${palette.second})`,
-            opacity: 0.88,
+            opacity: 0.86,
           }}
         />
         <div
@@ -598,37 +665,106 @@ function CoffeeHeroProduct({
             position: "absolute",
             left: 34,
             right: 34,
-            top: 214,
-            height: 76,
-            borderRadius: 16,
-            background: "rgba(255,255,255,0.86)",
+            top: 220,
+            height: 82,
+            borderRadius: 18,
+            background: "rgba(255,255,255,0.88)",
             color: "#111827",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             textAlign: "center",
-            fontSize: 22,
+            fontSize: 23,
             lineHeight: 1.05,
-            fontWeight: 960,
+            fontWeight: 980,
           }}
         >
           低糖
           <br />
           冷萃
         </div>
+        <Condensation frame={frame} />
       </div>
       <div
         style={{
           position: "absolute",
-          left: 20,
-          top: 360,
-          width: 238,
-          height: 42,
+          left: 50,
+          top: 18,
+          width: 182,
+          height: 54,
           borderRadius: "50%",
-          background: "rgba(0,0,0,0.28)",
-          filter: "blur(12px)",
+          border: "5px solid rgba(255,255,255,0.72)",
         }}
       />
+    </div>
+  );
+}
+
+function Condensation({ frame }: { frame: number }) {
+  return (
+    <>
+      {new Array(18).fill(0).map((_, index) => {
+        const x = 28 + ((index * 37) % 138);
+        const y = 40 + ((index * 53 + Math.floor(frame / 3)) % 250);
+        const size = 4 + (index % 3) * 2;
+        return (
+          <div
+            key={index}
+            style={{
+              position: "absolute",
+              left: x,
+              top: y,
+              width: size,
+              height: size,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.52)",
+              boxShadow: "0 0 10px rgba(255,255,255,0.3)",
+            }}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function MacroLiquidPlate({
+  frame,
+  palette,
+}: {
+  frame: number;
+  palette: (typeof stageColors)[number];
+}) {
+  return (
+    <div style={{ position: "absolute", inset: 0 }}>
+      <div
+        style={{
+          position: "absolute",
+          left: -180,
+          top: 318,
+          width: 1450,
+          height: 590,
+          borderRadius: "50%",
+          background: `radial-gradient(circle at 46% 43%, ${palette.accent}AA, rgba(93,52,34,0.92) 26%, rgba(14,20,29,0.96) 62%, transparent 72%)`,
+          transform: `rotate(${Math.sin(frame / 42) * 2}deg)`,
+          filter: "blur(0.2px)",
+        }}
+      />
+      {new Array(18).fill(0).map((_, index) => (
+        <div
+          key={index}
+          style={{
+            position: "absolute",
+            left: 120 + ((index * 71 + frame * 2) % 860),
+            top: 344 + Math.sin((frame + index * 18) / 16) * 94,
+            width: 18 + (index % 4) * 8,
+            height: 18 + (index % 4) * 8,
+            borderRadius: "50%",
+            background: index % 2 === 0 ? palette.second : "rgba(255,255,255,0.72)",
+            opacity: 0.24,
+            filter: "blur(0.4px)",
+          }}
+        />
+      ))}
     </div>
   );
 }
@@ -636,32 +772,50 @@ function CoffeeHeroProduct({
 function LiquidPour({
   frame,
   palette,
+  left,
+  top,
+  height,
 }: {
   frame: number;
   palette: (typeof stageColors)[number];
+  left: number;
+  top: number;
+  height: number;
 }) {
-  const pourHeight = interpolate(frame % 90, [0, 16, 90], [0, 300, 300], {
+  const pourHeight = interpolate(frame % 84, [0, 14, 84], [0, height, height], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+
   return (
     <div
       style={{
         position: "absolute",
-        left: 202,
-        top: 0,
-        width: 86,
+        left,
+        top,
+        width: 92,
         height: pourHeight,
-        borderRadius: "0 0 40px 40px",
-        background: `linear-gradient(180deg, ${palette.accent}, rgba(88,49,31,0.88))`,
+        borderRadius: "0 0 42px 42px",
+        background: `linear-gradient(180deg, ${palette.accent}, rgba(87,48,31,0.94))`,
         opacity: 0.92,
         filter: "blur(0.3px)",
+        boxShadow: `0 0 38px ${palette.accent}44`,
       }}
     />
   );
 }
 
-function CitrusSlice({ frame, left, top }: { frame: number; left: number; top: number }) {
+function CitrusSlice({
+  frame,
+  left,
+  top,
+  scale = 1,
+}: {
+  frame: number;
+  left: number;
+  top: number;
+  scale?: number;
+}) {
   return (
     <div
       style={{
@@ -674,7 +828,7 @@ function CitrusSlice({ frame, left, top }: { frame: number; left: number; top: n
         border: "16px solid #F8D27A",
         background:
           "conic-gradient(from 20deg, rgba(255,255,255,0.82), #FFE08A, rgba(255,255,255,0.78), #FFE08A, rgba(255,255,255,0.82))",
-        transform: `rotate(${frame * 0.8}deg)`,
+        transform: `scale(${scale}) rotate(${frame * 0.8}deg)`,
         boxShadow: "0 20px 60px rgba(248,210,122,0.28)",
       }}
     />
@@ -686,11 +840,13 @@ function IceCube({
   left,
   top,
   delay,
+  scale = 1,
 }: {
   frame: number;
   left: number;
   top: number;
   delay: number;
+  scale?: number;
 }) {
   return (
     <div
@@ -704,26 +860,144 @@ function IceCube({
         background: "rgba(221,248,255,0.82)",
         border: "2px solid rgba(255,255,255,0.86)",
         boxShadow: "inset 0 0 24px rgba(255,255,255,0.8), 0 18px 48px rgba(0,0,0,0.22)",
-        transform: `rotate(${Math.sin((frame + delay) / 22) * 12}deg)`,
+        transform: `scale(${scale}) rotate(${Math.sin((frame + delay) / 22) * 12}deg)`,
       }}
     />
+  );
+}
+
+function FloatingTastePill({
+  text,
+  left,
+  top,
+  palette,
+  progress,
+  delay = 0,
+}: {
+  text: string;
+  left: number;
+  top: number;
+  palette: (typeof stageColors)[number];
+  progress: number;
+  delay?: number;
+}) {
+  const lift = interpolate(clamp(progress - delay, 0, 1), [0, 1], [34, -18]);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left,
+        top: top + lift,
+        padding: "18px 25px",
+        borderRadius: 999,
+        background: "rgba(255,255,255,0.9)",
+        color: "#111827",
+        fontSize: 34,
+        fontWeight: 980,
+        boxShadow: `0 28px 80px rgba(0,0,0,0.28), 0 0 38px ${palette.accent}44`,
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
+function CleanHeadline({
+  text,
+  left,
+  top,
+  palette,
+  progress,
+}: {
+  text: string;
+  left: number;
+  top: number;
+  palette: (typeof stageColors)[number];
+  progress: number;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: Math.max(left, 112),
+        top,
+        right: 92,
+        color: "#FFFFFF",
+        transform: `translateY(${interpolate(progress, [0, 0.2, 1], [34, 0, -10], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        })}px)`,
+      }}
+    >
+      <div
+        style={{
+          width: 96,
+          height: 7,
+          borderRadius: 999,
+          background: `linear-gradient(90deg, ${palette.accent}, ${palette.second})`,
+          boxShadow: `0 0 30px ${palette.accent}66`,
+        }}
+      />
+      <div
+        style={{
+          marginTop: 18,
+          fontSize: 48,
+          lineHeight: 1.02,
+          fontWeight: 980,
+          textShadow: "0 20px 70px rgba(0,0,0,0.58)",
+        }}
+      >
+        {text}
+      </div>
+    </div>
+  );
+}
+
+function IngredientRings({
+  frame,
+  palette,
+}: {
+  frame: number;
+  palette: (typeof stageColors)[number];
+}) {
+  return (
+    <div style={{ position: "absolute", inset: 0 }}>
+      {new Array(6).fill(0).map((_, index) => (
+        <div
+          key={index}
+          style={{
+            position: "absolute",
+            left: -60 + index * 174,
+            top: 142 + Math.sin((frame + index * 20) / 18) * 24,
+            width: 290,
+            height: 620,
+            borderRadius: 999,
+            border: `3px solid ${index % 2 ? palette.accent : palette.second}`,
+            opacity: 0.13,
+            transform: `rotate(${12 + index * 16}deg)`,
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
 function CoffeeBeanCluster({ frame }: { frame: number }) {
   return (
     <>
-      {[0, 1, 2, 3, 4, 5].map((item) => (
+      {new Array(8).fill(0).map((_, item) => (
         <div
           key={item}
           style={{
             position: "absolute",
-            left: 38 + (item % 3) * 58,
-            top: 50 + Math.floor(item / 3) * 72 + Math.sin((frame + item * 8) / 12) * 7,
+            left: 28 + (item % 4) * 52,
+            top: 56 + Math.floor(item / 4) * 94 + Math.sin((frame + item * 8) / 12) * 7,
             width: 48,
             height: 64,
             borderRadius: "50%",
-            background: "linear-gradient(135deg, #5B3424, #1F2937)",
+            background: "linear-gradient(135deg, #633A27, #161D2B)",
+            boxShadow: "0 18px 34px rgba(0,0,0,0.18)",
             transform: `rotate(${30 + item * 22}deg)`,
           }}
         >
@@ -744,6 +1018,90 @@ function CoffeeBeanCluster({ frame }: { frame: number }) {
   );
 }
 
+function CommuteWindow({
+  frame,
+  palette,
+}: {
+  frame: number;
+  palette: (typeof stageColors)[number];
+}) {
+  return (
+    <div style={{ position: "absolute", inset: 0 }}>
+      <div
+        style={{
+          position: "absolute",
+          left: 86,
+          right: 86,
+          top: 150,
+          height: 720,
+          borderRadius: 46,
+          background:
+            "linear-gradient(180deg, rgba(154,211,255,0.18), rgba(255,255,255,0.08)), linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
+          border: "1px solid rgba(255,255,255,0.24)",
+          overflow: "hidden",
+          boxShadow: "inset 0 0 90px rgba(255,255,255,0.08), 0 34px 120px rgba(0,0,0,0.28)",
+        }}
+      >
+        {new Array(8).fill(0).map((_, item) => (
+          <div
+            key={item}
+            style={{
+              position: "absolute",
+              left: -260 + ((frame * (4.1 + item * 0.55)) % 1240),
+              top: 90 + item * 76,
+              width: 360,
+              height: item % 2 ? 5 : 3,
+              background: item % 2 ? palette.accent : "rgba(255,255,255,0.3)",
+              opacity: 0.34,
+              filter: "blur(0.4px)",
+            }}
+          />
+        ))}
+        <div
+          style={{
+            position: "absolute",
+            left: 76,
+            right: 76,
+            top: 86,
+            height: 300,
+            borderRadius: 34,
+            border: "2px solid rgba(255,255,255,0.28)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 112,
+            right: 112,
+            bottom: 132,
+            height: 78,
+            borderRadius: 999,
+            background: "rgba(255,255,255,0.16)",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function HandSilhouette({ frame }: { frame: number }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 318,
+        top: 720 + Math.sin(frame / 22) * 8,
+        width: 470,
+        height: 260,
+        borderRadius: "54% 46% 30% 70%",
+        background: "linear-gradient(135deg, rgba(20,16,14,0.86), rgba(86,51,38,0.5))",
+        filter: "blur(0.2px)",
+        transform: "rotate(-10deg)",
+      }}
+    />
+  );
+}
+
 function FlavorWave({
   frame,
   palette,
@@ -753,103 +1111,183 @@ function FlavorWave({
 }) {
   return (
     <div style={{ position: "absolute", inset: 0 }}>
-      {[0, 1, 2, 3].map((item) => (
+      {new Array(5).fill(0).map((_, item) => (
         <div
           key={item}
           style={{
             position: "absolute",
-            left: 58 + item * 146,
-            top: 100 + Math.sin((frame + item * 24) / 18) * 34,
-            width: 260,
-            height: 620,
+            left: 26 + item * 150,
+            top: 132 + Math.sin((frame + item * 24) / 18) * 34,
+            width: 300,
+            height: 760,
             borderRadius: 999,
             border: `3px solid ${item % 2 === 0 ? palette.accent : palette.second}`,
-            opacity: 0.16,
+            opacity: 0.14,
             transform: `rotate(${12 + item * 18}deg)`,
           }}
         />
       ))}
+      <div
+        style={{
+          position: "absolute",
+          left: -260,
+          right: -260,
+          top: 590,
+          height: 240,
+          background: `linear-gradient(90deg, transparent, ${palette.accent}22, ${palette.second}22, transparent)`,
+          filter: "blur(26px)",
+          transform: `translateX(${Math.sin(frame / 28) * 80}px) rotate(-8deg)`,
+        }}
+      />
     </div>
   );
 }
 
-function BigClaim({
-  text,
-  left,
-  top,
+function StorePoster({
+  frame,
   palette,
-  progress,
 }: {
-  text: string;
-  left: number;
-  top: number;
+  frame: number;
   palette: (typeof stageColors)[number];
-  progress: number;
 }) {
   return (
-    <div
-      style={{
-        position: "absolute",
-        left,
-        top,
-        right: 44,
-        padding: "22px 26px",
-        borderRadius: 26,
-        background: "rgba(255,255,255,0.92)",
-        color: "#111827",
-        boxShadow: "0 30px 88px rgba(0,0,0,0.28)",
-        transform: `translateY(${interpolate(progress, [0, 1], [22, -6])}px)`,
-      }}
-    >
-      <div style={{ fontSize: 26, color: palette.accent, fontWeight: 940 }}>STRUCTURE TRANSFER</div>
-      <div style={{ marginTop: 8, fontSize: 48, lineHeight: 1.02, fontWeight: 970 }}>{text}</div>
+    <div style={{ position: "absolute", inset: 0 }}>
+      <div
+        style={{
+          position: "absolute",
+          left: 56,
+          right: 56,
+          top: 134,
+          height: 820,
+          borderRadius: 46,
+          background:
+            "linear-gradient(150deg, rgba(255,141,165,0.24), rgba(255,184,77,0.14) 48%, rgba(255,255,255,0.06))",
+          border: "1px solid rgba(255,255,255,0.24)",
+          boxShadow: "0 42px 132px rgba(0,0,0,0.35)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: -110,
+            top: 246,
+            width: 1220,
+            height: 270,
+            background: `linear-gradient(90deg, ${palette.accent}, ${palette.second})`,
+            opacity: 0.22,
+            transform: `rotate(${-8 + Math.sin(frame / 30) * 1.2}deg)`,
+            filter: "blur(2px)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 70,
+            top: 78,
+            fontSize: 96,
+            lineHeight: 0.9,
+            fontWeight: 980,
+            color: "rgba(255,255,255,0.9)",
+          }}
+        >
+          COLD
+          <br />
+          BREW
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: 74,
+            bottom: 74,
+            width: 400,
+            fontSize: 25,
+            lineHeight: 1.28,
+            color: "#F5F7FB",
+            fontWeight: 780,
+          }}
+        >
+          低糖果香冷萃，今天到店试一杯。
+        </div>
+      </div>
     </div>
   );
 }
+
+function ForegroundOccluders({
+  frame,
+  palette,
+}: {
+  frame: number;
+  palette: (typeof stageColors)[number];
+}) {
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none" }}>
+      {[0, 1, 2].map((item) => (
+        <div
+          key={item}
+          style={{
+            position: "absolute",
+            left: -280 + ((frame * (2.3 + item * 0.8) + item * 360) % 1480),
+            top: -120,
+            width: 150 + item * 44,
+            height: 2200,
+            background: `linear-gradient(90deg, transparent, ${item === 1 ? palette.second : palette.accent}24, transparent)`,
+            filter: "blur(18px)",
+            transform: `skewX(${-18 + item * 9}deg)`,
+            opacity: 0.42,
+          }}
+        />
+      ))}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          boxShadow: "inset 0 0 220px rgba(0,0,0,0.54)",
+        }}
+      />
+    </AbsoluteFill>
+  );
+}
+
+const adCaptionTokens = [
+  ["别再靠老套路，", "先抓住", "一口清爽"],
+  ["先给果香，", "再讲低糖，", "最后给场景"],
+  ["把新品", "放进真实通勤路上"],
+  ["用试饮反馈", "变成购买证据"],
+  ["收藏这杯，", "今天到店试试"],
+] as const;
 
 function CoffeeCaption({ scene }: { scene: RenderScene }) {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const currentMs = ((scene.startFrame + frame) / fps) * 1000;
-  const pages = useMemo(
-    () =>
-      createTikTokStyleCaptions({
-        captions: scene.captionTokens.map((token) => ({
-          text: token.text,
-          startMs: token.startMs,
-          endMs: token.endMs,
-          timestampMs: null,
-          confidence: null,
-        })),
-        combineTokensWithinMilliseconds: 820,
-      }).pages,
-    [scene.captionTokens],
+  const tokens = adCaptionTokens[scene.index % adCaptionTokens.length] ?? [
+    compact(scene.subtitle, 18),
+  ];
+  const activeIndex = Math.min(
+    tokens.length - 1,
+    Math.floor((frame / Math.max(1, scene.durationFrames)) * tokens.length),
   );
-  const activePage =
-    pages.find((page) => currentMs >= page.startMs && currentMs <= page.startMs + page.durationMs) ??
-    pages[0];
-
-  if (!activePage) return compact(scene.subtitle, 36);
 
   return (
     <span>
-      {activePage.tokens.map((token) => {
-        const active = currentMs >= token.fromMs && currentMs <= token.toMs;
-        const hot = /低糖|冷萃|清爽|果香|通勤|限时|关键|第一|第二|收藏/i.test(token.text);
+      {tokens.map((token, index) => {
+        const active = index === activeIndex;
+        const hot = /低糖|冷萃|清爽|果香|通勤|限时|收藏|到店|试饮|证据|真实/i.test(token);
         return (
           <span
-            key={`${token.text}-${token.fromMs}`}
+            key={`${token}-${index}`}
             style={{
               display: "inline-block",
-              marginRight: 9,
+              marginRight: 12,
+              marginBottom: 6,
               color: active || hot ? "#FFE08A" : "#FFFFFF",
-              transform: active ? "translateY(-5px) scale(1.06)" : "translateY(0) scale(1)",
+              transform: active ? "translateY(-6px) scale(1.07)" : "translateY(0) scale(1)",
               textShadow: active
-                ? "0 10px 28px rgba(255,224,138,0.42)"
-                : "0 12px 34px rgba(0,0,0,0.34)",
+                ? "0 12px 32px rgba(255,224,138,0.46)"
+                : "0 14px 40px rgba(0,0,0,0.48)",
             }}
           >
-            {token.text}
+            {token}
           </span>
         );
       })}
@@ -860,9 +1298,11 @@ function CoffeeCaption({ scene }: { scene: RenderScene }) {
 function CoffeeProgress({
   scene,
   palette,
+  totalScenes,
 }: {
   scene: RenderScene;
   palette: (typeof stageColors)[number];
+  totalScenes: number;
 }) {
   const frame = useCurrentFrame();
   const progress = clamp(frame / scene.durationFrames, 0, 1);
@@ -872,21 +1312,33 @@ function CoffeeProgress({
         position: "absolute",
         left: 72,
         right: 72,
-        bottom: 82,
-        height: 12,
-        borderRadius: 999,
-        background: "rgba(255,255,255,0.12)",
-        overflow: "hidden",
+        bottom: 58,
+        display: "flex",
+        gap: 12,
+        alignItems: "center",
       }}
     >
-      <div
-        style={{
-          width: `${progress * 100}%`,
-          height: "100%",
-          borderRadius: 999,
-          background: `linear-gradient(90deg, ${palette.accent}, ${palette.second})`,
-        }}
-      />
+      {new Array(totalScenes).fill(0).map((_, index) => (
+        <div
+          key={index}
+          style={{
+            flex: 1,
+            height: 8,
+            borderRadius: 999,
+            background: "rgba(255,255,255,0.14)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              width: index < scene.index ? "100%" : index === scene.index ? `${progress * 100}%` : "0%",
+              height: "100%",
+              borderRadius: 999,
+              background: `linear-gradient(90deg, ${palette.accent}, ${palette.second})`,
+            }}
+          />
+        </div>
+      ))}
     </div>
   );
 }
@@ -902,67 +1354,86 @@ function MovingLight({
     <div
       style={{
         position: "absolute",
-        left: -240 + (frame % 240) * 5,
+        left: -320 + (frame % 260) * 5,
         top: 0,
-        width: 280,
+        width: 330,
         height: 1920,
-        background: `linear-gradient(90deg, transparent, ${palette.accent}22, transparent)`,
+        background: `linear-gradient(90deg, transparent, ${palette.accent}26, transparent)`,
         transform: "skewX(-14deg)",
       }}
     />
   );
 }
 
-function CoffeeTexture() {
+function CoffeeTexture({ intensity = 0.2 }: { intensity?: number }) {
   return (
     <AbsoluteFill>
       <div
         style={{
           position: "absolute",
           inset: 0,
-          opacity: 0.25,
+          opacity: intensity,
           backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.11) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.09) 1px, transparent 1px)",
-          backgroundSize: "108px 108px",
+            "linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px)",
+          backgroundSize: "118px 118px",
         }}
       />
-      {[0, 1, 2, 3, 4, 5].map((item) => (
-        <div
-          key={item}
-          style={{
-            position: "absolute",
-            left: 80 + ((item * 173) % 900),
-            top: 190 + item * 210,
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.26)",
-          }}
-        />
-      ))}
+      {new Array(58).fill(0).map((_, item) => {
+        const nx = noise2D("coffee-grain-x", item * 0.17, 0.31);
+        const ny = noise2D("coffee-grain-y", item * 0.11, 0.77);
+        return (
+          <div
+            key={item}
+            style={{
+              position: "absolute",
+              left: 40 + ((nx + 1) / 2) * 1000,
+              top: 70 + ((ny + 1) / 2) * 1780,
+              width: item % 5 === 0 ? 5 : 3,
+              height: item % 5 === 0 ? 5 : 3,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.34)",
+              opacity: 0.18 + (item % 4) * 0.04,
+            }}
+          />
+        );
+      })}
     </AbsoluteFill>
   );
 }
 
 function CoffeeFinal({ timeline }: { timeline: RenderTimeline }) {
+  const frame = useCurrentFrame();
+  const pop = spring({ frame, fps: 30, config: { damping: 150, mass: 0.8 } });
   return (
     <AbsoluteFill
       style={{
         background:
-          "radial-gradient(circle at 50% 42%, rgba(255,141,165,0.42), rgba(255,141,165,0) 42%), linear-gradient(180deg, #101724 0%, #1D1222 100%)",
+          "radial-gradient(circle at 50% 42%, rgba(255,141,165,0.46), rgba(255,141,165,0) 42%), linear-gradient(180deg, #101724 0%, #1D1222 100%)",
         justifyContent: "center",
         alignItems: "center",
         textAlign: "center",
-        padding: 72,
+        padding: 70,
       }}
     >
-      <CoffeeTexture />
-      <div style={{ fontSize: 30, color: "#FFB84D", fontWeight: 940 }}>FINAL CUT READY</div>
-      <div style={{ marginTop: 22, fontSize: 78, lineHeight: 1, fontWeight: 970 }}>
-        {compact(timeline.captionTitle, 26)}
-      </div>
-      <div style={{ marginTop: 28, fontSize: 25, color: "#D8E3F0", lineHeight: 1.35 }}>
-        可解释结构迁移 / 素材缺口补全 / 有声音频节奏
+      <CoffeeTexture intensity={0.3} />
+      <MacroLiquidPlate frame={frame} palette={stageColors[4]} />
+      <CoffeeHeroProduct frame={frame} palette={stageColors[4]} large left={404} top={250} />
+      <div
+        style={{
+          position: "absolute",
+          left: 72,
+          right: 72,
+          bottom: 140,
+          transform: `translateY(${interpolate(pop, [0, 1], [44, 0])}px)`,
+        }}
+      >
+        <div style={{ fontSize: 28, color: "#FFB84D", fontWeight: 960 }}>FINAL CUT READY</div>
+        <div style={{ marginTop: 20, fontSize: 72, lineHeight: 1, fontWeight: 980 }}>
+          {compact(timeline.captionTitle, 24)}
+        </div>
+        <div style={{ marginTop: 26, fontSize: 25, color: "#D8E3F0", lineHeight: 1.35 }}>
+          有声成片 / 结构可解释 / 缺口可补全 / 适合答辩展示
+        </div>
       </div>
     </AbsoluteFill>
   );
