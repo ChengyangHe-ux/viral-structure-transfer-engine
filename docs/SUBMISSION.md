@@ -83,6 +83,14 @@ npm run video:render -- --input cases/generated/demo-咖啡新品.json --out ren
 
 本命令会从方案 JSON 自动构建 `RenderTimeline`，生成临时 WAV 音频床，再由 Remotion 输出 MP4。当前主推案例换成“咖啡新品”，画面包含冷萃杯、液体倒入、冰块、果香卡片、通勤场景、试饮反馈、限时 CTA、WebGL 漏光转场、运动模糊和颗粒层。当前高质量验证结果：视频 1080x1920 / 30fps / 38 秒，视频码率约 5.01 Mbps，音频 MP3 / 48kHz / stereo，`mean_volume` 约 -18.5 dB，`max_volume` 约 -3.2 dB。抽帧验证文件位于本机 `renders/coffee-launch-high-02s.png`、`renders/coffee-launch-high-12s.png`、`renders/coffee-launch-high-27s.png`。
 
+渲染完成后，建议立即运行视频质量门禁：
+
+```bash
+npm run video:check -- --input renders/coffee-launch-short-high.mp4
+```
+
+该命令会用 ffprobe/ffmpeg 自动验证 1080x1920 竖屏、30fps、视频码率、音轨存在、48kHz stereo 和音量范围，避免最终交付出现“视频能播放但无声音/码率太低/规格不对”的扣分风险。
+
 ## 本地样例素材导入（建议演示用）
 
 - 将样例 `mp4/mov` 放入 `data/uploads/`（已被 `.gitignore` 忽略）。
@@ -103,7 +111,7 @@ npm run video:render -- --input cases/generated/demo-咖啡新品.json --out ren
 | 迁移过程可视化 | 样例节拍 -> 新方案镜头 -> 素材槽位 -> 补全动作 | “迁移映射” |
 | 结果可验证 | 秒级时间线草案、9:16 分镜预览、Remotion 竖屏成片预览、版本切换、Markdown/JSON 导出 | “时间线草案”“竖屏分镜预览”、`npm run video:render` 和导出按钮 |
 | 画面包装能力 | 字幕、标题条、卖点卡片、转场、封面标题 | 每个脚本 beat 的包装字段 |
-| 有声视频效果 | `CoffeeLaunchShort` 渲染冷萃杯、液体倒入、冰块、通勤场景、动态字幕、WebGL 漏光、运动模糊、颗粒层和合成音频床 | `npm run video:render -- --composition CoffeeLaunchShort` |
+| 有声视频效果 | `CoffeeLaunchShort` 渲染冷萃杯、液体倒入、冰块、通勤场景、动态字幕、WebGL 漏光、运动模糊、颗粒层和合成音频床，并用 `video:check` 验证音画指标 | `npm run video:render -- --composition CoffeeLaunchShort` / `npm run video:check` |
 | 多版本生成 | 稳妥转化版、强 Hook 版、内容种草版 | 版本切换按钮 |
 | 真实素材适配 | 用户素材文本解析和结构槽位匹配 | “迁移 Brief / 用户素材” |
 | 人工可调 | 自然语言编辑当前方案 | “自然语言编辑” |

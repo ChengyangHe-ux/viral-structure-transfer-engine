@@ -11,6 +11,7 @@
     "cases:generate": "tsx scripts/generate-demo-cases.ts",
     "award:check": "tsx scripts/award-check.ts",
     "video:render": "tsx scripts/render-video.ts",
+    "video:check": "tsx scripts/video-quality-check.ts",
     "media:install-binaries": "tsx scripts/install-media-binaries.ts",
     "verify": "npm run lint && npm run test && npm run build",
     "submission:check": "node scripts/submission-check.mjs && npm run award:check && npm run verify",

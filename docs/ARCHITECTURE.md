@@ -32,6 +32,7 @@
 - Remotion 只渲染项目白名单组件，例如动态字幕、素材卡、真实视频层、节奏进度、CTA 场景、漏光转场、运动模糊和颗粒层。
 - `scripts/render-video.ts` 默认会为 `HighQualityShort` / `CoffeeLaunchShort` 生成临时 WAV 音频床，渲染完成后删除临时音频文件。
 - 高质量 Remotion 渲染会设置 `chromiumOptions: { gl: "angle" }`，保证 `@remotion/light-leaks` 的 WebGL 漏光效果在本地 SSR 渲染中可用。
+- `scripts/video-quality-check.ts` 是成片质量门禁，用 ffprobe/ffmpeg 验证 9:16 竖屏、帧率、码率、音轨、采样率、声道数和音量范围。
 
 ### AIGC 视觉素材
 
