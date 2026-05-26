@@ -101,6 +101,7 @@ ASR_PROVIDER="manual"
 
 - [比赛演示脚本](docs/DEMO_SCRIPT.md)
 - [AI 架构、工具协议与安全边界](docs/ARCHITECTURE.md)
+- [拿奖导向改进方案](docs/AWARD_UPGRADE_PLAN.md)
 - [参赛提交清单](docs/SUBMISSION.md)
 - [可编辑答辩 PPT](docs/presentation/爆款结构迁移引擎答辩稿.pptx)
 - [AIGC 视觉素材提示词](docs/IMAGEGEN_PROMPTS.md)
