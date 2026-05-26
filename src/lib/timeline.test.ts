@@ -32,15 +32,30 @@ const rows: MigrationMapRow[] = [
     completionStrategy: "copy-caption",
     completionPlan: "用证据占位卡提醒补真实截图。",
   },
+  {
+    index: 3,
+    sampleTimeRange: "24-30s",
+    samplePurpose: "完成转化",
+    sampleRule: "结尾只保留最强理由",
+    outputTimeRange: "10-15s",
+    outputPurpose: "收束行动",
+    outputLine: "收藏领取",
+    mappingLogic: "结尾不要引入新卖点 -> 把观看转成下一步动作",
+    materialSlotName: "结尾 CTA 镜头",
+    materialFit: "partial",
+    completionStrategy: "reuse-existing",
+    completionPlan: "复用主体画面做定格结尾。",
+  },
 ];
 
 describe("timeline segments", () => {
   it("turns migration rows into proportional timeline segments", () => {
     const segments = buildTimelineSegments(rows);
 
-    expect(segments).toHaveLength(2);
+    expect(segments).toHaveLength(3);
     expect(segments[0].focus).toBe("Hook");
     expect(segments[1].focus).toBe("证据");
+    expect(segments[2].focus).toBe("CTA");
     expect(segments[1].materialFit).toBe("missing");
     expect(segments[1].leftPercent).toBeGreaterThan(segments[0].leftPercent);
   });

@@ -46,8 +46,8 @@ function classifyFocus(row: MigrationMapRow) {
   const text = `${row.samplePurpose} ${row.outputPurpose} ${row.mappingLogic}`;
   if (/hook|开头|停留|吸引|反差|抢/.test(text)) return "Hook";
   if (/证据|背书|可信|反馈|数据|评价/.test(text)) return "证据";
-  if (/收益|场景|适用|放大/.test(text)) return "收益";
   if (/结尾|行动|转化|CTA|入口|收藏|领取/i.test(text)) return "CTA";
+  if (/收益|场景|适用|放大/.test(text)) return "收益";
   if (/包装|字幕|转场|节奏/.test(text)) return "包装";
   return "推进";
 }

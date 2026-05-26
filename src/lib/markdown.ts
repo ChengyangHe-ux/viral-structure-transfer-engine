@@ -1,5 +1,6 @@
 import type { MigratedVideoPlan, VideoStructureAnalysis } from "@/lib/schemas";
 import { buildMigrationMap, materialFitText } from "@/lib/mapping";
+import { buildStoryboardFrames } from "@/lib/storyboard";
 
 function list(items: string[]) {
   return items.map((item) => `- ${item}`).join("\n");
@@ -176,6 +177,34 @@ ${rows
 `;
 }
 
+export function renderStoryboardMarkdown({
+  analysis,
+  plan,
+}: {
+  analysis: VideoStructureAnalysis;
+  plan: MigratedVideoPlan;
+}) {
+  const version =
+    plan.versions.find((item) => item.versionName === plan.evaluation?.bestVersion) ??
+    plan.versions[0];
+  const rows = buildMigrationMap({ analysis, plan, version });
+  const frames = buildStoryboardFrames({ version, rows });
+
+  return `## 竖屏分镜预览
+
+推荐版本：${version.versionName}
+
+| 时间段 | 结构任务 | 画面层 | 字幕层 | 包装层 | 转场/节奏 | 素材状态 |
+| --- | --- | --- | --- | --- | --- | --- |
+${frames
+  .map(
+    (frame) =>
+      `| ${frame.timeRange} | ${frame.focus} / ${frame.frameTitle} | ${frame.visualLayer} | ${frame.subtitleLayer} | ${frame.packagingLayer} | ${frame.transitionCue} | ${frame.materialSlotName}（${materialFitText(frame.materialFit)}）：${frame.completionPlan} |`,
+  )
+  .join("\n")}
+`;
+}
+
 export function renderProjectMarkdown({
   title,
   analysis,
@@ -206,6 +235,8 @@ ${source ? `关联需求：[[${source}]]\n` : ""}
 ${analysis ? renderAnalysisMarkdown(analysis) : ""}
 
 ${analysis && plan ? renderMigrationMapMarkdown({ analysis, plan }) : ""}
+
+${analysis && plan ? renderStoryboardMarkdown({ analysis, plan }) : ""}
 
 ${plan ? renderPlanMarkdown(plan) : ""}
 `;

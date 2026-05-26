@@ -38,13 +38,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { demoPresets } from "@/lib/demo-presets";
-import { renderMigrationMapMarkdown, renderPlanMarkdown } from "@/lib/markdown";
+import {
+  renderMigrationMapMarkdown,
+  renderPlanMarkdown,
+  renderStoryboardMarkdown,
+} from "@/lib/markdown";
 import {
   buildMigrationMap,
   materialFitText,
   type MigrationMapRow,
 } from "@/lib/mapping";
 import { diffPlans } from "@/lib/plan-diff";
+import { buildStoryboardFrames, type StoryboardFrame } from "@/lib/storyboard";
 import { buildTimelineSegments } from "@/lib/timeline";
 import { insertBeatAfter, moveBeat, removeBeat } from "@/lib/plan-edit";
 import type {
@@ -936,6 +941,108 @@ function TimelineOverview({ rows }: { rows: MigrationMapRow[] }) {
   );
 }
 
+function storyboardAccentClass(focus: string) {
+  if (focus === "Hook") return "border-l-emerald-500";
+  if (focus === "证据") return "border-l-sky-500";
+  if (focus === "收益") return "border-l-amber-500";
+  if (focus === "CTA") return "border-l-rose-500";
+  if (focus === "包装") return "border-l-violet-500";
+  return "border-l-primary";
+}
+
+function StoryboardPhone({ frame }: { frame: StoryboardFrame }) {
+  return (
+    <div className="rounded-lg border bg-background p-3">
+      <div className="mx-auto flex aspect-[9/16] max-h-[420px] min-h-[320px] w-full max-w-[236px] flex-col overflow-hidden rounded-lg border bg-white shadow-sm">
+        <div className={`border-l-4 ${storyboardAccentClass(frame.focus)} bg-secondary/60 px-3 py-2`}>
+          <div className="flex items-center justify-between gap-2">
+            <Badge variant="outline">{frame.timeRange}</Badge>
+            <span className="text-xs font-semibold text-foreground">{frame.focus}</span>
+          </div>
+          <p className="mt-2 line-clamp-2 text-xs font-medium leading-5 text-foreground">
+            {frame.frameTitle}
+          </p>
+        </div>
+
+        <div className="relative flex flex-1 flex-col justify-between bg-background p-3">
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold text-muted-foreground">画面层</p>
+            <p className="line-clamp-5 text-sm font-medium leading-6 text-foreground">
+              {frame.visualLayer}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <div className="rounded-md border bg-white/80 p-2">
+              <p className="text-[11px] font-semibold text-muted-foreground">包装层</p>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                {frame.packagingLayer}
+              </p>
+            </div>
+            <div className="rounded-md bg-slate-950 p-2 text-slate-50">
+              <p className="line-clamp-3 text-sm font-semibold leading-6">
+                {frame.subtitleLayer}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2 border-t bg-white px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={fitBadgeVariant(frame.materialFit)}>
+              {materialFitText(frame.materialFit)}
+            </Badge>
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {frame.materialSlotName}
+            </span>
+          </div>
+          <p className="line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+            {frame.transitionCue}；{frame.completionPlan}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StoryboardPreview({
+  version,
+  rows,
+}: {
+  version: PlanVersion;
+  rows: MigrationMapRow[];
+}) {
+  const frames = useMemo(
+    () => buildStoryboardFrames({ version, rows }),
+    [version, rows],
+  );
+
+  if (frames.length === 0) return null;
+
+  return (
+    <div className="space-y-4 rounded-lg border bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">竖屏分镜预览</Badge>
+            <Badge variant="outline">{version.versionName}</Badge>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            把当前版本转成 9:16 画面草稿，直接检查画面层、字幕层、包装层和素材状态。
+          </p>
+        </div>
+        <Video className="size-8 shrink-0 text-primary" />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {frames.map((frame) => (
+          <StoryboardPhone frame={frame} key={`${frame.index}-${frame.timeRange}`} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [projectTitle, setProjectTitle] = useState("爆款结构迁移演示项目");
   const [sampleTitle, setSampleTitle] = useState("优质短视频样例");
@@ -1013,6 +1120,7 @@ export default function Home() {
       return [
         analysisMarkdown,
         renderMigrationMapMarkdown({ analysis, plan }),
+        renderStoryboardMarkdown({ analysis, plan }),
         renderPlanMarkdown(plan),
       ]
         .filter(Boolean)
@@ -1964,6 +2072,11 @@ export default function Home() {
                   ) : null}
 
                   {plan.evaluation ? <EvaluationPanel evaluation={plan.evaluation} /> : null}
+
+                  <StoryboardPreview
+                    version={activePlanVersion}
+                    rows={activeMigrationRows}
+                  />
 
                   {!simpleMode && plan.materialAdaptation ? (
                     <MaterialAdaptationPanel adaptation={plan.materialAdaptation} />

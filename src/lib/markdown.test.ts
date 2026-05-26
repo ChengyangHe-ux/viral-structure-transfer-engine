@@ -87,6 +87,7 @@ describe("markdown rendering", () => {
     });
 
     expect(markdown).toContain("## 结构迁移映射");
+    expect(markdown).toContain("## 竖屏分镜预览");
     expect(markdown).toContain("样例节拍");
     expect(markdown).toContain("补全动作");
   });
