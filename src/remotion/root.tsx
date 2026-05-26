@@ -4,6 +4,10 @@ import {
   ProductCommercial15,
   type ProductCommercial15Props,
 } from "@/remotion/product-commercial-15";
+import {
+  HighQualityShort,
+  type HighQualityShortProps,
+} from "@/remotion/templates/high-quality-short";
 import { VideoFromPlan, type VideoFromPlanProps } from "@/remotion/video-from-plan";
 import { calculateVideoFramesFromPlan } from "@/remotion/video-metadata";
 
@@ -28,6 +32,28 @@ export function RemotionRoot() {
           title: "爆款结构迁移引擎（结构演示稿）",
           plan: null,
         } satisfies VideoFromPlanProps}
+      />
+      <Composition
+        id="HighQualityShort"
+        component={HighQualityShort}
+        fps={30}
+        width={1080}
+        height={1920}
+        durationInFrames={30 * 42}
+        calculateMetadata={async ({ props }) => {
+          const renderTimeline = (props.renderTimeline ??
+            null) as HighQualityShortProps["renderTimeline"];
+          return {
+            durationInFrames: renderTimeline?.totalFrames
+              ? renderTimeline.totalFrames
+              : 30 * 42,
+          };
+        }}
+        defaultProps={{
+          title: "爆款结构迁移引擎（高质量成片）",
+          plan: null,
+          renderTimeline: null,
+        } satisfies HighQualityShortProps}
       />
       <Composition
         id="ProductCommercial15"

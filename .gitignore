@@ -1,6 +1,7 @@
 node_modules
 .next
 out
+outputs/
 dist
 coverage
 .DS_Store
@@ -9,6 +10,7 @@ coverage
 /renders/
 /submissions/
 /public/render-sources/
+/public/render-audio/
 *.mp4
 .remotion-binaries/
 .env

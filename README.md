@@ -43,6 +43,14 @@ npm run video:render -- --input cases/generated/demo-学习平板.json --out ren
 
 渲染结果是 1080x1920 竖屏成片预览：每个 beat 都会变成全屏场景，包含大字幕、素材位、包装提示、素材缺口/补全标签和节奏进度。提示：首次渲染前先执行一次 `npm run media:install-binaries`（会安装/链接 Remotion compositor + ffmpeg/ffprobe）。
 
+## 高质量有声成片（拿奖主版本）
+
+```bash
+npm run video:render -- --input cases/generated/demo-学习平板.json --out renders/hq-draft.mp4 --composition HighQualityShort --quality draft --title "学习平板结构迁移高质量有声版"
+```
+
+`HighQualityShort` 会把方案脚本转换成受控 `RenderTimeline`，再由 Remotion 渲染动态字幕、素材槽位、节奏进度和本地合成音频床。最新本地验证结果：1080x1920、30fps、38 秒，音频为 MP3 / 48kHz / stereo，`mean_volume` 约 -19.1 dB。
+
 ## 本地样例素材（可选）
 
 - 把 `mp4/mov` 放到 `data/uploads/`（已在 `.gitignore` 中，不会被提交）。
@@ -74,6 +82,7 @@ ASR_PROVIDER="manual"
 - 生成可视化时间线草案，按秒展示 Hook、证据、收益、CTA 与素材状态。
 - 生成 9:16 竖屏分镜预览，把每段脚本拆成画面层、字幕层、包装层和素材状态。
 - 一键渲染 1080x1920 竖屏视频预览，把脚本 beat 变成短视频式画面、字幕和素材缺口提示。
+- 生成高质量有声 Remotion 成片：`RenderTimeline` 驱动动态字幕、素材槽位、节奏提示和可听见音频。
 - 展示样例节拍到新方案镜头的迁移映射，串起结构规则、素材槽位和补全动作。
 - 自动给出质量评分、推荐主版本和优先修改建议。
 - 自动生成“大奖目标看板”，把冲奖目标拆成结构迁移、RAG 可解释、成片可执行、现场可控和上交证据 5 个评分项。
@@ -86,6 +95,8 @@ ASR_PROVIDER="manual"
 - [比赛演示脚本](docs/DEMO_SCRIPT.md)
 - [AI 架构、工具协议与安全边界](docs/ARCHITECTURE.md)
 - [参赛提交清单](docs/SUBMISSION.md)
+- [可编辑答辩 PPT](docs/presentation/爆款结构迁移引擎答辩稿.pptx)
+- [AIGC 视觉素材提示词](docs/IMAGEGEN_PROMPTS.md)
 - [视频产物 Case](cases/ai-resume-demo-case.md)
 - [离线可复现实验案例](cases/generated/README.md)
 
@@ -100,6 +111,7 @@ ASR_PROVIDER="manual"
 - 时间线草案把脚本变成可验证的生产计划，方便后续接 Remotion/FFmpeg 或人工剪辑。
 - 竖屏分镜预览让评委不用读完整表格，也能看到成片画面组织方式。
 - Remotion 成片预览把“结构可执行”变成可播放视频证据，评审能直接看到节奏、字幕、包装和补全策略。
+- 高质量有声版本让评审能直接听到节奏 cue，避免视频只像静态方案页。
 - 输出包含多版本时间线、可替换素材、风险提示和质量诊断。
 - 自然语言编辑让系统更接近真实创作平台，而不是一次性文案工具。
 - 无 API Key 时也能跑通演示链路，配置云模型后可升级为真实多模态分析。

@@ -6,6 +6,8 @@
 - 项目说明：`README.md`
 - AI 架构、工具协议与安全边界：`docs/ARCHITECTURE.md`
 - 演示讲稿与录屏流程：`docs/DEMO_SCRIPT.md`
+- 可编辑答辩 PPT：`docs/presentation/爆款结构迁移引擎答辩稿.pptx`
+- AIGC 视觉素材提示词：`docs/IMAGEGEN_PROMPTS.md`
 - 视频产物 case：`cases/ai-resume-demo-case.md`
 - 离线可复现实验案例（自动生成）：`cases/generated/README.md`
 
@@ -73,6 +75,14 @@ npm run video:render -- --input cases/generated/demo-学习平板.json --out ren
 说明：这里生成的是 1080x1920 竖屏成片预览，不只是字幕卡。每个脚本 beat 会渲染为全屏场景，包含大字幕、模拟素材位、包装提示、素材缺口/补全标签和节奏进度；后续仍可在剪辑软件中替换为真实素材或 AIGC 画面。
 提示：首次渲染前执行一次 `npm run media:install-binaries`（安装/链接 Remotion compositor + ffmpeg/ffprobe）。
 
+## 高质量有声成片（主推荐）
+
+```bash
+npm run video:render -- --input cases/generated/demo-学习平板.json --out renders/hq-draft.mp4 --composition HighQualityShort --quality draft --title "学习平板结构迁移高质量有声版"
+```
+
+本命令会从方案 JSON 自动构建 `RenderTimeline`，生成临时 WAV 音频床，再由 Remotion 输出 MP4。当前验证结果：视频 1080x1920 / 30fps / 38 秒，音频 MP3 / 48kHz / stereo，`mean_volume` 约 -19.1 dB，`max_volume` 约 -3.8 dB。抽帧验证文件位于本机 `renders/hq-draft-04s.png`、`renders/hq-draft-14s.png`、`renders/hq-draft-28s.png`。
+
 ## 本地样例素材导入（建议演示用）
 
 - 将样例 `mp4/mov` 放入 `data/uploads/`（已被 `.gitignore` 忽略）。
@@ -93,6 +103,7 @@ npm run video:render -- --input cases/generated/demo-学习平板.json --out ren
 | 迁移过程可视化 | 样例节拍 -> 新方案镜头 -> 素材槽位 -> 补全动作 | “迁移映射” |
 | 结果可验证 | 秒级时间线草案、9:16 分镜预览、Remotion 竖屏成片预览、版本切换、Markdown/JSON 导出 | “时间线草案”“竖屏分镜预览”、`npm run video:render` 和导出按钮 |
 | 画面包装能力 | 字幕、标题条、卖点卡片、转场、封面标题 | 每个脚本 beat 的包装字段 |
+| 有声视频效果 | `HighQualityShort` 渲染动态字幕、素材槽位、节奏进度和合成音频床 | `npm run video:render -- --composition HighQualityShort` |
 | 多版本生成 | 稳妥转化版、强 Hook 版、内容种草版 | 版本切换按钮 |
 | 真实素材适配 | 用户素材文本解析和结构槽位匹配 | “迁移 Brief / 用户素材” |
 | 人工可调 | 自然语言编辑当前方案 | “自然语言编辑” |
@@ -107,7 +118,7 @@ npm run video:render -- --input cases/generated/demo-学习平板.json --out ren
 6. 停留在“素材缺口与补全”，指出缺少对比/结果镜头和 CTA 镜头时，系统给出包装补全和素材复用策略。
 7. 展示“时间线草案”，说明脚本已经按秒拆成可生产时间线。
 8. 展示“竖屏分镜预览”，说明系统已经把每段转成画面层、字幕层、包装层和素材状态。
-9. 播放 Remotion 导出的竖屏成片预览，说明方案已经能被验证为字幕、画面包装、素材补全和节奏组合。
+9. 播放 Remotion 导出的高质量有声成片，说明方案已经能被验证为字幕、画面包装、素材补全和节奏组合。
 10. 展示“迁移映射”，说明每段新脚本如何继承样例规则，以及素材缺口怎么被处理。
 11. 展示“质量诊断”，用综合评分和推荐版本回答为什么这个方案可上交。
 12. 在自然语言编辑里输入“开头更抓人一些，并补充可信证据”，展示方案可被人工协同调整。
