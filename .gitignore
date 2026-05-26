@@ -25,3 +25,4 @@ data/*.jpg
 screenshots/
 .playwright-mcp/
 何承洋简历.pdf
+.plan/

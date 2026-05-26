@@ -18,8 +18,8 @@ type LoadedPlan = MigratedVideoPlan & { evaluation?: MigratedVideoPlan["evaluati
 export function calculateVideoFramesFromPlan({
   plan,
   fps,
-  minSeconds = 18,
-  maxSeconds = 75,
+  minSeconds = 15,
+  maxSeconds = 45,
 }: {
   plan: LoadedPlan | null;
   fps: number;
@@ -27,7 +27,7 @@ export function calculateVideoFramesFromPlan({
   maxSeconds?: number;
 }) {
   if (!plan?.versions?.length) {
-    const fallbackSeconds = clamp(40, minSeconds, maxSeconds);
+    const fallbackSeconds = clamp(28, minSeconds, maxSeconds);
     return { totalSeconds: fallbackSeconds, totalFrames: Math.round(fallbackSeconds * fps) };
   }
 
@@ -43,7 +43,6 @@ export function calculateVideoFramesFromPlan({
     ? Math.max(...segments.map((segment) => segment.endSecond))
     : 40;
 
-  const totalSeconds = clamp(totalSecondsFromPlan + 6, minSeconds, maxSeconds);
+  const totalSeconds = clamp(totalSecondsFromPlan + 4, minSeconds, maxSeconds);
   return { totalSeconds, totalFrames: Math.round(totalSeconds * fps) };
 }
-

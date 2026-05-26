@@ -38,10 +38,10 @@ npm run award:check
 ## 一键生成演示视频（Remotion）
 
 ```bash
-npm run video:render -- --input cases/generated/demo-学习平板.json --out renders/demo.mp4 --title "学习平板结构演示稿" --quality high
+npm run video:render -- --input cases/generated/demo-学习平板.json --out renders/demo.mp4 --title "学习平板结构迁移成片预览" --quality high
 ```
 
-提示：首次渲染前先执行一次 `npm run media:install-binaries`（会安装/链接 Remotion compositor + ffmpeg/ffprobe）。
+渲染结果是 1080x1920 竖屏成片预览：每个 beat 都会变成全屏场景，包含大字幕、素材位、包装提示、素材缺口/补全标签和节奏进度。提示：首次渲染前先执行一次 `npm run media:install-binaries`（会安装/链接 Remotion compositor + ffmpeg/ffprobe）。
 
 ## 本地样例素材（可选）
 
@@ -73,6 +73,7 @@ ASR_PROVIDER="manual"
 - 识别素材槽位缺口，并给出结构重排、字幕补全、包装补全或素材复用策略。
 - 生成可视化时间线草案，按秒展示 Hook、证据、收益、CTA 与素材状态。
 - 生成 9:16 竖屏分镜预览，把每段脚本拆成画面层、字幕层、包装层和素材状态。
+- 一键渲染 1080x1920 竖屏视频预览，把脚本 beat 变成短视频式画面、字幕和素材缺口提示。
 - 展示样例节拍到新方案镜头的迁移映射，串起结构规则、素材槽位和补全动作。
 - 自动给出质量评分、推荐主版本和优先修改建议。
 - 自动生成“大奖目标看板”，把冲奖目标拆成结构迁移、RAG 可解释、成片可执行、现场可控和上交证据 5 个评分项。
@@ -98,6 +99,7 @@ ASR_PROVIDER="manual"
 - `npm run award:check` 把冲奖标准纳入提交前自动校验，确保演示案例持续保持 90+。
 - 时间线草案把脚本变成可验证的生产计划，方便后续接 Remotion/FFmpeg 或人工剪辑。
 - 竖屏分镜预览让评委不用读完整表格，也能看到成片画面组织方式。
+- Remotion 成片预览把“结构可执行”变成可播放视频证据，评审能直接看到节奏、字幕、包装和补全策略。
 - 输出包含多版本时间线、可替换素材、风险提示和质量诊断。
 - 自然语言编辑让系统更接近真实创作平台，而不是一次性文案工具。
 - 无 API Key 时也能跑通演示链路，配置云模型后可升级为真实多模态分析。
