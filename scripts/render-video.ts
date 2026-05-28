@@ -201,7 +201,11 @@ async function main() {
   const { plan, renderTimeline, title } = await loadPlanJson(resolvedInput);
   const { sourceVideoPath, cleanupPath } = await prepareStaticSourceVideo(args.sourceVideo);
   const cleanupPaths = [cleanupPath].filter(Boolean) as string[];
-  const highQualityCompositionIds = new Set(["HighQualityShort", "CoffeeLaunchShort"]);
+  const highQualityCompositionIds = new Set([
+    "HighQualityShort",
+    "CoffeeLaunchShort",
+    "CoconutLatteCommercial15",
+  ]);
   const highQualityInput =
     highQualityCompositionIds.has(args.compositionId)
       ? await buildHighQualityInput({
@@ -262,7 +266,7 @@ async function main() {
             x264Preset: "veryfast",
           } as const)
         : ({
-            crf: 18,
+            crf: 14,
             x264Preset: "medium",
           } as const);
 
