@@ -1,5 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { generateObject, generateText } from "ai";
+import { generateObject, generateText, type ModelMessage, type UserContent } from "ai";
 import { z } from "zod";
 
 import {
@@ -22,7 +22,11 @@ import {
 } from "@/lib/editing-techniques";
 import { attachPlanEvaluation } from "@/lib/evaluation";
 import { attachMaterialAdaptation } from "@/lib/materials";
-import { describeMediaForPrompt } from "@/lib/media";
+import {
+  describeMediaForPrompt,
+  loadPreviewFrameImages,
+  type PreviewFrameImage,
+} from "@/lib/media";
 import { parseJsonFromText } from "@/lib/structured-json";
 
 const aiPlanDraftSchema = z.object({
@@ -42,6 +46,8 @@ const provider = createOpenAICompatible({
   supportsStructuredOutputs: process.env.AI_SUPPORTS_STRUCTURED_OUTPUTS === "true",
 });
 
+type SchemaPrompt = string | ModelMessage[];
+
 function hasAiConfig() {
   return Boolean(process.env.AI_API_KEY && process.env.AI_API_KEY.trim().length > 0);
 }
@@ -55,12 +61,92 @@ function requestTimeoutMs() {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 45000;
 }
 
+function visionFrameLimit() {
+  const parsed = Number(process.env.AI_VISION_FRAME_LIMIT);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(Math.floor(parsed), 8) : 3;
+}
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
 function schemaPrompt<T>(schema: z.ZodType<T>) {
   return JSON.stringify(z.toJSONSchema(schema), null, 2).slice(0, 16000);
+}
+
+function promptForError(prompt: SchemaPrompt) {
+  if (typeof prompt === "string") return prompt;
+  return prompt
+    .map((message) => {
+      if (typeof message.content === "string") return `${message.role}: ${message.content}`;
+      return `${message.role}: ${message.content
+        .map((part) => (part.type === "text" ? part.text : `[${part.type}]`))
+        .join("\n")}`;
+    })
+    .join("\n\n")
+    .slice(0, 16000);
+}
+
+function appendInstruction(prompt: SchemaPrompt, instruction: string): SchemaPrompt {
+  if (typeof prompt === "string") return `${prompt}\n\n${instruction}`;
+  return [...prompt, { role: "user", content: instruction }];
+}
+
+function promptOptions(prompt: SchemaPrompt) {
+  return typeof prompt === "string" ? { prompt } : { messages: prompt };
+}
+
+function buildVisionAnalysisPrompt(input: {
+  sampleTitle: string;
+  sampleNotes: string;
+  sampleUrl?: string;
+  mediaMeta?: MediaMeta;
+  frameImages: PreviewFrameImage[];
+}) {
+  const frameInstruction = input.frameImages.length
+    ? `我已经附上 ${input.frameImages.length} 张从样例视频抽取的关键帧。请直接观察这些画面，结合描述判断镜头主体、字幕/包装、构图、节奏和卖点推进；不要只复述元数据。`
+    : "当前没有可直接传入模型的关键帧，请基于标题、链接、描述/转写和视频元数据进行结构拆解。";
+
+  return `请分析样例视频结构，并输出结构化 JSON。
+
+样例标题：${input.sampleTitle}
+样例链接：${input.sampleUrl || "无"}
+样例描述/转写/观察：${input.sampleNotes}
+视频元数据：${describeMediaForPrompt(input.mediaMeta)}
+
+${frameInstruction}
+
+重点拆解：开头 hook、镜头节奏、字幕布局、画面包装、音乐卡点、卖点推进、结尾转化。`;
+}
+
+function buildVisionAnalysisMessages(input: {
+  promptText: string;
+  frameImages: PreviewFrameImage[];
+}): SchemaPrompt {
+  if (!input.frameImages.length) return input.promptText;
+
+  const content: UserContent = [
+    {
+      type: "text",
+      text: `${input.promptText}
+
+下面按视频时间顺序附关键帧。请把每张图当成真实样例画面观察，而不是占位说明。`,
+    },
+  ];
+
+  input.frameImages.forEach((image, index) => {
+    content.push({
+      type: "text",
+      text: `关键帧 ${index + 1} / ${input.frameImages.length}：${image.label}`,
+    });
+    content.push({
+      type: "image",
+      image: image.data,
+      mediaType: image.mediaType,
+    });
+  });
+
+  return [{ role: "user", content }];
 }
 
 async function generateSchemaObject<T>({
@@ -72,7 +158,7 @@ async function generateSchemaObject<T>({
   modelId: string;
   schema: z.ZodType<T>;
   system: string;
-  prompt: string;
+  prompt: SchemaPrompt;
 }): Promise<T> {
   let structuredError: unknown = null;
 
@@ -82,7 +168,7 @@ async function generateSchemaObject<T>({
         model: provider(modelId),
         schema,
         system,
-        prompt,
+        ...promptOptions(prompt),
         maxRetries: 0,
         timeout: requestTimeoutMs(),
       });
@@ -95,14 +181,9 @@ async function generateSchemaObject<T>({
 
   try {
     const schemaDescription = schemaPrompt(schema);
-    const textResult = await generateText({
-      model: provider(modelId),
-      system,
-      maxRetries: 0,
-      timeout: requestTimeoutMs(),
-      prompt: `${prompt}
-
-字段约束 JSON Schema：
+    const textPrompt = appendInstruction(
+      prompt,
+      `字段约束 JSON Schema：
 ${schemaDescription}
 
 输出要求：
@@ -110,6 +191,13 @@ ${schemaDescription}
 - JSON 必须完整覆盖约定字段，数组字段不要省略。
 - 如果数组元素是 object，绝不能输出 string。
 - 中文文案可以自然，但字段名必须严格匹配 schema。`,
+    );
+    const textResult = await generateText({
+      model: provider(modelId),
+      system,
+      maxRetries: 0,
+      timeout: requestTimeoutMs(),
+      ...promptOptions(textPrompt),
     });
 
     try {
@@ -122,7 +210,7 @@ ${schemaDescription}
         maxRetries: 0,
         timeout: requestTimeoutMs(),
         prompt: `原始任务：
-${prompt}
+${promptForError(prompt)}
 
 上一次结构化输出错误：
 ${errorMessage(structuredError)}
@@ -164,27 +252,31 @@ export async function analyzeSample(input: {
   }
 
   try {
+    const frameImages = await loadPreviewFrameImages(
+      input.mediaMeta?.previewFrames ?? [],
+      visionFrameLimit(),
+    );
+    const promptText = buildVisionAnalysisPrompt({ ...input, frameImages });
     const analysis = await generateSchemaObject({
       modelId: process.env.AI_MODEL_VISION || process.env.AI_MODEL_TEXT || "gpt-4.1-mini",
       schema: videoStructureAnalysisSchema,
       system:
         "你是短视频爆款结构分析师。只抽象创作方法，不复刻具体内容。输出必须可迁移、可剪辑、可执行。",
-      prompt: `请分析样例视频结构，并输出结构化 JSON。
-
-样例标题：${input.sampleTitle}
-样例链接：${input.sampleUrl || "无"}
-样例描述/转写/观察：${input.sampleNotes}
-视频元数据：${describeMediaForPrompt(input.mediaMeta)}
-
-重点拆解：开头 hook、镜头节奏、字幕布局、画面包装、音乐卡点、卖点推进、结尾转化。`,
+      prompt: buildVisionAnalysisMessages({ promptText, frameImages }),
     });
 
-    return { analysis, usedFallback: false, aiError: null };
+    return {
+      analysis,
+      usedFallback: false,
+      aiError: null,
+      visionFrameCount: frameImages.length,
+    };
   } catch (error) {
     return {
       analysis: createFallbackAnalysis(input),
       usedFallback: true,
       aiError: error instanceof Error ? error.message : "AI analysis failed",
+      visionFrameCount: 0,
     };
   }
 }

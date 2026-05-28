@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import { access, mkdir, readdir, stat, writeFile } from "fs/promises";
+import { access, mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 
@@ -9,6 +9,13 @@ const uploadDir = path.join(process.cwd(), "data", "uploads");
 const frameDir = path.join(process.cwd(), "data", "frames");
 
 const frameIdPattern = /^[0-9a-fA-F-]{36}\.jpg$/;
+
+export type PreviewFrameImage = {
+  frameId: string;
+  data: Buffer;
+  mediaType: "image/jpeg";
+  label: string;
+};
 
 function runCommand(command: string, args: string[]) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
@@ -193,6 +200,27 @@ export async function extractPreviewFrames(filePath: string, duration?: number) 
   }
 
   return frameIds;
+}
+
+export async function loadPreviewFrameImages(frameIds: string[], limit = 3) {
+  const images: PreviewFrameImage[] = [];
+  const safeFrameIds = frameIds.filter(isSafeFrameId).slice(0, Math.max(0, limit));
+
+  for (const frameId of safeFrameIds) {
+    try {
+      const data = await readFile(path.join(frameDir, frameId));
+      images.push({
+        frameId,
+        data,
+        mediaType: "image/jpeg",
+        label: `样例视频关键帧 ${images.length + 1}`,
+      });
+    } catch {
+      // Missing preview frames should not block AI analysis; ffmpeg extraction is best-effort.
+    }
+  }
+
+  return images;
 }
 
 export function describeMediaForPrompt(mediaMeta?: MediaMeta) {

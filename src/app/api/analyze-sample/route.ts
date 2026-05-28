@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const { analysis, usedFallback, aiError } = await analyzeSample({
+    const { analysis, usedFallback, aiError, visionFrameCount } = await analyzeSample({
       sampleTitle: input.sampleTitle,
       sampleNotes: input.sampleNotes,
       sampleUrl: input.sampleUrl || undefined,
@@ -131,6 +131,7 @@ export async function POST(request: NextRequest) {
       mediaMeta: input.mediaMeta,
       usedFallback,
       aiError,
+      visionFrameCount,
     });
   } catch (error) {
     return NextResponse.json(

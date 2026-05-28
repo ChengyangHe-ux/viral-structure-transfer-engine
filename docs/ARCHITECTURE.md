@@ -17,6 +17,7 @@
 ### LLM / 多模态模型
 
 - 通过 OpenAI-compatible 接口接入云模型，使用 `AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL_TEXT`、`AI_MODEL_VISION` 配置。
+- 上传视频会先由 FFmpeg 抽取关键帧，再把最多 `AI_VISION_FRAME_LIMIT` 张本地 JPG 作为多模态 `image` parts 传给 `AI_MODEL_VISION`，让模型直接观察样例画面。
 - 系统要求模型输出符合 Zod Schema 的结构化 JSON，而不是自由文本。
 - 对不支持 schema response format 的本地 OpenAI-compatible 网关，系统会退到 `generateText`，再执行 JSON 提取、一次修复和 Zod 校验；校验失败才进入本地 fallback。
 - 未配置密钥时使用本地 fallback 策略，保证演示链路可运行。

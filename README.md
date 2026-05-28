@@ -74,10 +74,13 @@ AI_MODEL_TEXT="gpt-4.1-mini"
 AI_MODEL_VISION="gpt-4.1-mini"
 AI_SUPPORTS_STRUCTURED_OUTPUTS="false"
 AI_REQUEST_TIMEOUT_MS="45000"
+AI_VISION_FRAME_LIMIT="3"
 ASR_PROVIDER="manual"
 ```
 
 未配置 `AI_API_KEY` 时，系统会自动使用本地演示策略，保证样例拆解、迁移方案和导出链路可跑通。若 OpenAI-compatible 服务不支持 schema response format，系统会自动改用文本 JSON 生成、提取、修复和 Zod 校验，不会把模型自由文本直接写入方案。
+
+上传样例视频时，后端会用 FFmpeg 抽取关键帧，并把最多 `AI_VISION_FRAME_LIMIT` 张 JPG 作为多模态 `image` 输入发给 `AI_MODEL_VISION`。因此只要配置的 OpenAI-compatible 服务支持视觉消息，样例拆解就会让大模型直接观察画面；如果网关或模型不支持视觉，会自动回落到文本/元数据分析和本地兜底。
 
 ## 当前能力
 
