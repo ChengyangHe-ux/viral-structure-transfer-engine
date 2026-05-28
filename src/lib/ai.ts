@@ -1,8 +1,10 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { generateObject } from "ai";
+import { generateObject, generateText } from "ai";
+import { z } from "zod";
 
 import {
   migratedVideoPlanSchema,
+  planVersionSchema,
   videoStructureAnalysisSchema,
   type MediaMeta,
   type MigratedVideoPlan,
@@ -21,15 +23,130 @@ import {
 import { attachPlanEvaluation } from "@/lib/evaluation";
 import { attachMaterialAdaptation } from "@/lib/materials";
 import { describeMediaForPrompt } from "@/lib/media";
+import { parseJsonFromText } from "@/lib/structured-json";
+
+const aiPlanDraftSchema = z.object({
+  projectTitle: z.string().min(1),
+  targetBrief: z.string().min(4),
+  strategySummary: z.string().min(8),
+  inheritedStructure: z.array(z.string().min(1)),
+  versions: z.array(planVersionSchema).min(1),
+  evaluationChecklist: z.array(z.string().min(1)),
+  productionNotes: z.array(z.string().min(1)).default([]),
+});
 
 const provider = createOpenAICompatible({
   name: "configured-openai-compatible",
   baseURL: process.env.AI_BASE_URL || "https://api.openai.com/v1",
   apiKey: process.env.AI_API_KEY || "missing-key",
+  supportsStructuredOutputs: process.env.AI_SUPPORTS_STRUCTURED_OUTPUTS === "true",
 });
 
 function hasAiConfig() {
   return Boolean(process.env.AI_API_KEY && process.env.AI_API_KEY.trim().length > 0);
+}
+
+function supportsStructuredOutputs() {
+  return process.env.AI_SUPPORTS_STRUCTURED_OUTPUTS === "true";
+}
+
+function requestTimeoutMs() {
+  const parsed = Number(process.env.AI_REQUEST_TIMEOUT_MS);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 45000;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function schemaPrompt<T>(schema: z.ZodType<T>) {
+  return JSON.stringify(z.toJSONSchema(schema), null, 2).slice(0, 16000);
+}
+
+async function generateSchemaObject<T>({
+  modelId,
+  schema,
+  system,
+  prompt,
+}: {
+  modelId: string;
+  schema: z.ZodType<T>;
+  system: string;
+  prompt: string;
+}): Promise<T> {
+  let structuredError: unknown = null;
+
+  if (supportsStructuredOutputs()) {
+    try {
+      const result = await generateObject({
+        model: provider(modelId),
+        schema,
+        system,
+        prompt,
+        maxRetries: 0,
+        timeout: requestTimeoutMs(),
+      });
+
+      return result.object;
+    } catch (error) {
+      structuredError = error;
+    }
+  }
+
+  try {
+    const schemaDescription = schemaPrompt(schema);
+    const textResult = await generateText({
+      model: provider(modelId),
+      system,
+      maxRetries: 0,
+      timeout: requestTimeoutMs(),
+      prompt: `${prompt}
+
+字段约束 JSON Schema：
+${schemaDescription}
+
+输出要求：
+- 只输出一个合法 JSON 对象，不要 Markdown 代码块，不要解释。
+- JSON 必须完整覆盖约定字段，数组字段不要省略。
+- 如果数组元素是 object，绝不能输出 string。
+- 中文文案可以自然，但字段名必须严格匹配 schema。`,
+    });
+
+    try {
+      return schema.parse(parseJsonFromText(textResult.text));
+    } catch (parseError) {
+      const repairResult = await generateText({
+        model: provider(modelId),
+        system:
+          "你是 JSON 修复器。只返回合法 JSON，不要解释，不要 Markdown。保留原意，补齐缺失字段。",
+        maxRetries: 0,
+        timeout: requestTimeoutMs(),
+        prompt: `原始任务：
+${prompt}
+
+上一次结构化输出错误：
+${errorMessage(structuredError)}
+
+上一次文本 JSON 解析错误：
+${errorMessage(parseError)}
+
+字段约束 JSON Schema：
+${schemaDescription}
+
+请把下面内容修复成完全合法、字段完整的 JSON：
+${textResult.text.slice(0, 12000)}`,
+      });
+
+      return schema.parse(parseJsonFromText(repairResult.text));
+    }
+  } catch (error) {
+    if (structuredError) {
+      throw new Error(
+        `Structured output failed: ${errorMessage(structuredError)}; text JSON fallback failed: ${errorMessage(error)}`,
+      );
+    }
+    throw error;
+  }
 }
 
 export async function analyzeSample(input: {
@@ -47,8 +164,8 @@ export async function analyzeSample(input: {
   }
 
   try {
-    const result = await generateObject({
-      model: provider(process.env.AI_MODEL_VISION || process.env.AI_MODEL_TEXT || "gpt-4.1-mini"),
+    const analysis = await generateSchemaObject({
+      modelId: process.env.AI_MODEL_VISION || process.env.AI_MODEL_TEXT || "gpt-4.1-mini",
       schema: videoStructureAnalysisSchema,
       system:
         "你是短视频爆款结构分析师。只抽象创作方法，不复刻具体内容。输出必须可迁移、可剪辑、可执行。",
@@ -62,7 +179,7 @@ export async function analyzeSample(input: {
 重点拆解：开头 hook、镜头节奏、字幕布局、画面包装、音乐卡点、卖点推进、结尾转化。`,
     });
 
-    return { analysis: result.object, usedFallback: false, aiError: null };
+    return { analysis, usedFallback: false, aiError: null };
   } catch (error) {
     return {
       analysis: createFallbackAnalysis(input),
@@ -105,9 +222,9 @@ export async function generateMigratedPlan(input: {
   }
 
   try {
-    const result = await generateObject({
-      model: provider(process.env.AI_MODEL_TEXT || "gpt-4.1-mini"),
-      schema: migratedVideoPlanSchema,
+    const generatedDraft = await generateSchemaObject({
+      modelId: process.env.AI_MODEL_TEXT || "gpt-4.1-mini",
+      schema: aiPlanDraftSchema,
       system:
         "你是 AIGC 短视频创意导演。把样例结构迁移到新主题中，生成方案脚本，不复制样例内容。",
       prompt: `请基于样例结构拆解，为新主题生成 3 个可比较的视频方案版本。
@@ -128,10 +245,14 @@ ${formatEditingTechniquesForPrompt(retrievedTechniques)}
 2. 必须考虑素材是否足够支撑目标结构；缺素材时用结构重排、文案/字幕补全、包装补全、AIGC 生成建议或现有素材复用补足。
 3. 方案应可被创作者直接二次编辑。
 4. 输出侧重结构迁移，不要复刻样例中的具体人物、台词和画面。
-5. retrievedTechniques 字段必须保留上述 RAG 命中项，productionNotes 至少写出 3 条具体剪辑执行提醒。`,
+5. 必须输出 3 个版本，每个版本至少 5 个 scriptBeats，第一段 timeRange 必须从 0- 开始。
+6. 主版本开头口播必须包含“别”“变化”“错”或“关键”之一，以形成强 Hook。
+7. 每个版本必须写出证据/对比/反馈/评价中的至少 2 类；每段 replaceableAssets 必须明确“可替换素材”；每段 riskNotes 必须包含“避免”或“追溯”。
+8. productionNotes 至少写出 3 条具体剪辑执行提醒。`,
     });
+    const generatedPlan = migratedVideoPlanSchema.parse(generatedDraft);
     const plan = attachEditingTechniquesToPlan({
-      plan: result.object,
+      plan: generatedPlan,
       techniques: retrievedTechniques,
     });
     const adaptedPlan = attachMaterialAdaptation({
@@ -179,9 +300,9 @@ export async function refineMigratedPlan(input: {
   }
 
   try {
-    const result = await generateObject({
-      model: provider(process.env.AI_MODEL_TEXT || "gpt-4.1-mini"),
-      schema: migratedVideoPlanSchema,
+    const generatedDraft = await generateSchemaObject({
+      modelId: process.env.AI_MODEL_TEXT || "gpt-4.1-mini",
+      schema: aiPlanDraftSchema,
       system:
         "你是短视频创作平台的自然语言编辑器。基于用户修改指令，保留原结构并生成修订后的完整方案。",
       prompt: `请根据用户修改指令重写方案，保持 JSON 结构完整。
@@ -195,15 +316,16 @@ ${JSON.stringify(input.analysis, null, 2)}
 当前方案：
 ${JSON.stringify(input.plan, null, 2)}
 
-要求：保留可迁移结构，不复刻样例内容；输出完整多版本方案，而不是局部补丁。`,
+要求：保留可迁移结构，不复刻样例内容；输出完整多版本方案，而不是局部补丁。每个版本至少 5 段，开头要强 Hook，证据/对比/反馈/评价、可替换素材和风险追溯提醒必须完整。`,
     });
+    const generatedPlan = migratedVideoPlanSchema.parse(generatedDraft);
 
     const nextPlan = input.plan.retrievedTechniques.length
       ? attachEditingTechniquesToPlan({
-          plan: result.object,
+          plan: generatedPlan,
           techniques: input.plan.retrievedTechniques,
         })
-      : result.object;
+      : generatedPlan;
 
     return {
       plan: attachPlanEvaluation(nextPlan, input.analysis),

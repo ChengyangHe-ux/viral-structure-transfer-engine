@@ -6,10 +6,11 @@
 
 1. 样例理解：接收样例视频、链接或人工观察文本，结合 FFmpeg/ffprobe 元数据抽取基础信息。
 2. 结构抽取：把样例拆成 Hook、节奏、字幕包装、画面包装、音乐卡点、卖点推进和 CTA 结构。
-3. 素材适配：把新主题和用户素材映射到结构槽位，识别开头吸引、主体特写、使用过程、对比结果、背书证据、结尾 CTA 等缺口。
-4. 结果生成：生成多版本短视频方案，包含脚本、分镜、时间线草案和包装建议。
-5. 视频重组：把最佳版本转换成 `RenderTimeline`，由 Remotion 渲染动态字幕、素材槽位、节奏进度、音频床和 MP4。
-6. 人机协同：支持自然语言编辑，例如“开头更抓人一些”“补充可信证据”，系统重写完整结构化方案。
+3. 结构指纹：本地从 `VideoStructureAnalysis` 推导 Hook 强度、镜头密度、字幕密度、证据位置、CTA 位置、节奏曲线和包装标签，用于答辩解释“学到了什么结构”。
+4. 素材适配：把新主题和用户素材映射到结构槽位，识别开头吸引、主体特写、使用过程、对比结果、背书证据、结尾 CTA 等缺口。
+5. 结果生成：生成多版本短视频方案，包含脚本、分镜、时间线草案和包装建议。
+6. 视频重组：把最佳版本转换成 `RenderTimeline`，由 Remotion 渲染动态字幕、素材槽位、节奏进度、音频床和 MP4。
+7. 人机协同：支持自然语言编辑，例如“开头更抓人一些”“补充可信证据”，系统重写完整结构化方案。
 
 ## 工具协议
 
@@ -17,6 +18,7 @@
 
 - 通过 OpenAI-compatible 接口接入云模型，使用 `AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL_TEXT`、`AI_MODEL_VISION` 配置。
 - 系统要求模型输出符合 Zod Schema 的结构化 JSON，而不是自由文本。
+- 对不支持 schema response format 的本地 OpenAI-compatible 网关，系统会退到 `generateText`，再执行 JSON 提取、一次修复和 Zod 校验；校验失败才进入本地 fallback。
 - 未配置密钥时使用本地 fallback 策略，保证演示链路可运行。
 
 ### FFmpeg / ffprobe
@@ -27,6 +29,7 @@
 
 ### RenderTimeline / Remotion
 
+- `StructureFingerprint` 是 `VideoStructureAnalysis` 的本地派生层，不调用模型，负责把样例节拍转成可展示的 Hook、节奏、字幕、证据、CTA 和包装指标。
 - `RenderTimeline` 是模型和渲染器之间的协议层，字段包含 `scenes`、`captionTokens`、`visualLayers`、`audioCues`、`materialFit` 和 `completionPlan`。
 - LLM 或本地 fallback 只能生成结构化 JSON，服务端用 Zod 校验后才交给 Remotion。
 - Remotion 只渲染项目白名单组件，例如动态字幕、素材卡、真实视频层、节奏进度、CTA 场景、漏光转场、运动模糊和颗粒层。

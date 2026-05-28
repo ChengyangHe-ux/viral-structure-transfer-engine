@@ -50,6 +50,10 @@ import {
 } from "@/lib/mapping";
 import { diffPlans } from "@/lib/plan-diff";
 import { buildStoryboardFrames, type StoryboardFrame } from "@/lib/storyboard";
+import {
+  buildStructureFingerprint,
+  type StructureFocus,
+} from "@/lib/structure-fingerprint";
 import { buildTimelineSegments } from "@/lib/timeline";
 import { insertBeatAfter, moveBeat, removeBeat } from "@/lib/plan-edit";
 import type {
@@ -195,6 +199,115 @@ function MediaMetaPanel({ mediaMeta }: { mediaMeta: MediaMeta }) {
           未抽取预览帧（可能缺少 ffmpeg），但仍可基于转写/观察继续拆解。
         </p>
       )}
+    </div>
+  );
+}
+
+function focusLabel(focus: StructureFocus) {
+  const labels: Record<StructureFocus, string> = {
+    hook: "Hook",
+    proof: "证据",
+    benefit: "收益",
+    cta: "CTA",
+    packaging: "包装",
+  };
+
+  return labels[focus];
+}
+
+function focusBarClass(focus: StructureFocus) {
+  const classes: Record<StructureFocus, string> = {
+    hook: "bg-rose-500",
+    proof: "bg-blue-500",
+    benefit: "bg-emerald-500",
+    cta: "bg-amber-500",
+    packaging: "bg-violet-500",
+  };
+
+  return classes[focus];
+}
+
+function StructureFingerprintPanel({ analysis }: { analysis: VideoStructureAnalysis }) {
+  const fingerprint = useMemo(() => buildStructureFingerprint(analysis), [analysis]);
+
+  return (
+    <div className="space-y-4 rounded-lg border bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">结构指纹</Badge>
+            <Badge variant="outline">Hook {fingerprint.hookStrength}/100</Badge>
+            <Badge variant="outline">{fingerprint.shotDensityPer10s} 镜/10s</Badge>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {fingerprint.summary}
+          </p>
+        </div>
+        <BarChart3 className="size-8 shrink-0 text-primary" />
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+        {[
+          ["Hook 强度", `${fingerprint.hookStrength}/100`],
+          ["镜头密度", `${fingerprint.shotDensityPer10s} /10s`],
+          ["字幕密度", `${fingerprint.subtitleDensityPer10s} 屏/10s`],
+          ["证据位置", `${fingerprint.proofPositionPercent}%`],
+          ["CTA 位置", `${fingerprint.ctaPositionPercent}%`],
+        ].map(([label, value]) => (
+          <div className="rounded-md border bg-background p-3" key={label}>
+            <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+            <p className="mt-1 text-lg font-semibold tracking-normal text-foreground">
+              {value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold text-foreground">结构曲线</p>
+          <p className="text-xs text-muted-foreground">{fingerprint.durationSeconds}s</p>
+        </div>
+        <div className="grid gap-2">
+          {fingerprint.rhythmCurve.map((point) => (
+            <div
+              className="grid gap-2 sm:grid-cols-[92px_minmax(0,1fr)] sm:items-center"
+              key={`${point.index}-${point.timeRange}`}
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <Badge variant="outline">{point.timeRange}</Badge>
+                <span className="text-[11px] font-medium text-muted-foreground sm:hidden">
+                  {focusLabel(point.focus)}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <p className="truncate text-xs font-medium text-foreground">
+                    {point.label}
+                  </p>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                    {point.intensity}
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-muted">
+                  <div
+                    className={`h-2 rounded-full ${focusBarClass(point.focus)}`}
+                    style={{ width: `${point.intensity}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {fingerprint.packagingTags.map((tag) => (
+          <Badge variant="outline" key={tag}>
+            {tag}
+          </Badge>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1995,6 +2108,7 @@ export default function Home() {
               {analysis ? (
                 <div className="space-y-5">
                   {mediaMeta ? <MediaMetaPanel mediaMeta={mediaMeta} /> : null}
+                  <StructureFingerprintPanel analysis={analysis} />
                   <div className="grid gap-3 md:grid-cols-3">
                     <div className="rounded-lg border bg-background p-3">
                       <p className="text-xs text-muted-foreground">内容承诺</p>
