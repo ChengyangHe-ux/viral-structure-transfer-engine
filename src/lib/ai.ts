@@ -39,11 +39,20 @@ const aiPlanDraftSchema = z.object({
   productionNotes: z.array(z.string().min(1)).default([]),
 });
 
+function transformProviderRequestBody(args: Record<string, unknown>) {
+  if (process.env.AI_DISABLE_THINKING !== "true") return args;
+  return {
+    ...args,
+    thinking: { type: "disabled" },
+  };
+}
+
 const provider = createOpenAICompatible({
   name: "configured-openai-compatible",
   baseURL: process.env.AI_BASE_URL || "https://api.openai.com/v1",
   apiKey: process.env.AI_API_KEY || "missing-key",
   supportsStructuredOutputs: process.env.AI_SUPPORTS_STRUCTURED_OUTPUTS === "true",
+  transformRequestBody: transformProviderRequestBody,
 });
 
 type SchemaPrompt = string | ModelMessage[];
@@ -59,6 +68,11 @@ function supportsStructuredOutputs() {
 function requestTimeoutMs() {
   const parsed = Number(process.env.AI_REQUEST_TIMEOUT_MS);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 45000;
+}
+
+function maxOutputTokens() {
+  const parsed = Number(process.env.AI_MAX_OUTPUT_TOKENS);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 4096;
 }
 
 function visionFrameLimit() {
@@ -149,6 +163,32 @@ function buildVisionAnalysisMessages(input: {
   return [{ role: "user", content }];
 }
 
+async function summarizeVisionFrames(input: {
+  promptText: string;
+  frameImages: PreviewFrameImage[];
+}) {
+  if (!input.frameImages.length) return "";
+
+  const result = await generateText({
+    model: provider(process.env.AI_MODEL_VISION || process.env.AI_MODEL_TEXT || "gpt-4.1-mini"),
+    system:
+      "你是短视频视觉拆解助手。直接观察用户提供的关键帧，只输出中文观察笔记，不输出 JSON。",
+    maxRetries: 0,
+    timeout: requestTimeoutMs(),
+    maxOutputTokens: Math.min(maxOutputTokens(), 1400),
+    ...promptOptions(
+      buildVisionAnalysisMessages({
+        promptText: `${input.promptText}
+
+请只输出画面观察笔记，覆盖：主体/产品、字幕与标题、构图、色彩、包装元素、可能的镜头节奏、适合迁移的规则。不要输出 JSON。`,
+        frameImages: input.frameImages,
+      }),
+    ),
+  });
+
+  return result.text.trim().slice(0, 6000);
+}
+
 async function generateSchemaObject<T>({
   modelId,
   schema,
@@ -171,6 +211,7 @@ async function generateSchemaObject<T>({
         ...promptOptions(prompt),
         maxRetries: 0,
         timeout: requestTimeoutMs(),
+        maxOutputTokens: maxOutputTokens(),
       });
 
       return result.object;
@@ -197,6 +238,7 @@ ${schemaDescription}
       system,
       maxRetries: 0,
       timeout: requestTimeoutMs(),
+      maxOutputTokens: maxOutputTokens(),
       ...promptOptions(textPrompt),
     });
 
@@ -209,6 +251,7 @@ ${schemaDescription}
           "你是 JSON 修复器。只返回合法 JSON，不要解释，不要 Markdown。保留原意，补齐缺失字段。",
         maxRetries: 0,
         timeout: requestTimeoutMs(),
+        maxOutputTokens: maxOutputTokens(),
         prompt: `原始任务：
 ${promptForError(prompt)}
 
@@ -243,11 +286,13 @@ export async function analyzeSample(input: {
   sampleUrl?: string;
   mediaMeta?: MediaMeta;
 }) {
+  let visionFrameCount = 0;
   if (!hasAiConfig()) {
     return {
       analysis: createFallbackAnalysis(input),
       usedFallback: true,
       aiError: null,
+      visionFrameCount,
     };
   }
 
@@ -256,27 +301,37 @@ export async function analyzeSample(input: {
       input.mediaMeta?.previewFrames ?? [],
       visionFrameLimit(),
     );
+    visionFrameCount = frameImages.length;
     const promptText = buildVisionAnalysisPrompt({ ...input, frameImages });
+    const visionNotes = await summarizeVisionFrames({ promptText, frameImages });
+    const structuredPrompt = visionNotes
+      ? `${promptText}
+
+多模态模型关键帧观察笔记：
+${visionNotes}
+
+请基于这些视觉观察笔记和样例信息，整理成严格符合 schema 的视频结构拆解 JSON。`
+      : promptText;
     const analysis = await generateSchemaObject({
-      modelId: process.env.AI_MODEL_VISION || process.env.AI_MODEL_TEXT || "gpt-4.1-mini",
+      modelId: process.env.AI_MODEL_TEXT || process.env.AI_MODEL_VISION || "gpt-4.1-mini",
       schema: videoStructureAnalysisSchema,
       system:
         "你是短视频爆款结构分析师。只抽象创作方法，不复刻具体内容。输出必须可迁移、可剪辑、可执行。",
-      prompt: buildVisionAnalysisMessages({ promptText, frameImages }),
+      prompt: structuredPrompt,
     });
 
     return {
       analysis,
       usedFallback: false,
       aiError: null,
-      visionFrameCount: frameImages.length,
+      visionFrameCount,
     };
   } catch (error) {
     return {
       analysis: createFallbackAnalysis(input),
       usedFallback: true,
       aiError: error instanceof Error ? error.message : "AI analysis failed",
-      visionFrameCount: 0,
+      visionFrameCount,
     };
   }
 }
