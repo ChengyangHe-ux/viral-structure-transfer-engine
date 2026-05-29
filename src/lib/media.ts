@@ -15,6 +15,12 @@ export type PreviewFrameImage = {
   data: Buffer;
   mediaType: "image/jpeg";
   label: string;
+  timestampSeconds?: number;
+};
+
+export type ExtractedPreviewFrames = {
+  frameIds: string[];
+  timestamps: number[];
 };
 
 function runCommand(command: string, args: string[]) {
@@ -72,6 +78,36 @@ function safeFileName(name: string) {
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
   return `${base || "sample"}-${randomUUID()}${ext}`;
+}
+
+function previewFrameCount(duration?: number) {
+  const parsed = Number(process.env.AI_VIDEO_FRAME_COUNT || process.env.AI_VISION_FRAME_LIMIT);
+  const defaultCount = duration && duration > 30 ? 12 : duration && duration > 8 ? 8 : 4;
+  if (!Number.isFinite(parsed) || parsed <= 0) return defaultCount;
+  return Math.max(1, Math.min(Math.floor(parsed), 24));
+}
+
+function choosePreviewOffsets(duration?: number) {
+  const safeDuration = Number.isFinite(duration) && duration && duration > 0 ? duration : 0;
+  if (!safeDuration) return [1];
+
+  const count = previewFrameCount(safeDuration);
+  if (count === 1) return [Math.min(1, Math.max(0, safeDuration / 2))];
+
+  const start = Math.min(0.8, safeDuration * 0.08);
+  const end = Math.max(start, safeDuration - Math.min(0.8, safeDuration * 0.08));
+  return Array.from({ length: count }, (_, index) => {
+    const ratio = count === 1 ? 0.5 : index / (count - 1);
+    return start + (end - start) * ratio;
+  });
+}
+
+function formatTimestamp(seconds?: number) {
+  if (!Number.isFinite(seconds)) return null;
+  const safeSeconds = Math.max(0, seconds ?? 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = Math.round(safeSeconds % 60);
+  return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
 export function isSafeFrameId(frameId: string) {
@@ -160,6 +196,7 @@ export async function inspectMedia(filePath: string): Promise<MediaMeta> {
       frameRate: video?.r_frame_rate,
       hasAudio,
       previewFrames: [],
+      frameTimestamps: [],
       sourceKind: "upload",
     });
   } catch {
@@ -167,15 +204,19 @@ export async function inspectMedia(filePath: string): Promise<MediaMeta> {
   }
 }
 
-export async function extractPreviewFrames(filePath: string, duration?: number) {
+export async function extractPreviewFrameSet(
+  filePath: string,
+  duration?: number,
+): Promise<ExtractedPreviewFrames> {
   const ffmpeg = await resolveBinary("ffmpeg");
   if (!ffmpeg) {
-    return [];
+    return { frameIds: [], timestamps: [] };
   }
 
   await mkdir(frameDir, { recursive: true });
-  const offsets = duration && duration > 8 ? [1, duration * 0.3, duration * 0.6] : [1];
+  const offsets = choosePreviewOffsets(duration);
   const frameIds: string[] = [];
+  const timestamps: number[] = [];
 
   for (const offset of offsets) {
     const frameId = `${randomUUID()}.jpg`;
@@ -194,26 +235,41 @@ export async function extractPreviewFrames(filePath: string, duration?: number) 
         framePath,
       ]);
       frameIds.push(frameId);
+      timestamps.push(Number(offset.toFixed(2)));
     } catch {
       // Frame extraction is best-effort; the scripted MVP can still proceed.
     }
   }
 
-  return frameIds;
+  return { frameIds, timestamps };
 }
 
-export async function loadPreviewFrameImages(frameIds: string[], limit = 3) {
+export async function extractPreviewFrames(filePath: string, duration?: number) {
+  return (await extractPreviewFrameSet(filePath, duration)).frameIds;
+}
+
+export async function loadPreviewFrameImages(
+  frameIds: string[],
+  limit = 3,
+  timestamps: number[] = [],
+) {
   const images: PreviewFrameImage[] = [];
   const safeFrameIds = frameIds.filter(isSafeFrameId).slice(0, Math.max(0, limit));
 
   for (const frameId of safeFrameIds) {
+    const originalIndex = frameIds.indexOf(frameId);
+    const timestampSeconds = timestamps[originalIndex];
+    const timestampLabel = formatTimestamp(timestampSeconds);
     try {
       const data = await readFile(path.join(frameDir, frameId));
       images.push({
         frameId,
         data,
         mediaType: "image/jpeg",
-        label: `样例视频关键帧 ${images.length + 1}`,
+        label: timestampLabel
+          ? `样例视频关键帧 ${images.length + 1}（约 ${timestampLabel}）`
+          : `样例视频关键帧 ${images.length + 1}`,
+        timestampSeconds,
       });
     } catch {
       // Missing preview frames should not block AI analysis; ffmpeg extraction is best-effort.
@@ -242,7 +298,44 @@ export function describeMediaForPrompt(mediaMeta?: MediaMeta) {
     mediaMeta.previewFrames.length
       ? `已抽取 ${mediaMeta.previewFrames.length} 张预览帧`
       : null,
+    mediaMeta.frameTimestamps.length
+      ? `预览帧时间点 ${mediaMeta.frameTimestamps
+          .map((seconds) => formatTimestamp(seconds))
+          .filter(Boolean)
+          .join("、")}`
+      : null,
   ].filter(Boolean);
 
   return parts.length ? parts.join("；") : "视频元数据有限。";
+}
+
+export function isLikelyDirectVideoUrl(url: string | undefined) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return (
+      ["http:", "https:"].includes(parsed.protocol) &&
+      /\.(mp4|mov|m4v|webm|mpeg|mpg|avi|wmv|3gp)(?:$|\?)/i.test(parsed.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function mimeTypeForVideo(filePath: string) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".mov") return "video/mov";
+  if (ext === ".webm") return "video/webm";
+  if (ext === ".avi") return "video/avi";
+  if (ext === ".mpeg" || ext === ".mpg") return "video/mpeg";
+  if (ext === ".wmv") return "video/wmv";
+  if (ext === ".3gp" || ext === ".3gpp") return "video/3gpp";
+  return "video/mp4";
+}
+
+export async function loadVideoDataUrl(filePath: string, maxBytes: number) {
+  const fileStat = await stat(filePath);
+  if (fileStat.size > maxBytes) return null;
+  const data = await readFile(filePath);
+  return `data:${mimeTypeForVideo(filePath)};base64,${data.toString("base64")}`;
 }

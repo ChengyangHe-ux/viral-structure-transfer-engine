@@ -7,6 +7,7 @@ export const mediaMetaSchema = z.object({
   frameRate: z.string().optional(),
   hasAudio: z.boolean().optional(),
   previewFrames: z.array(z.string()).default([]),
+  frameTimestamps: z.array(z.number().nonnegative()).default([]),
   sourceKind: z.enum(["upload", "url", "manual"]).default("manual"),
 });
 

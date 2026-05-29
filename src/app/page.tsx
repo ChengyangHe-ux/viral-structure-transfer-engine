@@ -74,6 +74,8 @@ type AnalyzeResponse = {
   mediaMeta: MediaMeta;
   usedFallback: boolean;
   aiError: string | null;
+  visionFrameCount?: number;
+  directVideoUsed?: boolean;
   error?: string;
 };
 
@@ -178,7 +180,15 @@ function MediaMetaPanel({ mediaMeta }: { mediaMeta: MediaMeta }) {
         {typeof mediaMeta.hasAudio === "boolean" ? (
           <Badge variant="outline">{mediaMeta.hasAudio ? "有音频" : "无音频"}</Badge>
         ) : null}
+        {mediaMeta.previewFrames.length ? (
+          <Badge variant="outline">时间轴采样 {mediaMeta.previewFrames.length} 帧</Badge>
+        ) : null}
       </div>
+      {mediaMeta.frameTimestamps.length ? (
+        <p className="text-xs leading-6 text-muted-foreground">
+          采样点：{mediaMeta.frameTimestamps.map((seconds) => formatSeconds(seconds)).join(" / ")}
+        </p>
+      ) : null}
 
       {mediaMeta.previewFrames.length ? (
         <div className="grid grid-cols-3 gap-2">
@@ -1345,7 +1355,9 @@ export default function Home() {
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
         ? "未检测到可用 AI 密钥，已使用本地演示策略完成拆解。"
-        : "样例结构拆解完成。",
+        : payload.directVideoUsed
+          ? `样例结构拆解完成：已启用整段视频理解，并结合 ${payload.visionFrameCount ?? 0} 个时间轴关键帧。`
+          : `样例结构拆解完成：已结合 ${payload.visionFrameCount ?? 0} 个时间轴关键帧。`,
     });
   }
 

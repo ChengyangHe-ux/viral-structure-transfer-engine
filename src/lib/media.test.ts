@@ -19,13 +19,14 @@ describe("media helpers", () => {
     await writeFile(framePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
 
     try {
-      const images = await loadPreviewFrameImages([frameId, "../secret.jpg"], 2);
+      const images = await loadPreviewFrameImages([frameId, "../secret.jpg"], 2, [3.2]);
 
       expect(images).toHaveLength(1);
       expect(images[0]).toMatchObject({
         frameId,
         mediaType: "image/jpeg",
-        label: "样例视频关键帧 1",
+        label: "样例视频关键帧 1（约 00:03）",
+        timestampSeconds: 3.2,
       });
       expect(images[0]?.data.length).toBeGreaterThan(0);
     } finally {

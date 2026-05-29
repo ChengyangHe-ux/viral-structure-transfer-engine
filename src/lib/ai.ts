@@ -24,6 +24,8 @@ import { attachPlanEvaluation } from "@/lib/evaluation";
 import { attachMaterialAdaptation } from "@/lib/materials";
 import {
   describeMediaForPrompt,
+  isLikelyDirectVideoUrl,
+  loadVideoDataUrl,
   loadPreviewFrameImages,
   type PreviewFrameImage,
 } from "@/lib/media";
@@ -77,7 +79,30 @@ function maxOutputTokens() {
 
 function visionFrameLimit() {
   const parsed = Number(process.env.AI_VISION_FRAME_LIMIT);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.min(Math.floor(parsed), 8) : 3;
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(Math.floor(parsed), 24) : 12;
+}
+
+function directVideoMaxBytes() {
+  const parsedMb = Number(process.env.AI_DIRECT_VIDEO_MAX_MB);
+  const safeMb = Number.isFinite(parsedMb) && parsedMb > 0 ? Math.min(parsedMb, 80) : 20;
+  return safeMb * 1024 * 1024;
+}
+
+function directVideoFps() {
+  const parsed = Number(process.env.AI_DIRECT_VIDEO_FPS);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 4) : 1;
+}
+
+function videoInputMode() {
+  const mode = process.env.AI_VIDEO_INPUT_MODE;
+  return mode === "frames" || mode === "direct" || mode === "off" ? mode : "hybrid";
+}
+
+function shouldTryDirectVideo(input: { sampleUrl?: string; mediaPath?: string }) {
+  const mode = videoInputMode();
+  if (mode === "off" || mode === "frames") return false;
+  if (mode === "direct") return true;
+  return Boolean(input.mediaPath || isLikelyDirectVideoUrl(input.sampleUrl));
 }
 
 function errorMessage(error: unknown) {
@@ -161,6 +186,76 @@ function buildVisionAnalysisMessages(input: {
   });
 
   return [{ role: "user", content }];
+}
+
+function chatCompletionsUrl() {
+  const baseURL = process.env.AI_BASE_URL || "https://api.openai.com/v1";
+  return `${baseURL.replace(/\/$/, "")}/chat/completions`;
+}
+
+async function summarizeDirectVideo(input: {
+  promptText: string;
+  sampleUrl?: string;
+  mediaPath?: string;
+}) {
+  if (!shouldTryDirectVideo(input)) return { notes: "", used: false };
+
+  let videoUrl = isLikelyDirectVideoUrl(input.sampleUrl) ? input.sampleUrl : undefined;
+  if (!videoUrl && input.mediaPath) {
+    videoUrl = (await loadVideoDataUrl(input.mediaPath, directVideoMaxBytes())) ?? undefined;
+  }
+  if (!videoUrl) return { notes: "", used: false };
+
+  const requestBody = {
+    model: process.env.AI_MODEL_VIDEO || process.env.AI_MODEL_VISION || process.env.AI_MODEL_TEXT,
+    messages: [
+      {
+        role: "system",
+        content:
+          "你是短视频视觉理解助手。你会观察整段视频的时间顺序，只输出中文观察笔记，不输出 JSON。",
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "video_url",
+            video_url: {
+              url: videoUrl,
+              fps: directVideoFps(),
+            },
+          },
+          {
+            type: "text",
+            text: `${input.promptText}
+
+请直接理解整段样例视频，按时间顺序输出观察笔记。重点覆盖：镜头段落、开头 hook、主体/商品、字幕与包装、转场/节奏、音乐或音频线索、卖点推进、结尾 CTA，以及哪些规则适合迁移到新主题。`,
+          },
+        ],
+      },
+    ],
+    max_tokens: Math.min(maxOutputTokens(), 1800),
+    ...(process.env.AI_DISABLE_THINKING === "true" ? { thinking: { type: "disabled" } } : {}),
+  };
+
+  const response = await fetch(chatCompletionsUrl(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.AI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
+    signal: AbortSignal.timeout(requestTimeoutMs()),
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Direct video understanding failed: ${response.status} ${text.slice(0, 800)}`);
+  }
+
+  const payload = JSON.parse(text) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const notes = payload.choices?.[0]?.message?.content?.trim() ?? "";
+  return { notes: notes.slice(0, 6000), used: Boolean(notes) };
 }
 
 async function summarizeVisionFrames(input: {
@@ -284,15 +379,18 @@ export async function analyzeSample(input: {
   sampleTitle: string;
   sampleNotes: string;
   sampleUrl?: string;
+  mediaPath?: string;
   mediaMeta?: MediaMeta;
 }) {
   let visionFrameCount = 0;
+  let directVideoUsed = false;
   if (!hasAiConfig()) {
     return {
       analysis: createFallbackAnalysis(input),
       usedFallback: true,
       aiError: null,
       visionFrameCount,
+      directVideoUsed,
     };
   }
 
@@ -300,15 +398,36 @@ export async function analyzeSample(input: {
     const frameImages = await loadPreviewFrameImages(
       input.mediaMeta?.previewFrames ?? [],
       visionFrameLimit(),
+      input.mediaMeta?.frameTimestamps ?? [],
     );
     visionFrameCount = frameImages.length;
     const promptText = buildVisionAnalysisPrompt({ ...input, frameImages });
+    let directVideoNotes = "";
+    let directVideoError = "";
+    try {
+      const directVideo = await summarizeDirectVideo({
+        promptText,
+        sampleUrl: input.sampleUrl,
+        mediaPath: input.mediaPath,
+      });
+      directVideoNotes = directVideo.notes;
+      directVideoUsed = directVideo.used;
+    } catch (error) {
+      directVideoError = errorMessage(error);
+    }
     const visionNotes = await summarizeVisionFrames({ promptText, frameImages });
-    const structuredPrompt = visionNotes
+    const observationBlocks = [
+      directVideoNotes
+        ? `整段视频模型观察笔记：\n${directVideoNotes}`
+        : directVideoError
+          ? `整段视频模型不可用，原因：${directVideoError}`
+          : "",
+      visionNotes ? `时间轴关键帧观察笔记：\n${visionNotes}` : "",
+    ].filter(Boolean);
+    const structuredPrompt = observationBlocks.length
       ? `${promptText}
 
-多模态模型关键帧观察笔记：
-${visionNotes}
+${observationBlocks.join("\n\n")}
 
 请基于这些视觉观察笔记和样例信息，整理成严格符合 schema 的视频结构拆解 JSON。`
       : promptText;
@@ -325,6 +444,7 @@ ${visionNotes}
       usedFallback: false,
       aiError: null,
       visionFrameCount,
+      directVideoUsed,
     };
   } catch (error) {
     return {
@@ -332,6 +452,7 @@ ${visionNotes}
       usedFallback: true,
       aiError: error instanceof Error ? error.message : "AI analysis failed",
       visionFrameCount,
+      directVideoUsed,
     };
   }
 }

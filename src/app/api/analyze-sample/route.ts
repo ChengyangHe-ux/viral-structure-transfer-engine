@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { analyzeSample } from "@/lib/ai";
 import { prisma } from "@/lib/db";
 import {
-  extractPreviewFrames,
+  extractPreviewFrameSet,
   inspectMedia,
   resolveUploadedVideoPath,
   saveUploadedVideo,
@@ -40,11 +40,18 @@ async function parseRequest(request: NextRequest) {
     if (file instanceof File && file.size > 0) {
       const mediaPath = await saveUploadedVideo(file);
       const inspected = await inspectMedia(mediaPath);
-      const previewFrames = await extractPreviewFrames(mediaPath, inspected.durationSeconds);
+      const { frameIds, timestamps } = await extractPreviewFrameSet(
+        mediaPath,
+        inspected.durationSeconds,
+      );
       return {
         ...parsed,
         mediaPath,
-        mediaMeta: mediaMetaSchema.parse({ ...inspected, previewFrames }),
+        mediaMeta: mediaMetaSchema.parse({
+          ...inspected,
+          previewFrames: frameIds,
+          frameTimestamps: timestamps,
+        }),
       };
     }
 
@@ -52,11 +59,19 @@ async function parseRequest(request: NextRequest) {
     if (localUploadName) {
       const mediaPath = await resolveUploadedVideoPath(localUploadName);
       const inspected = await inspectMedia(mediaPath);
-      const previewFrames = await extractPreviewFrames(mediaPath, inspected.durationSeconds);
+      const { frameIds, timestamps } = await extractPreviewFrameSet(
+        mediaPath,
+        inspected.durationSeconds,
+      );
       return {
         ...parsed,
         mediaPath,
-        mediaMeta: mediaMetaSchema.parse({ ...inspected, previewFrames, sourceKind: "upload" }),
+        mediaMeta: mediaMetaSchema.parse({
+          ...inspected,
+          previewFrames: frameIds,
+          frameTimestamps: timestamps,
+          sourceKind: "upload",
+        }),
       };
     }
 
@@ -76,11 +91,19 @@ async function parseRequest(request: NextRequest) {
   if (localUploadName) {
     const mediaPath = await resolveUploadedVideoPath(localUploadName);
     const inspected = await inspectMedia(mediaPath);
-    const previewFrames = await extractPreviewFrames(mediaPath, inspected.durationSeconds);
+    const { frameIds, timestamps } = await extractPreviewFrameSet(
+      mediaPath,
+      inspected.durationSeconds,
+    );
     return {
       ...parsed,
       mediaPath,
-      mediaMeta: mediaMetaSchema.parse({ ...inspected, previewFrames, sourceKind: "upload" }),
+      mediaMeta: mediaMetaSchema.parse({
+        ...inspected,
+        previewFrames: frameIds,
+        frameTimestamps: timestamps,
+        sourceKind: "upload",
+      }),
     };
   }
   return {
@@ -109,11 +132,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const { analysis, usedFallback, aiError, visionFrameCount } = await analyzeSample({
+    const { analysis, usedFallback, aiError, visionFrameCount, directVideoUsed } =
+      await analyzeSample({
       sampleTitle: input.sampleTitle,
       sampleNotes: input.sampleNotes,
       sampleUrl: input.sampleUrl || undefined,
       mediaMeta: input.mediaMeta as MediaMeta,
+      mediaPath: input.mediaPath || undefined,
     });
 
     await prisma.sampleAnalysis.create({
@@ -132,6 +157,7 @@ export async function POST(request: NextRequest) {
       usedFallback,
       aiError,
       visionFrameCount,
+      directVideoUsed,
     });
   } catch (error) {
     return NextResponse.json(
