@@ -20,6 +20,7 @@ type Args = {
   productName?: string;
   sourceVideo?: string;
   imageAssets?: string;
+  videoAssets?: string;
   quality: "high" | "draft";
   audioMode: "auto" | "off";
 };
@@ -42,6 +43,7 @@ function parseArgs(argv: string[]): Args {
     if (item === "--product-name") args.productName = argv[index + 1];
     if (item === "--source-video") args.sourceVideo = argv[index + 1];
     if (item === "--image-assets") args.imageAssets = argv[index + 1];
+    if (item === "--video-assets") args.videoAssets = argv[index + 1];
     if (item === "--quality") args.quality = argv[index + 1] as Args["quality"];
     if (item === "--audio-mode") args.audioMode = argv[index + 1] as Args["audioMode"];
   }
@@ -56,6 +58,7 @@ function parseArgs(argv: string[]): Args {
     productName: args.productName,
     sourceVideo: args.sourceVideo,
     imageAssets: args.imageAssets,
+    videoAssets: args.videoAssets,
     quality: args.quality === "draft" ? "draft" : "high",
     audioMode: args.audioMode === "off" ? "off" : "auto",
   };
@@ -168,6 +171,41 @@ async function prepareStaticImageAssets(imageAssets: string | undefined) {
   };
 }
 
+async function prepareStaticVideoAssets(videoAssets: string | undefined) {
+  const assetPaths = (videoAssets ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (assetPaths.length === 0) {
+    return { videoAssetPaths: [] as string[], cleanupPaths: [] as string[] };
+  }
+
+  const renderSourceDir = path.resolve(process.cwd(), "public", "render-sources");
+  await mkdir(renderSourceDir, { recursive: true });
+
+  const preparedAssets = await Promise.all(
+    assetPaths.map(async (assetPath) => {
+      const resolvedAsset = path.resolve(process.cwd(), assetPath);
+      const safeName = path
+        .basename(resolvedAsset)
+        .replace(/[^a-zA-Z0-9_.-]/g, "-");
+      const fileName = `${randomUUID()}-${safeName}`;
+      const cleanupPath = path.join(renderSourceDir, fileName);
+      await copyFile(resolvedAsset, cleanupPath);
+      return {
+        videoAssetPath: `render-sources/${fileName}`,
+        cleanupPath,
+      };
+    }),
+  );
+
+  return {
+    videoAssetPaths: preparedAssets.map((asset) => asset.videoAssetPath),
+    cleanupPaths: preparedAssets.map((asset) => asset.cleanupPath),
+  };
+}
+
 async function prepareSyntheticAudio({
   renderTimeline,
   audioMode,
@@ -241,7 +279,12 @@ async function main() {
   const { imageAssetPaths, cleanupPaths: imageCleanupPaths } = await prepareStaticImageAssets(
     args.imageAssets,
   );
-  const cleanupPaths = [cleanupPath, ...imageCleanupPaths].filter(Boolean) as string[];
+  const { videoAssetPaths, cleanupPaths: videoCleanupPaths } = await prepareStaticVideoAssets(
+    args.videoAssets,
+  );
+  const cleanupPaths = [cleanupPath, ...imageCleanupPaths, ...videoCleanupPaths].filter(
+    Boolean,
+  ) as string[];
   const highQualityCompositionIds = new Set([
     "HighQualityShort",
     "CoffeeLaunchShort",
@@ -265,6 +308,7 @@ async function main() {
     productName: args.productName || "天然矿泉水",
     sourceVideoPath,
     imageAssets: imageAssetPaths,
+    videoAssets: videoAssetPaths,
     renderTimeline: highQualityInput?.renderTimeline ?? null,
   };
 

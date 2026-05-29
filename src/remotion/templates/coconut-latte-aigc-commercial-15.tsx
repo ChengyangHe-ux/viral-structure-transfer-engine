@@ -6,6 +6,7 @@ import {
   interpolate,
   spring,
   staticFile,
+  Video,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
@@ -19,6 +20,7 @@ export type CoconutLatteAigcCommercial15Props = {
   plan: MigratedVideoPlan | null;
   renderTimeline: RenderTimeline | null;
   imageAssets?: string[];
+  videoAssets?: string[];
 };
 
 const TOTAL_FRAMES = 450;
@@ -72,11 +74,16 @@ function assetAt(imageAssets: string[] | undefined, index: number) {
   return imageAssets?.[index] || fallbackImages[index] || fallbackImages[0];
 }
 
+function videoAt(videoAssets: string[] | undefined, index: number) {
+  return videoAssets?.[index] || null;
+}
+
 export function CoconutLatteAigcCommercial15({
   title,
   productName = "生椰轻乳拿铁",
   renderTimeline,
   imageAssets,
+  videoAssets,
 }: CoconutLatteAigcCommercial15Props) {
   const frame = useCurrentFrame();
 
@@ -111,6 +118,7 @@ export function CoconutLatteAigcCommercial15({
         frame={frame}
         index={0}
         imagePath={assetAt(imageAssets, 0)}
+        videoPath={videoAt(videoAssets, 0)}
         eyebrow="NEW / LOW SUGAR"
         headline={title || sceneRanges[0].title}
         subline="低糖、椰香、咖啡后劲，把下午三点拉回来。"
@@ -158,6 +166,7 @@ function AigcScene({
   frame,
   index,
   imagePath,
+  videoPath,
   eyebrow,
   headline,
   subline,
@@ -168,6 +177,7 @@ function AigcScene({
   frame: number;
   index: number;
   imagePath: string;
+  videoPath?: string | null;
   eyebrow: string;
   headline: string;
   subline: string;
@@ -201,6 +211,24 @@ function AigcScene({
           filter: cta ? "saturate(1.08) contrast(1.05)" : "saturate(1.14) contrast(1.06)",
         }}
       />
+      {videoPath ? (
+        <Video
+          src={staticFile(videoPath)}
+          muted
+          loop
+          startFrom={0}
+          delayRenderTimeoutInMilliseconds={120000}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            transform: `scale(${1.18 + progress * 0.04}) translate3d(-18px, -46px, 0)`,
+            filter: "saturate(1.12) contrast(1.04)",
+          }}
+        />
+      ) : null}
       <AbsoluteFill
         style={{
           background: dark
@@ -208,6 +236,7 @@ function AigcScene({
             : "linear-gradient(180deg, rgba(255,248,230,0.32) 0%, rgba(255,248,230,0.08) 40%, rgba(0,0,0,0.52) 100%)",
         }}
       />
+      {videoPath ? <VideoWatermarkCover /> : null}
       <div
         style={{
           position: "absolute",
@@ -264,6 +293,22 @@ function AigcScene({
       <CaptionBlock frame={local} caption={caption} accent={scene.accent} dark={dark} />
       <SceneBadge index={index} accent={scene.accent} dark={dark} />
     </AbsoluteFill>
+  );
+}
+
+function VideoWatermarkCover() {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: 260,
+        background:
+          "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.56) 52%, rgba(0,0,0,0.84) 100%)",
+      }}
+    />
   );
 }
 
