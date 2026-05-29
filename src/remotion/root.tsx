@@ -16,6 +16,10 @@ import {
   CoconutLatteCommercial15,
   type CoconutLatteCommercial15Props,
 } from "@/remotion/templates/coconut-latte-commercial-15";
+import {
+  CoconutLatteAigcCommercial15,
+  type CoconutLatteAigcCommercial15Props,
+} from "@/remotion/templates/coconut-latte-aigc-commercial-15";
 import { VideoFromPlan, type VideoFromPlanProps } from "@/remotion/video-from-plan";
 import { calculateVideoFramesFromPlan } from "@/remotion/video-metadata";
 
@@ -111,6 +115,21 @@ export function RemotionRoot() {
           plan: null,
           renderTimeline: null,
         } satisfies CoconutLatteCommercial15Props}
+      />
+      <Composition
+        id="CoconutLatteAigcCommercial15"
+        component={CoconutLatteAigcCommercial15}
+        fps={30}
+        width={1080}
+        height={1920}
+        durationInFrames={30 * 15}
+        defaultProps={{
+          title: "别把它当普通拿铁",
+          productName: "生椰轻乳拿铁",
+          plan: null,
+          renderTimeline: null,
+          imageAssets: [],
+        } satisfies CoconutLatteAigcCommercial15Props}
       />
     </>
   );
