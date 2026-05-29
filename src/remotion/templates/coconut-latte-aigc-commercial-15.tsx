@@ -224,7 +224,7 @@ function AigcScene({
             width: "100%",
             height: "100%",
             objectFit: "cover",
-            transform: `scale(${1.18 + progress * 0.04}) translate3d(-18px, -46px, 0)`,
+            transform: `scale(${1.06 + progress * 0.025}) translate3d(-8px, -10px, 0)`,
             filter: "saturate(1.12) contrast(1.04)",
           }}
         />
