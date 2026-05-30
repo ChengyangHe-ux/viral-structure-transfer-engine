@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
-import { renderPlanMarkdown } from "@/lib/markdown";
-import { migratedVideoPlanSchema } from "@/lib/schemas";
+import { renderProjectMarkdown } from "@/lib/markdown";
+import {
+  migratedVideoPlanSchema,
+  videoStructureAnalysisSchema,
+} from "@/lib/schemas";
 
 export const runtime = "nodejs";
 
@@ -19,13 +22,24 @@ export async function POST(
     const { id } = await context.params;
     const body = (await request.json()) as SavePlanRequestBody;
     const plan = migratedVideoPlanSchema.parse(body.plan);
-    const project = await prisma.project.findUnique({ where: { id } });
+    const project = await prisma.project.findUnique({
+      where: { id },
+      include: { sampleAnalysis: true },
+    });
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    const markdown = renderPlanMarkdown(plan);
+    const analysis = project.sampleAnalysis
+      ? videoStructureAnalysisSchema.parse(project.sampleAnalysis.data)
+      : undefined;
+    const markdown = renderProjectMarkdown({
+      title: project.title,
+      analysis,
+      plan,
+      source: "项目要求",
+    });
     const versionName = plan.versions.map((version) => version.versionName).join(" / ");
     const note = body.note?.trim();
 

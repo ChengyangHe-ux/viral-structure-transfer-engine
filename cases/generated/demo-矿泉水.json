@@ -466,11 +466,11 @@
         {
           "key": "production-ready",
           "label": "成片生产可执行",
-          "score": 83,
+          "score": 84,
           "target": "每段都具备画面、包装、转场、可替换素材，素材缺口有补全策略。",
-          "evidence": "时间线镜头 15 段；完整生产字段 15/15；素材充分度 61/100。",
-          "passed": false,
-          "suggestion": "优先补齐真实素材槽位，并减少只有字幕卡的段落。"
+          "evidence": "时间线镜头 15 段；完整生产字段 15/15；素材充分度 67/100。",
+          "passed": true,
+          "suggestion": "可以进入一键出片或人工剪辑替换素材。"
         },
         {
           "key": "editable-workflow",
@@ -486,13 +486,13 @@
           "label": "上交证据完整",
           "score": 89,
           "target": "导出稿能自证目标、方法、评分、缺口、风险和下一步。",
-          "evidence": "质量评分 91/100；制作备注 7 条；样例节拍 4 段。",
+          "evidence": "质量评分 92/100；制作备注 7 条；样例节拍 4 段。",
           "passed": true,
           "suggestion": "导出 Markdown/JSON 可作为上交说明附件。"
         }
       ],
       "nextActions": [
-        "优先补齐真实素材槽位，并减少只有字幕卡的段落。"
+        "保持当前主链路，录屏时重点展示 RAG 技巧命中、结构映射和一键出片。"
       ],
       "demoProof": [
         "展示样例拆解：Hook、节奏、字幕、包装、卖点推进。",
@@ -504,8 +504,118 @@
     },
     "materialAdaptation": {
       "providedMaterialsSummary": "已有素材：瓶身特写、开盖水滴、山泉感背景、运动后饮用、办公桌面、购买入口；需要补充矿物质参数证据卡。",
-      "sufficiencyScore": 61,
-      "missingSlotCount": 3,
+      "sufficiencyScore": 67,
+      "missingSlotCount": 2,
+      "assets": [
+        {
+          "id": "asset-1",
+          "kind": "image",
+          "label": "瓶身特写",
+          "detectedSignals": [
+            "静态视觉",
+            "特写",
+            "hero",
+            "usage",
+            "cta"
+          ],
+          "suggestedSlots": [
+            "hero",
+            "usage",
+            "cta"
+          ],
+          "qualityScore": 79,
+          "highlightReason": "识别到可支撑 3 个结构槽位，适合进入迁移时间线。",
+          "recommendedUse": "优先用于商品/主体特写、使用过程镜头、结尾 CTA 镜头，作为静态视觉支撑结构槽位。"
+        },
+        {
+          "id": "asset-2",
+          "kind": "text",
+          "label": "开盖水滴",
+          "detectedSignals": [
+            "文本证据",
+            "usage",
+            "cta"
+          ],
+          "suggestedSlots": [
+            "usage",
+            "cta"
+          ],
+          "qualityScore": 68,
+          "highlightReason": "识别到可支撑 2 个结构槽位，适合进入迁移时间线。",
+          "recommendedUse": "优先用于使用过程镜头、结尾 CTA 镜头，作为文本证据支撑结构槽位。"
+        },
+        {
+          "id": "asset-3",
+          "kind": "text",
+          "label": "山泉感背景",
+          "detectedSignals": [
+            "文本证据",
+            "usage",
+            "cta"
+          ],
+          "suggestedSlots": [
+            "usage",
+            "cta"
+          ],
+          "qualityScore": 68,
+          "highlightReason": "识别到可支撑 2 个结构槽位，适合进入迁移时间线。",
+          "recommendedUse": "优先用于使用过程镜头、结尾 CTA 镜头，作为文本证据支撑结构槽位。"
+        },
+        {
+          "id": "asset-4",
+          "kind": "text",
+          "label": "运动后饮用",
+          "detectedSignals": [
+            "文本证据",
+            "饮用",
+            "usage",
+            "cta"
+          ],
+          "suggestedSlots": [
+            "usage",
+            "cta"
+          ],
+          "qualityScore": 68,
+          "highlightReason": "识别到可支撑 2 个结构槽位，适合进入迁移时间线。",
+          "recommendedUse": "优先用于使用过程镜头、结尾 CTA 镜头，作为文本证据支撑结构槽位。"
+        },
+        {
+          "id": "asset-5",
+          "kind": "text",
+          "label": "办公桌面",
+          "detectedSignals": [
+            "文本证据",
+            "usage",
+            "cta"
+          ],
+          "suggestedSlots": [
+            "usage",
+            "cta"
+          ],
+          "qualityScore": 68,
+          "highlightReason": "识别到可支撑 2 个结构槽位，适合进入迁移时间线。",
+          "recommendedUse": "优先用于使用过程镜头、结尾 CTA 镜头，作为文本证据支撑结构槽位。"
+        },
+        {
+          "id": "asset-6",
+          "kind": "link",
+          "label": "购买入口",
+          "detectedSignals": [
+            "行动入口",
+            "入口",
+            "购买",
+            "usage",
+            "cta"
+          ],
+          "suggestedSlots": [
+            "usage",
+            "cta"
+          ],
+          "qualityScore": 80,
+          "highlightReason": "识别到可支撑 2 个结构槽位，适合进入迁移时间线。",
+          "recommendedUse": "优先用于使用过程镜头、结尾 CTA 镜头，作为行动入口支撑结构槽位。"
+        }
+      ],
       "slots": [
         {
           "slotId": "hook",
@@ -513,6 +623,7 @@
           "requiredFor": "承接样例的前 3 秒 Hook，制造停留。",
           "requiredMaterial": "结果画面、强反差画面、问题现场或高冲突截图。",
           "matchedMaterial": "当前输入中没有足够素材线索直接支撑该槽位。",
+          "recommendedAssets": [],
           "fit": "missing",
           "impact": "如果不补全，会影响视频结构完整度和可信度。",
           "completionStrategy": "visual-packaging",
@@ -523,7 +634,15 @@
           "slotName": "商品/主体特写",
           "requiredFor": "让用户知道新内容的主体是什么，避免只听卖点却看不见对象。",
           "requiredMaterial": "商品图、界面截图、Logo、包装、人物或服务主体。",
-          "matchedMaterial": "从输入中识别到与“商品 / 产品 / 工具”相关的素材线索。",
+          "matchedMaterial": "推荐素材：瓶身特写。",
+          "recommendedAssets": [
+            {
+              "assetId": "asset-1",
+              "label": "瓶身特写",
+              "reason": "优先用于商品/主体特写、使用过程镜头、结尾 CTA 镜头，作为静态视觉支撑结构槽位。",
+              "fitScore": 79
+            }
+          ],
           "fit": "matched",
           "impact": "可直接支撑目标结构。",
           "completionStrategy": "copy-caption",
@@ -534,9 +653,29 @@
           "slotName": "使用过程镜头",
           "requiredFor": "证明卖点不是口号，展示从问题到结果的过程。",
           "requiredMaterial": "操作录屏、使用步骤、拍摄过程、工作流或现场演示。",
-          "matchedMaterial": "当前输入中没有足够素材线索直接支撑该槽位。",
-          "fit": "missing",
-          "impact": "如果不补全，会影响视频结构完整度和可信度。",
+          "matchedMaterial": "推荐素材：购买入口 / 瓶身特写 / 开盖水滴。",
+          "recommendedAssets": [
+            {
+              "assetId": "asset-6",
+              "label": "购买入口",
+              "reason": "优先用于使用过程镜头、结尾 CTA 镜头，作为行动入口支撑结构槽位。",
+              "fitScore": 80
+            },
+            {
+              "assetId": "asset-1",
+              "label": "瓶身特写",
+              "reason": "优先用于商品/主体特写、使用过程镜头、结尾 CTA 镜头，作为静态视觉支撑结构槽位。",
+              "fitScore": 79
+            },
+            {
+              "assetId": "asset-2",
+              "label": "开盖水滴",
+              "reason": "优先用于使用过程镜头、结尾 CTA 镜头，作为文本证据支撑结构槽位。",
+              "fitScore": 68
+            }
+          ],
+          "fit": "matched",
+          "impact": "可直接支撑目标结构。",
           "completionStrategy": "structure-reorder",
           "completionPlan": "降低过程镜头占比，改成“三步字幕解释 + 局部放大 + 结果回看”的结构。"
         },
@@ -546,6 +685,7 @@
           "requiredFor": "支撑样例的结果前置和收益翻译结构。",
           "requiredMaterial": "前后对比、效果截图、数据变化、Before/After 画面。",
           "matchedMaterial": "当前输入中没有足够素材线索直接支撑该槽位。",
+          "recommendedAssets": [],
           "fit": "missing",
           "impact": "如果不补全，会影响视频结构完整度和可信度。",
           "completionStrategy": "visual-packaging",
@@ -557,8 +697,9 @@
           "requiredFor": "增强可信度，支撑中段卖点推进。",
           "requiredMaterial": "评价截图、用户反馈、案例、参数、实验记录或真实数据。",
           "matchedMaterial": "从输入中识别到与“评价 / 反馈 / 案例”相关的素材线索。",
-          "fit": "matched",
-          "impact": "可直接支撑目标结构。",
+          "recommendedAssets": [],
+          "fit": "partial",
+          "impact": "可用文字或包装承接，但真实画面说服力偏弱。",
           "completionStrategy": "copy-caption",
           "completionPlan": "用“证据来源待补”字幕卡占位，并要求最终生产前补真实截图或可追溯数据。"
         },
@@ -567,7 +708,27 @@
           "slotName": "结尾 CTA 镜头",
           "requiredFor": "完成转化或行动指令，让视频有明确收束。",
           "requiredMaterial": "购买入口、二维码、链接、店铺页、收藏提示或领取入口。",
-          "matchedMaterial": "从输入中识别到与“入口 / 链接 / 二维码”相关的素材线索。",
+          "matchedMaterial": "推荐素材：购买入口 / 瓶身特写 / 开盖水滴。",
+          "recommendedAssets": [
+            {
+              "assetId": "asset-6",
+              "label": "购买入口",
+              "reason": "优先用于使用过程镜头、结尾 CTA 镜头，作为行动入口支撑结构槽位。",
+              "fitScore": 80
+            },
+            {
+              "assetId": "asset-1",
+              "label": "瓶身特写",
+              "reason": "优先用于商品/主体特写、使用过程镜头、结尾 CTA 镜头，作为静态视觉支撑结构槽位。",
+              "fitScore": 79
+            },
+            {
+              "assetId": "asset-2",
+              "label": "开盖水滴",
+              "reason": "优先用于使用过程镜头、结尾 CTA 镜头，作为文本证据支撑结构槽位。",
+              "fitScore": 68
+            }
+          ],
           "fit": "matched",
           "impact": "可直接支撑目标结构。",
           "completionStrategy": "reuse-existing",
@@ -577,7 +738,7 @@
       "timelineAdjustment": "缺失槽位优先用字幕卡、卖点卡片、局部放大和结构重排补足，减少对新增拍摄的依赖。"
     },
     "evaluation": {
-      "overallScore": 91,
+      "overallScore": 92,
       "readiness": "ready",
       "bestVersion": "稳妥转化版",
       "structureAlignment": {
@@ -622,8 +783,8 @@
         {
           "key": "material-adaptation",
           "label": "素材适配",
-          "score": 61,
-          "evidence": "识别 3 个素材缺口，并给出槽位级补全策略。",
+          "score": 67,
+          "evidence": "识别 2 个素材缺口，并给出槽位级补全策略。",
           "suggestion": "优先补齐缺失槽位，或用字幕卡、包装卡片和结构重排补足。"
         },
         {

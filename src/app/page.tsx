@@ -39,9 +39,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { demoPresets } from "@/lib/demo-presets";
 import {
-  renderMigrationMapMarkdown,
   renderPlanMarkdown,
-  renderStoryboardMarkdown,
+  renderProjectMarkdown,
 } from "@/lib/markdown";
 import {
   buildMigrationMap,
@@ -54,6 +53,10 @@ import {
   buildStructureFingerprint,
   type StructureFocus,
 } from "@/lib/structure-fingerprint";
+import {
+  buildTechniqueTransferRecipe,
+  type TechniqueTransferRecipe,
+} from "@/lib/technique-transfer";
 import { buildTimelineSegments } from "@/lib/timeline";
 import { insertBeatAfter, moveBeat, removeBeat } from "@/lib/plan-edit";
 import type {
@@ -76,6 +79,8 @@ type AnalyzeResponse = {
   aiError: string | null;
   visionFrameCount?: number;
   directVideoUsed?: boolean;
+  sourceSampleCount?: number;
+  sourceSamples?: string[];
   error?: string;
 };
 
@@ -811,6 +816,40 @@ function MaterialAdaptationPanel({
         <PackageCheck className="size-8 shrink-0 text-primary" />
       </div>
 
+      {adaptation.assets.length ? (
+        <div className="rounded-lg border bg-background p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">真实素材资产</Badge>
+            <Badge variant="outline">{adaptation.assets.length} 个</Badge>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {adaptation.assets.map((asset) => (
+              <div className="rounded-md border bg-white p-3" key={asset.id}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {asset.label}
+                  </p>
+                  <Badge variant="outline">{asset.kind}</Badge>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {asset.highlightReason}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {asset.suggestedSlots.map((slot) => (
+                    <Badge variant="outline" key={`${asset.id}-${slot}`}>
+                      {slot}
+                    </Badge>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs font-medium text-foreground">
+                  质量 {asset.qualityScore}/100
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-3 md:grid-cols-2">
         {adaptation.slots.map((slot) => (
           <div className="rounded-lg border bg-background p-3" key={slot.slotId}>
@@ -834,7 +873,105 @@ function MaterialAdaptationPanel({
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
               {slot.matchedMaterial}
             </p>
+            {slot.recommendedAssets.length ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {slot.recommendedAssets.map((asset) => (
+                  <Badge variant="outline" key={`${slot.slotId}-${asset.assetId}`}>
+                    {asset.label} · {asset.fitScore}
+                  </Badge>
+                ))}
+              </div>
+            ) : null}
             <p className="mt-2 text-xs font-medium text-foreground">补全：{slot.completionPlan}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TechniqueTransferPanel({
+  recipe,
+}: {
+  recipe: TechniqueTransferRecipe;
+}) {
+  return (
+    <div className="space-y-4 rounded-lg border bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">手法迁移配方</Badge>
+            <Badge variant="outline">{recipe.sceneTransfers.length} 个映射镜头</Badge>
+            <Badge variant="outline">{recipe.sourceProfile.transitionStyle}</Badge>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {recipe.summary}
+          </p>
+        </div>
+        <GitBranch className="size-8 shrink-0 text-primary" />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        {[
+          ["Hook窗口", `${recipe.sourceProfile.hookWindowSeconds}s`],
+          ["镜头密度", `${recipe.sourceProfile.shotDensityPer10s}/10s`],
+          ["字幕密度", recipe.sourceProfile.captionDensity],
+          ["运动手法", recipe.sourceProfile.motionStyle],
+        ].map(([label, value]) => (
+          <div className="rounded-md border bg-background p-3" key={label}>
+            <p className="text-[11px] text-muted-foreground">{label}</p>
+            <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        {recipe.sceneTransfers.map((scene) => (
+          <div className="rounded-lg border bg-background p-3" key={scene.index}>
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_32px_minmax(0,1.1fr)_minmax(160px,0.55fr)] lg:items-stretch">
+              <div className="rounded-md border bg-white p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{scene.sampleTimeRange}</Badge>
+                  <span className="text-xs font-semibold text-foreground">
+                    {scene.sourcePurpose}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {scene.transferableRule}
+                </p>
+              </div>
+              <div className="hidden items-center justify-center text-primary lg:flex">
+                <ArrowRight className="size-5" />
+              </div>
+              <div className="rounded-md border bg-white p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{scene.outputTimeRange}</Badge>
+                  <span className="text-xs font-semibold text-foreground">
+                    {scene.outputPurpose}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-foreground">
+                  {scene.outputLine}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {scene.mappedTechnique}
+                </p>
+              </div>
+              <div className="rounded-md border bg-white p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={fitBadgeVariant(scene.materialFit)}>
+                    {materialFitText(scene.materialFit)}
+                  </Badge>
+                  <Badge variant="outline">强度 {scene.beatIntensity}</Badge>
+                </div>
+                <p className="mt-2 text-xs font-medium text-foreground">
+                  {scene.materialSlotName}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {scene.captionPlacement}/{scene.captionDensity} · {scene.transitionStyle}
+                </p>
+              </div>
+            </div>
           </div>
         ))}
       </div>
@@ -1171,6 +1308,7 @@ export default function Home() {
   const [sampleTitle, setSampleTitle] = useState("优质短视频样例");
   const [sampleUrl, setSampleUrl] = useState("");
   const [sampleNotes, setSampleNotes] = useState("");
+  const [additionalSampleNotes, setAdditionalSampleNotes] = useState("");
   const [targetBrief, setTargetBrief] = useState("");
   const [userMaterials, setUserMaterials] = useState("");
   const [sampleFile, setSampleFile] = useState<File | null>(null);
@@ -1238,22 +1376,29 @@ export default function Home() {
     if (!analysis || !plan || !activePlanVersion) return [];
     return buildMigrationMap({ analysis, plan, version: activePlanVersion });
   }, [analysis, plan, activePlanVersion]);
+  const activeTechniqueRecipe = useMemo(() => {
+    if (!analysis || !plan || !activePlanVersion) return null;
+    return buildTechniqueTransferRecipe({
+      analysis,
+      plan,
+      version: activePlanVersion,
+    });
+  }, [analysis, plan, activePlanVersion]);
   const previewMarkdown = useMemo(() => {
     if (analysis && plan) {
-      return [
-        analysisMarkdown,
-        renderMigrationMapMarkdown({ analysis, plan }),
-        renderStoryboardMarkdown({ analysis, plan }),
-        renderPlanMarkdown(plan),
-      ]
-        .filter(Boolean)
-        .join("\n");
+      return renderProjectMarkdown({
+        title: projectTitle,
+        analysis,
+        plan,
+        techniqueTransfer: activeTechniqueRecipe || undefined,
+        source: "项目要求",
+      });
     }
 
     return [analysisMarkdown, plan ? renderPlanMarkdown(plan) : ""]
       .filter(Boolean)
       .join("\n");
-  }, [analysis, analysisMarkdown, plan]);
+  }, [activeTechniqueRecipe, analysis, analysisMarkdown, plan, projectTitle]);
 
   async function refreshPlanHistory(nextProjectId: string) {
     setLoadingPlanHistory(true);
@@ -1330,6 +1475,7 @@ export default function Home() {
     formData.append("sampleUrl", sampleUrl);
     formData.append("localUploadName", localUploadName);
     formData.append("sampleNotes", sampleNotes || "用户上传了样例视频，请结合视频元数据和常见短视频结构进行拆解。");
+    formData.append("additionalSampleNotes", additionalSampleNotes);
     formData.append("targetBrief", targetBrief);
     if (sampleFile) {
       formData.append("sampleFile", sampleFile);
@@ -1354,10 +1500,10 @@ export default function Home() {
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
-        ? "未检测到可用 AI 密钥，已使用本地演示策略完成拆解。"
+        ? `未检测到可用 AI 密钥，已使用本地演示策略完成 ${payload.sourceSampleCount ?? 1} 条样例拆解。`
         : payload.directVideoUsed
-          ? `样例结构拆解完成：已启用整段视频理解，并结合 ${payload.visionFrameCount ?? 0} 个时间轴关键帧。`
-          : `样例结构拆解完成：已结合 ${payload.visionFrameCount ?? 0} 个时间轴关键帧。`,
+          ? `样例结构拆解完成：已启用整段视频理解，并结合 ${payload.visionFrameCount ?? 0} 个时间轴关键帧；样例数 ${payload.sourceSampleCount ?? 1}。`
+          : `样例结构拆解完成：已结合 ${payload.visionFrameCount ?? 0} 个时间轴关键帧；样例数 ${payload.sourceSampleCount ?? 1}。`,
     });
   }
 
@@ -1503,6 +1649,7 @@ export default function Home() {
     setProjectTitle(preset.projectTitle);
     setSampleTitle(preset.sampleTitle);
     setSampleNotes(preset.sampleNotes);
+    setAdditionalSampleNotes("");
     setTargetBrief(preset.targetBrief);
     setUserMaterials(preset.userMaterials);
     setSampleUrl("");
@@ -1797,6 +1944,21 @@ export default function Home() {
                   value={sampleNotes}
                   onChange={(event) => setSampleNotes(event.target.value)}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="additionalSampleNotes">补充样例（可选）</Label>
+                <Textarea
+                  id="additionalSampleNotes"
+                  placeholder={`多样例模式：每条样例用 --- 分隔。可写：
+标题：教育产品样例
+0-2s 先给痛点，2-8s 三段证据，结尾 CTA。`}
+                  value={additionalSampleNotes}
+                  onChange={(event) => setAdditionalSampleNotes(event.target.value)}
+                  rows={3}
+                />
+                <p className="text-xs leading-5 text-muted-foreground">
+                  用来证明系统能从多条优质样例中汇总共性结构，上传视频仍以主样例为准。
+                </p>
               </div>
               <Button className="w-full" onClick={handleAnalyze}>
                 {status.type === "loading" ? <Loader2 className="animate-spin" /> : <ClipboardList />}
@@ -2229,6 +2391,10 @@ export default function Home() {
                   ) : null}
 
                   {plan.evaluation ? <EvaluationPanel evaluation={plan.evaluation} /> : null}
+
+                  {activeTechniqueRecipe ? (
+                    <TechniqueTransferPanel recipe={activeTechniqueRecipe} />
+                  ) : null}
 
                   <StoryboardPreview
                     version={activePlanVersion}

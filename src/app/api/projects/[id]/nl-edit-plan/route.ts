@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 import { applyNaturalLanguageEdits } from "@/lib/nl-edit";
-import { renderPlanMarkdown } from "@/lib/markdown";
+import { renderProjectMarkdown } from "@/lib/markdown";
 import { diffPlans } from "@/lib/plan-diff";
 import { migratedVideoPlanSchema, videoStructureAnalysisSchema } from "@/lib/schemas";
 
@@ -69,7 +69,12 @@ export async function POST(
     const parsedPlan = migratedVideoPlanSchema.parse(record.data);
     const result = applyNaturalLanguageEdits(parsedPlan, instruction, analysis?.success ? analysis.data : undefined);
 
-    const markdown = renderPlanMarkdown(result.plan);
+    const markdown = renderProjectMarkdown({
+      title: project.title,
+      analysis: analysis?.success ? analysis.data : undefined,
+      plan: result.plan,
+      source: "项目要求",
+    });
     const dryRun = Boolean(body.dryRun);
     const diff = diffPlans(parsedPlan, result.plan);
 

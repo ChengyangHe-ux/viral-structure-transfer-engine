@@ -133,10 +133,29 @@ export const planEvaluationSchema = z.object({
   judgePitch: z.string().min(1),
 });
 
+export const materialAssetSchema = z.object({
+  id: z.string().min(1),
+  kind: z.enum(["image", "video", "text", "link"]),
+  label: z.string().min(1),
+  detectedSignals: z.array(z.string().min(1)).default([]),
+  suggestedSlots: z.array(z.string().min(1)).default([]),
+  qualityScore: z.number().int().min(0).max(100),
+  highlightReason: z.string().min(1),
+  recommendedUse: z.string().min(1),
+});
+
+export const materialSlotRecommendationSchema = z.object({
+  assetId: z.string().min(1),
+  label: z.string().min(1),
+  reason: z.string().min(1),
+  fitScore: z.number().int().min(0).max(100),
+});
+
 export const materialAdaptationSchema = z.object({
   providedMaterialsSummary: z.string().min(1),
   sufficiencyScore: z.number().int().min(0).max(100),
   missingSlotCount: z.number().int().min(0),
+  assets: z.array(materialAssetSchema).default([]),
   slots: z.array(
     z.object({
       slotId: z.string().min(1),
@@ -144,6 +163,7 @@ export const materialAdaptationSchema = z.object({
       requiredFor: z.string().min(1),
       requiredMaterial: z.string().min(1),
       matchedMaterial: z.string().min(1),
+      recommendedAssets: z.array(materialSlotRecommendationSchema).default([]),
       fit: z.enum(["matched", "partial", "missing"]),
       impact: z.string().min(1),
       completionStrategy: z.enum([
@@ -211,6 +231,16 @@ export const analyzeSampleRequestSchema = z.object({
   sampleUrl: z.string().url().optional().or(z.literal("")),
   localUploadName: z.string().optional().or(z.literal("")),
   sampleNotes: z.string().min(1),
+  additionalSampleNotes: z.string().optional().default(""),
+  additionalSamples: z
+    .array(
+      z.object({
+        sampleTitle: z.string().min(1),
+        sampleUrl: z.string().url().optional().or(z.literal("")),
+        sampleNotes: z.string().min(1),
+      }),
+    )
+    .default([]),
   targetBrief: z.string().default(""),
 });
 
@@ -232,6 +262,8 @@ export type MigratedVideoPlan = z.infer<typeof migratedVideoPlanSchema>;
 export type PlanBeat = z.infer<typeof planBeatSchema>;
 export type PlanVersion = z.infer<typeof planVersionSchema>;
 export type PlanEvaluation = z.infer<typeof planEvaluationSchema>;
+export type MaterialAsset = z.infer<typeof materialAssetSchema>;
+export type MaterialSlotRecommendation = z.infer<typeof materialSlotRecommendationSchema>;
 export type MaterialAdaptation = z.infer<typeof materialAdaptationSchema>;
 export type RetrievedEditingTechnique = z.infer<typeof retrievedEditingTechniqueSchema>;
 export type AwardReadiness = z.infer<typeof awardReadinessSchema>;

@@ -10,6 +10,11 @@ function list(items: string[]) {
   return items.map((item) => `- ${item}`).join("\n");
 }
 
+function fallbackText(value: string | number | undefined | null, fallback = "--") {
+  if (value === undefined || value === null || value === "") return fallback;
+  return String(value);
+}
+
 export function renderAnalysisMarkdown(analysis: VideoStructureAnalysis) {
   return `## 样例结构拆解
 
@@ -97,8 +102,21 @@ ${plan.materialAdaptation ? `### 素材缺口与补全
 
 - 素材充分度：${plan.materialAdaptation.sufficiencyScore}/100
 - 缺口数量：${plan.materialAdaptation.missingSlotCount}
+- 已识别素材资产：${plan.materialAdaptation.assets.length}
 - 素材概览：${plan.materialAdaptation.providedMaterialsSummary}
 - 时间线调整：${plan.materialAdaptation.timelineAdjustment}
+
+${plan.materialAdaptation.assets.length ? `#### 真实素材资产盘点
+
+| 素材 | 类型 | 推荐槽位 | 质量 | 高光理由 | 用法 |
+| --- | --- | --- | --- | --- | --- |
+${plan.materialAdaptation.assets
+  .map(
+    (asset) =>
+      `| ${asset.label} | ${asset.kind} | ${asset.suggestedSlots.join(" / ") || "--"} | ${asset.qualityScore}/100 | ${asset.highlightReason} | ${asset.recommendedUse} |`,
+  )
+  .join("\n")}
+` : ""}
 
 | 结构槽位 | 匹配状态 | 需要素材 | 当前匹配 | 影响 | 补全策略 |
 | --- | --- | --- | --- | --- | --- |
@@ -206,6 +224,63 @@ ${recipe.sceneTransfers
 `;
 }
 
+export function renderTechniqueComparisonMarkdown(recipe: TechniqueTransferRecipe) {
+  return `## 样例-结果手法对比
+
+| 对比维度 | 样例指纹 | 新结果承接 |
+| --- | --- | --- |
+| 节奏 | ${recipe.sourceProfile.shotDensityPer10s} 镜/10s；Hook ${recipe.sourceProfile.hookWindowSeconds}s；CTA ${recipe.sourceProfile.ctaHoldSeconds}s | ${recipe.sceneTransfers.length} 个可渲染镜头，按源样例强度分配 beat intensity |
+| 字幕 | ${recipe.sourceProfile.captionPlacement}；${recipe.sourceProfile.captionDensity}；${recipe.sourceProfile.subtitleDensityPer10s} 屏/10s | 每段字幕继承位置/密度，并保留可编辑口播字段 |
+| 转场 | ${recipe.sourceProfile.transitionStyle}；${recipe.sourceProfile.motionStyle} | Remotion timeline 使用同一转场倾向和音频 cue |
+| 包装 | ${recipe.sourceProfile.packagingTags.join(" / ") || "--"} | 每段输出保留 inherited packaging tags |
+
+| 源样例 | 输出段落 | 强度 | 字幕/转场 | 素材状态 | 证明点 |
+| --- | --- | --- | --- | --- | --- |
+${recipe.sceneTransfers
+  .map(
+    (scene) =>
+      `| ${scene.sampleTimeRange} ${scene.sourcePurpose} | ${scene.outputTimeRange} ${scene.outputPurpose} | ${scene.beatIntensity}/100 | ${scene.captionPlacement}/${scene.captionDensity}/${scene.transitionStyle} | ${scene.materialSlotName}（${materialFitText(scene.materialFit)}） | ${scene.mappedTechnique} |`,
+  )
+  .join("\n")}
+`;
+}
+
+export function renderScoringEvidenceMarkdown({
+  analysis,
+  plan,
+  techniqueTransfer,
+}: {
+  analysis?: VideoStructureAnalysis;
+  plan?: MigratedVideoPlan;
+  techniqueTransfer?: TechniqueTransferRecipe;
+}) {
+  const material = plan?.materialAdaptation;
+  const evaluation = plan?.evaluation;
+  const versions = plan?.versions.length ?? 0;
+  const beatCount = plan?.versions.reduce((sum, version) => sum + version.scriptBeats.length, 0) ?? 0;
+  const assets = material?.assets.length ?? 0;
+  const missingSlots = material?.missingSlotCount ?? 0;
+  const mappedScenes = techniqueTransfer?.sceneTransfers.length ?? 0;
+
+  return `## 评分证据矩阵
+
+| 评分项 | 当前证据 | 验收口径 |
+| --- | --- | --- |
+| 样例输入与基础解析 | ${analysis ? `${analysis.sampleTitle}；${analysis.beatMap.length} 个样例节拍；${fallbackText(analysis.durationSeconds, "手工/抽帧时长")}` : "待生成"} | 支持样例文本、链接、上传视频和补充样例文本；媒体元信息/关键帧进入拆解。 |
+| 结构拆解 | ${analysis ? `Hook ${analysis.hookPatterns.length} 条；节奏/字幕/包装/音乐/卖点/CTA 均有字段` : "待生成"} | 覆盖脚本结构、节奏结构、包装结构 3 类。 |
+| 结构迁移生成 | ${plan ? `${versions} 个版本；${beatCount} 个脚本 beat；${mappedScenes} 个手法映射` : "待生成"} | 输出脚本、分镜、时间线草案、包装建议和成片协议。 |
+| 素材缺口识别 | ${material ? `素材充分度 ${material.sufficiencyScore}/100；缺口 ${missingSlots} 个；资产 ${assets} 个` : "待生成"} | 明确开头、主体、过程、对比、证据、CTA 槽位状态。 |
+| 素材缺口补全 | ${material ? material.slots.map((slot) => slot.completionStrategy).join(" / ") : "待生成"} | 结构重排、字幕补全、包装补全、AIGC 占位和素材复用均可解释。 |
+| 迁移过程可视化 | ${techniqueTransfer ? `源样例到输出 ${mappedScenes} 行，含时间段、规则、强度、素材状态` : "待生成"} | UI/Markdown 展示“学到了什么、迁移到哪里、缺口怎么补”。 |
+| 结果可验证 | ${plan ? `可导出 Markdown/JSON，可用 Remotion 渲染 MP4；推荐版本 ${fallbackText(evaluation?.bestVersion)}` : "待生成"} | 分镜/时间线/样例-结果对比/有声视频任一或多项可展示。 |
+| 画面包装能力 | ${techniqueTransfer ? techniqueTransfer.sourceProfile.packagingTags.join(" / ") : "待生成"} | 字幕样式、标题条/卖点卡、转场、贴纸/强调元素可进入脚本和渲染。 |
+| 多版本生成 | ${versions} 个版本 | 至少 2 个版本且定位差异明确。 |
+| 真实素材适配 | ${assets} 个资产被分类推荐 | 用户素材被识别为图片/视频/文本/入口，并映射到结构槽位。 |
+| 人工可调与自然语言改片 | 页面支持字段编辑、保存历史稿、自然语言预览/应用 | 现场可改 hook、卖点顺序、节奏、包装和结尾表达。 |
+| 项目说明与安全边界 | README / ARCHITECTURE / SUBMISSION / DEMO_SCRIPT | 说明 AI 架构、工具协议、安全边界和 AI 辅助工具使用。 |
+`;
+}
+
 export function renderStoryboardMarkdown({
   analysis,
   plan,
@@ -273,7 +348,15 @@ ${analysis && plan ? renderMigrationMapMarkdown({ analysis, plan }) : ""}
 
 ${resolvedTechniqueTransfer ? renderTechniqueTransferMarkdown(resolvedTechniqueTransfer) : ""}
 
+${resolvedTechniqueTransfer ? renderTechniqueComparisonMarkdown(resolvedTechniqueTransfer) : ""}
+
 ${analysis && plan ? renderStoryboardMarkdown({ analysis, plan }) : ""}
+
+${renderScoringEvidenceMarkdown({
+  analysis,
+  plan,
+  techniqueTransfer: resolvedTechniqueTransfer,
+})}
 
 ${plan ? renderPlanMarkdown(plan) : ""}
 `;

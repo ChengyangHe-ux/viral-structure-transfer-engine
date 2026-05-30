@@ -139,12 +139,15 @@ async function main() {
     analysis: analysisResult.analysis,
     plan: planResult.plan,
     techniqueTransfer,
+    materialAssets: planResult.plan.materialAdaptation?.assets ?? [],
     diagnostics: {
       analysisUsedFallback: analysisResult.usedFallback,
       planUsedFallback: planResult.usedFallback,
       aiError: analysisResult.aiError || planResult.aiError,
       directVideoUsed: analysisResult.directVideoUsed,
       visionFrameCount: analysisResult.visionFrameCount,
+      multiSampleSupported: true,
+      materialAssetCount: planResult.plan.materialAdaptation?.assets.length ?? 0,
     },
   };
 
@@ -158,6 +161,8 @@ async function main() {
 - 时间轴关键帧：${analysisResult.visionFrameCount} 帧（${mediaMeta.frameTimestamps.map((seconds) => `${seconds.toFixed(1)}s`).join(" / ") || "--"}）
 - 样例拆解：${analysisResult.usedFallback ? "本地保底" : "AI 生成"}
 - 迁移方案：${planResult.usedFallback ? "本地保底" : "AI 生成"}
+- 真实素材资产：${planResult.plan.materialAdaptation?.assets.length ?? 0} 个
+- 多样例能力：API 支持主样例 + 补充样例合并，导出稿会保留来源样例标题
 - 诊断信息：${analysisResult.aiError || planResult.aiError || "无"}
 
 `;

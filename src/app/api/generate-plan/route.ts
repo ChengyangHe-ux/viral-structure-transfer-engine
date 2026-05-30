@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { generateMigratedPlan } from "@/lib/ai";
 import { prisma } from "@/lib/db";
-import { renderPlanMarkdown } from "@/lib/markdown";
+import { renderProjectMarkdown } from "@/lib/markdown";
 import {
   generatePlanRequestSchema,
   videoStructureAnalysisSchema,
@@ -33,7 +33,12 @@ export async function POST(request: NextRequest) {
       direction: input.direction,
       analysis,
     });
-    const markdown = renderPlanMarkdown(plan);
+    const markdown = renderProjectMarkdown({
+      title: project.title,
+      analysis,
+      plan,
+      source: "项目要求",
+    });
 
     await prisma.project.update({
       where: { id: project.id },

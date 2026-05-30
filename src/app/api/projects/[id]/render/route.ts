@@ -6,7 +6,10 @@ import { spawn } from "node:child_process";
 import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
-import { migratedVideoPlanSchema } from "@/lib/schemas";
+import {
+  migratedVideoPlanSchema,
+  videoStructureAnalysisSchema,
+} from "@/lib/schemas";
 
 export const runtime = "nodejs";
 
@@ -51,7 +54,10 @@ export async function POST(
     const { id } = await context.params;
     const body = (await request.json()) as RequestBody;
 
-    const project = await prisma.project.findUnique({ where: { id } });
+    const project = await prisma.project.findUnique({
+      where: { id },
+      include: { sampleAnalysis: true },
+    });
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
@@ -66,6 +72,9 @@ export async function POST(
     }
 
     const plan = migratedVideoPlanSchema.parse(record.data);
+    const analysis = project.sampleAnalysis
+      ? videoStructureAnalysisSchema.parse(project.sampleAnalysis.data)
+      : null;
     const quality: RenderQuality = body.quality === "draft" ? "draft" : "high";
     const mode: RenderMode =
       body.mode === "commercial"
@@ -81,7 +90,7 @@ export async function POST(
     const outputPath = path.join(renderDir, `${renderId}.mp4`);
 
     const inputPath = path.join(renderDir, `${renderId}.json`);
-    await writeFile(inputPath, JSON.stringify({ plan }, null, 2), "utf8");
+    await writeFile(inputPath, JSON.stringify({ plan, analysis }, null, 2), "utf8");
 
     const tsxBin = path.resolve(process.cwd(), "node_modules", ".bin", "tsx");
     await runCommand(tsxBin, [
