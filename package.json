@@ -22,7 +22,8 @@
     "submission:check": "node scripts/submission-check.mjs && npm run award:check && npm run verify",
     "submission:pack": "node scripts/submission-pack.mjs",
     "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push"
+    "prisma:push": "prisma db push",
+    "champion:check": "tsx scripts/champion-check.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.47",

@@ -37,6 +37,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  evaluateChampionRubric,
+  type ChampionRubricReport,
+} from "@/lib/champion-rubric";
 import { demoPresets } from "@/lib/demo-presets";
 import {
   renderPlanMarkdown,
@@ -785,6 +789,110 @@ function AwardReadinessPanel({
   );
 }
 
+function championVerdictText(verdict: ChampionRubricReport["verdict"]) {
+  if (verdict === "champion-ready") return "冠军答辩";
+  if (verdict === "finalist-ready") return "决赛可交";
+  return "证据待补";
+}
+
+function championVerdictVariant(verdict: ChampionRubricReport["verdict"]) {
+  if (verdict === "champion-ready") return "success";
+  if (verdict === "finalist-ready") return "secondary";
+  return "warning";
+}
+
+function ChampionRubricPanel({
+  report,
+}: {
+  report: ChampionRubricReport;
+}) {
+  const groups = useMemo(() => {
+    const names = Array.from(new Set(report.items.map((item) => item.group)));
+    return names.map((name) => {
+      const rows = report.items.filter((item) => item.group === name);
+      return {
+        name,
+        rows,
+        score: rows.reduce((sum, item) => sum + item.score, 0),
+        maxScore: rows.reduce((sum, item) => sum + item.maxScore, 0),
+      };
+    });
+  }, [report]);
+
+  return (
+    <div className="space-y-4 rounded-lg border bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="mb-2 flex items-center gap-2">
+            <Trophy className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">冠军验收台</h3>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={championVerdictVariant(report.verdict)}>
+              {championVerdictText(report.verdict)}
+            </Badge>
+            <Badge variant="outline">官方基础分 {report.baseScore}/100</Badge>
+            <Badge variant="outline">加分 {report.bonusScore}/10</Badge>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {report.pitch}
+          </p>
+        </div>
+        <div className="min-w-[118px] rounded-lg border bg-background px-4 py-3 text-center">
+          <p className="text-xs text-muted-foreground">含加分</p>
+          <p className="mt-1 text-3xl font-semibold text-primary">
+            {report.totalScoreWithBonus}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {groups.map((group) => (
+          <div className="rounded-lg border bg-background p-3" key={group.name}>
+            <div className="flex items-center justify-between gap-2">
+              <p className="line-clamp-2 text-xs font-semibold text-foreground">
+                {group.name}
+              </p>
+              <span className="shrink-0 text-xs font-semibold text-primary">
+                {group.score}/{group.maxScore}
+              </span>
+            </div>
+            <div className="mt-2 h-1.5 rounded-full bg-secondary">
+              <div
+                className="h-1.5 rounded-full bg-primary"
+                style={{ width: `${Math.round((group.score / group.maxScore) * 100)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+              {group.rows
+                .filter((item) => item.passed)
+                .slice(0, 2)
+                .map((item) => item.label)
+                .join(" / ")}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2">
+        {report.items.slice(0, 12).map((item) => (
+          <div
+            className="grid gap-2 rounded-md border bg-background p-3 md:grid-cols-[150px_72px_minmax(0,1fr)_170px]"
+            key={item.key}
+          >
+            <p className="text-xs font-semibold text-foreground">{item.label}</p>
+            <Badge variant={item.passed ? "success" : "warning"}>
+              {item.score}/{item.maxScore}
+            </Badge>
+            <p className="text-xs leading-5 text-muted-foreground">{item.evidence}</p>
+            <p className="text-xs leading-5 text-muted-foreground">{item.judgePanel}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function fitText(fit: MaterialAdaptation["slots"][number]["fit"]) {
   if (fit === "matched") return "已匹配";
   if (fit === "partial") return "部分匹配";
@@ -1384,6 +1492,14 @@ export default function Home() {
       version: activePlanVersion,
     });
   }, [analysis, plan, activePlanVersion]);
+  const championRubric = useMemo(() => {
+    if (!analysis || !plan) return null;
+    return evaluateChampionRubric({
+      analysis,
+      plan,
+      techniqueTransfer: activeTechniqueRecipe || undefined,
+    });
+  }, [activeTechniqueRecipe, analysis, plan]);
   const previewMarkdown = useMemo(() => {
     if (analysis && plan) {
       return renderProjectMarkdown({
@@ -2388,6 +2504,10 @@ export default function Home() {
 
                   {plan.awardReadiness ? (
                     <AwardReadinessPanel readiness={plan.awardReadiness} />
+                  ) : null}
+
+                  {championRubric ? (
+                    <ChampionRubricPanel report={championRubric} />
                   ) : null}
 
                   {plan.evaluation ? <EvaluationPanel evaluation={plan.evaluation} /> : null}

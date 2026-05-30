@@ -37,10 +37,19 @@ npm run award:check
 
 该命令会用离线案例跑“大奖目标看板”，要求所有演示案例达到 90+，防止提交前只看功能可用、没看参赛说服力。
 
+## 冠军级验收
+
+```bash
+npm run champion:check
+```
+
+该命令会按题目官方 100 分评分表检查离线案例是否达到 `champion-ready`，并在最终演示包存在时验证 `final-video.mp4` 质量报告为 100/100、导出稿包含手法迁移配方、样例-结果对比、真实素材资产和官方评分表拆解。
+
 ## 评委快速验收
 
 - 快速指南：`docs/JUDGE_GUIDE.md`
 - 提交清单：`docs/SUBMISSION.md`
+- 冠军答辩手册：`docs/CHAMPIONSHIP_PLAYBOOK.md`
 - AI 架构 / 工具协议 / 安全边界：`docs/ARCHITECTURE.md`
 - 最终演示包：`npm run demo:final -- --out-dir submissions/final-coconut-latte --quality high`
 - 打包源码和最终演示证据：`npm run submission:pack -- --include-final-demo-dir submissions/final-coconut-latte`
@@ -151,6 +160,7 @@ AI_VIDEO_FRAME_COUNT="12"
 - 展示真实素材资产盘点，让评审看到已有素材能撑哪些结构槽位。
 - 自动给出质量评分、推荐主版本和优先修改建议。
 - 自动生成“大奖目标看板”，把冲奖目标拆成结构迁移、RAG 可解释、成片可执行、现场可控和上交证据 5 个评分项。
+- 自动生成“冠军验收台”，按题目官方评分表拆解 100 分基础项和 10 分加分项。
 - 支持自然语言编辑当前方案，并保存新的修订版本。
 - 导出 Markdown 或 JSON。
 - 数据通过 Prisma + SQLite 存储。
@@ -158,6 +168,7 @@ AI_VIDEO_FRAME_COUNT="12"
 ## 演示材料
 
 - [比赛演示脚本](docs/DEMO_SCRIPT.md)
+- [冠军答辩手册](docs/CHAMPIONSHIP_PLAYBOOK.md)
 - [AI 架构、工具协议与安全边界](docs/ARCHITECTURE.md)
 - [拿奖导向改进方案](docs/AWARD_UPGRADE_PLAN.md)
 - [参赛提交清单](docs/SUBMISSION.md)

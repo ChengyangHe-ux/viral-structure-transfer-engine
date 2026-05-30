@@ -1,4 +1,8 @@
 import type { MigratedVideoPlan, VideoStructureAnalysis } from "@/lib/schemas";
+import {
+  evaluateChampionRubric,
+  type ChampionRubricReport,
+} from "@/lib/champion-rubric";
 import { buildMigrationMap, materialFitText } from "@/lib/mapping";
 import { buildStoryboardFrames } from "@/lib/storyboard";
 import {
@@ -281,6 +285,41 @@ export function renderScoringEvidenceMarkdown({
 `;
 }
 
+export function renderChampionRubricMarkdown(report: ChampionRubricReport) {
+  const groups = Array.from(new Set(report.items.map((item) => item.group)));
+
+  return `## 官方评分表拆解
+
+- 基础分：${report.baseScore}/100
+- 加分项：${report.bonusScore}/10
+- 含加分总分：${report.totalScoreWithBonus}/110
+- 状态：${report.verdict}
+- 答辩重点：${report.pitch}
+
+${groups
+  .map((group) => {
+    const rows = report.items.filter((item) => item.group === group);
+    const score = rows.reduce((sum, item) => sum + item.score, 0);
+    const maxScore = rows.reduce((sum, item) => sum + item.maxScore, 0);
+
+    return `### ${group}
+
+小计：${score}/${maxScore}
+
+| 评分点 | 分数 | 证据 | 展示位置 |
+| --- | --- | --- | --- |
+${rows
+  .map(
+    (item) =>
+      `| ${item.label} | ${item.score}/${item.maxScore} | ${item.evidence} | ${item.judgePanel} |`,
+  )
+  .join("\n")}
+`;
+  })
+  .join("\n")}
+`;
+}
+
 export function renderStoryboardMarkdown({
   analysis,
   plan,
@@ -325,6 +364,14 @@ export function renderProjectMarkdown({
   const resolvedTechniqueTransfer =
     techniqueTransfer ??
     (analysis && plan ? buildTechniqueTransferRecipe({ analysis, plan }) : undefined);
+  const championRubric =
+    analysis && plan
+      ? evaluateChampionRubric({
+          analysis,
+          plan,
+          techniqueTransfer: resolvedTechniqueTransfer,
+        })
+      : undefined;
 
   return `---
 title: ${JSON.stringify(title)}
@@ -357,6 +404,8 @@ ${renderScoringEvidenceMarkdown({
   plan,
   techniqueTransfer: resolvedTechniqueTransfer,
 })}
+
+${championRubric ? renderChampionRubricMarkdown(championRubric) : ""}
 
 ${plan ? renderPlanMarkdown(plan) : ""}
 `;

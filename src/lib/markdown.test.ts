@@ -92,6 +92,9 @@ describe("markdown rendering", () => {
     expect(markdown).toContain("## 样例-结果手法对比");
     expect(markdown).toContain("## 竖屏分镜预览");
     expect(markdown).toContain("## 评分证据矩阵");
+    expect(markdown).toContain("## 官方评分表拆解");
+    expect(markdown).toContain("基础闭环完成度");
+    expect(markdown).toContain("加分项");
     expect(markdown).toContain("源样例时间段");
     expect(markdown).toContain("样例节拍");
     expect(markdown).toContain("补全动作");

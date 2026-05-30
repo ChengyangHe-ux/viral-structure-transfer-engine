@@ -6,6 +6,7 @@
 - 项目说明：`README.md`
 - AI 架构、工具协议与安全边界：`docs/ARCHITECTURE.md`
 - 演示讲稿与录屏流程：`docs/DEMO_SCRIPT.md`
+- 冠军答辩手册：`docs/CHAMPIONSHIP_PLAYBOOK.md`
 - 可编辑答辩 PPT：`docs/presentation/爆款结构迁移引擎答辩稿.pptx`
 - AIGC 视觉素材提示词：`docs/IMAGEGEN_PROMPTS.md`
 - 视频产物 case：`cases/ai-resume-demo-case.md`
@@ -41,6 +42,14 @@ npm run award:check
 ```
 
 当前离线演示案例（AI 简历、学习平板、咖啡新品、矿泉水）都必须在“大奖目标看板”达到 90+，否则提交前应先补强结构、RAG 技巧命中、真实素材证据或答辩证明链。
+
+冠军级验收建议再运行：
+
+```bash
+npm run champion:check
+```
+
+该命令使用官方评分表 evaluator 检查每个离线案例是否 `champion-ready`，并在最终演示包存在时检查视频质量 100/100 以及 `case.md` 是否包含手法迁移配方、样例-结果手法对比、评分证据矩阵、官方评分表拆解和真实素材资产盘点。
 
 ## 打包提交物（可选）
 
@@ -130,6 +139,7 @@ npm run video:check -- --input renders/coffee-launch-short-high.mp4
 | 结构迁移生成 | 生成脚本、分镜式时间线、包装建议、多版本方案 | “多版本方案脚本” |
 | 手法迁移证明 | `TechniqueTransferRecipe` 把源样例时间段、可迁移规则、字幕密度、转场倾向、beat intensity 和素材状态映射到新片段 | “手法迁移配方”面板 / 导出 Markdown |
 | 冲奖目标自评 | 将大奖目标拆成 5 个评分项，并给出下一步补强动作 | “大奖目标看板” |
+| 官方评分表 | 将题目 100 分基础项 + 10 分加分项结构化评分，列出证据和展示位置 | “冠军验收台” / Markdown 导出 |
 | 素材缺口识别 | 结构槽位诊断，识别开头、主体、过程、对比、证据、CTA 缺口 | “素材缺口与补全” |
 | 素材缺口补全 | 结构重排、文案补全、包装补全、素材复用 | “素材缺口与补全” |
 | 真实素材适配 | 用户素材被拆成图片、视频、文本证据、行动入口资产，并推荐到结构槽位 | “素材缺口与补全 / 真实素材资产” |
