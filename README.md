@@ -62,25 +62,14 @@ npm run video:check -- --input renders/coffee-launch-short-high.mp4
 如果要给评委证明“样例视频 -> 整段理解 -> 结构拆解 -> 迁移方案 -> 有声成片”整条链路，可以运行：
 
 ```bash
-npm run demo:full-flow -- \
-  --sample-video renders/coconut-latte-zhipu-motion-stable-15.mp4 \
-  --out-dir outputs/full-flow-demo
-
-npm run video:render -- \
-  --input outputs/full-flow-demo/case.json \
-  --out renders/full-flow-demo-no-shake-15.mp4 \
-  --composition CoconutLatteAigcCommercial15 \
-  --quality high \
-  --title "别把它当普通拿铁" \
-  --product-name "生椰轻乳拿铁" \
-  --image-assets "outputs/zhipu-video-assets/processed/hero-cup.png,outputs/zhipu-video-assets/processed/pour-macro.png,outputs/zhipu-video-assets/processed/commute-desk-v2.png,outputs/zhipu-video-assets/processed/cta-packshot.png"
-
-npm run video:check -- --input renders/full-flow-demo-no-shake-15.mp4 --min-duration 14 --max-duration 16
+npm run demo:final -- \
+  --out-dir submissions/final-coconut-latte \
+  --asset-manifest outputs/zhipu-video-assets/asset-manifest.json
 ```
 
-`demo:full-flow` 会在 Markdown 开头写入运行证据，包括是否启用整段视频理解、采样帧数、是否使用本地保底和输出路径。
+如果没有 `asset-manifest.json`，命令会自动使用本机已生成的四张稳定商品图作为主视觉素材。输出目录包含 `final-video.mp4`、`quality-report.json`、`keyframes/*.png`、`final-flow/case.md` 和 `final-flow/case.json`。
 
-说明：主推荐演示片不把图生视频直接放在开场大特写，因为饮品杯身、冰块和液体边缘容易出现逐帧形变。最终出片用 AIGC 静帧 + Remotion 可控推镜保证开场稳定；智谱/CogVideoX 更适合生成补充 B-roll 或非核心主视觉镜头。
+说明：主推荐演示片不把图生视频直接放在开场大特写，因为饮品杯身、冰块和液体边缘容易出现逐帧形变。最终出片用 AIGC 静帧 + Remotion 可控推镜保证开场稳定；智谱/CogVideoX 更适合生成补充 B-roll、转场垫片或非核心主视觉镜头。
 
 ## 本地样例素材（可选）
 

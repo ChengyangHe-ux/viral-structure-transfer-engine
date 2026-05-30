@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { decideSceneAssetUsage, isSceneVideoAllowed } from "@/lib/render-policy";
 import {
   classifyBeatFocus,
   compactText,
@@ -61,5 +62,27 @@ describe("video-style", () => {
   it("compacts and extracts highlight text", () => {
     expect(compactText("abcdef", 4)).toBe("abc…");
     expect(extractHighlightText("把商品信息提前，让用户马上理解价值", 6)).toBe("把商品信息…");
+  });
+
+  it("keeps generated video out of the first commercial scene by default", () => {
+    const [heroDecision] = decideSceneAssetUsage(
+      {
+        assets: [
+          {
+            id: "generated-closeup",
+            path: "render-sources/generated-closeup.mp4",
+            kind: "video",
+            slotKind: "hero",
+            sceneIndex: 0,
+            source: "generated-video",
+            riskFlags: [],
+          },
+        ],
+      },
+      4,
+    );
+
+    expect(heroDecision?.useVideo).toBe(false);
+    expect(isSceneVideoAllowed(heroDecision)).toBe(false);
   });
 });

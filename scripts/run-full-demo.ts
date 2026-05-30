@@ -1,10 +1,11 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { analyzeSample, generateMigratedPlan } from "../src/lib/ai";
 import { renderProjectMarkdown } from "../src/lib/markdown";
 import { extractPreviewFrameSet, inspectMedia } from "../src/lib/media";
 import { mediaMetaSchema } from "../src/lib/schemas";
+
+type EnvMap = Record<string, string>;
 
 type Args = {
   sampleVideo: string;
@@ -48,7 +49,39 @@ function parseArgs(argv: string[]): Args {
   };
 }
 
+function parseEnvFile(content: string): EnvMap {
+  const env: EnvMap = {};
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(trimmed);
+    if (!match) continue;
+    const [, key, rawValue] = match;
+    if (!key) continue;
+    env[key] = rawValue?.trim().replace(/^['"]|['"]$/g, "") ?? "";
+  }
+  return env;
+}
+
+async function loadLocalEnv() {
+  const originalKeys = new Set(Object.keys(process.env));
+  for (const file of [".env", ".env.local"]) {
+    try {
+      const fileEnv = parseEnvFile(await readFile(path.resolve(process.cwd(), file), "utf8"));
+      for (const [key, value] of Object.entries(fileEnv)) {
+        if (!value) continue;
+        if (originalKeys.has(key) && process.env[key]) continue;
+        process.env[key] = value;
+      }
+    } catch {
+      // Local env files are optional.
+    }
+  }
+}
+
 async function main() {
+  await loadLocalEnv();
+  const { analyzeSample, generateMigratedPlan } = await import("../src/lib/ai");
   const args = parseArgs(process.argv.slice(2));
   const sampleVideoPath = path.resolve(process.cwd(), args.sampleVideo);
   const outDir = path.resolve(process.cwd(), args.outDir);

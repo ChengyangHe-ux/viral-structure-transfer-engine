@@ -129,6 +129,8 @@ export function RemotionRoot() {
           plan: null,
           renderTimeline: null,
           imageAssets: [],
+          videoAssets: [],
+          sceneAssetDecisions: [],
         } satisfies CoconutLatteAigcCommercial15Props}
       />
     </>

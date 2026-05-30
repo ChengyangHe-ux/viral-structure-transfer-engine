@@ -6,6 +6,8 @@ type Args = {
   prompt: string;
   out: string;
   metadataOut?: string;
+  slotId?: string;
+  slotKind?: string;
   model: string;
   baseUrl: string;
   duration: 5 | 10;
@@ -70,6 +72,8 @@ function parseArgs(argv: string[]): Args {
     prompt: parsed.prompt,
     out: parsed.out,
     metadataOut: parsed["metadata-out"],
+    slotId: parsed["slot-id"],
+    slotKind: parsed["slot-kind"],
     model: parsed.model || process.env.ZHIPU_VIDEO_MODEL || "cogvideox-2",
     baseUrl: parsed["base-url"] || process.env.AI_BASE_URL || DEFAULT_BASE_URL,
     duration: duration === 10 ? 10 : 5,
@@ -302,8 +306,13 @@ async function main() {
     JSON.stringify(
       {
         taskId,
+        slotId: args.slotId ?? null,
+        slotKind: args.slotKind ?? null,
         model: args.model,
         prompt: args.prompt,
+        quality: args.quality,
+        duration: args.duration,
+        withAudio: args.withAudio,
         out: resolvedOut,
         result,
       },

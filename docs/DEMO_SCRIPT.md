@@ -23,24 +23,15 @@
 如果现场不想完全依赖点击操作，可以先跑一遍端到端脚本生成证据材料：
 
 ```bash
-npm run demo:full-flow -- \
-  --sample-video renders/coconut-latte-zhipu-motion-stable-15.mp4 \
-  --out-dir outputs/full-flow-demo
-
-npm run video:render -- \
-  --input outputs/full-flow-demo/case.json \
-  --out renders/full-flow-demo-no-shake-15.mp4 \
-  --composition CoconutLatteAigcCommercial15 \
-  --quality high \
-  --title "别把它当普通拿铁" \
-  --product-name "生椰轻乳拿铁" \
-  --image-assets "outputs/zhipu-video-assets/processed/hero-cup.png,outputs/zhipu-video-assets/processed/pour-macro.png,outputs/zhipu-video-assets/processed/commute-desk-v2.png,outputs/zhipu-video-assets/processed/cta-packshot.png"
-
-npm run video:check -- --input renders/full-flow-demo-no-shake-15.mp4 --min-duration 14 --max-duration 16
+npm run demo:final -- \
+  --out-dir submissions/final-coconut-latte \
+  --asset-manifest outputs/zhipu-video-assets/asset-manifest.json
 ```
 
-这条链路会完成：样例视频解析 → 整段视频理解（可用时）→ 时间轴关键帧理解 → 结构拆解 → 迁移方案 → Markdown/JSON 证据 → Remotion 有声竖屏成片。
+这条链路会完成：样例视频解析 → 整段视频理解（可用时）→ 时间轴关键帧理解 → 结构拆解 → 迁移方案 → Markdown/JSON 证据 → Remotion 有声竖屏成片 → 质量报告 → 关键帧截图。
 主推荐出片使用稳定商品图做开场可控推镜，避免图生视频在杯身、冰块和液体边缘产生逐帧抖动；CogVideoX 生成视频保留为补充镜头能力，不作为开场主视觉。
+
+演示时先播放 `submissions/final-coconut-latte/final-video.mp4`，再打开 `submissions/final-coconut-latte/final-demo-report.md` 展示证据链、质量报告和关键帧。
 
 ## 评委提问回答
 

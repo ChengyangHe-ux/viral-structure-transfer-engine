@@ -9,6 +9,12 @@ import { path as ffmpegPath } from "@ffmpeg-installer/ffmpeg";
 import { path as ffprobePath } from "@ffprobe-installer/ffprobe";
 
 import { buildRenderTimelineFromPlan, renderTimelineSchema } from "../src/lib/render-timeline";
+import {
+  decideSceneAssetUsage,
+  visualAssetManifestSchema,
+  type SceneAssetDecision,
+  type VisualAsset,
+} from "../src/lib/render-policy";
 import { migratedVideoPlanSchema } from "../src/lib/schemas";
 import { writeSyntheticVideoAudio } from "./synthesize-video-audio";
 
@@ -21,6 +27,7 @@ type Args = {
   sourceVideo?: string;
   imageAssets?: string;
   videoAssets?: string;
+  assetManifest?: string;
   quality: "high" | "draft";
   audioMode: "auto" | "off";
 };
@@ -44,6 +51,7 @@ function parseArgs(argv: string[]): Args {
     if (item === "--source-video") args.sourceVideo = argv[index + 1];
     if (item === "--image-assets") args.imageAssets = argv[index + 1];
     if (item === "--video-assets") args.videoAssets = argv[index + 1];
+    if (item === "--asset-manifest") args.assetManifest = argv[index + 1];
     if (item === "--quality") args.quality = argv[index + 1] as Args["quality"];
     if (item === "--audio-mode") args.audioMode = argv[index + 1] as Args["audioMode"];
   }
@@ -59,6 +67,7 @@ function parseArgs(argv: string[]): Args {
     sourceVideo: args.sourceVideo,
     imageAssets: args.imageAssets,
     videoAssets: args.videoAssets,
+    assetManifest: args.assetManifest,
     quality: args.quality === "draft" ? "draft" : "high",
     audioMode: args.audioMode === "off" ? "off" : "auto",
   };
@@ -206,6 +215,61 @@ async function prepareStaticVideoAssets(videoAssets: string | undefined) {
   };
 }
 
+async function copyRenderAsset(assetPath: string) {
+  const resolvedAsset = path.resolve(process.cwd(), assetPath);
+  const renderSourceDir = path.resolve(process.cwd(), "public", "render-sources");
+  const safeName = path
+    .basename(resolvedAsset)
+    .replace(/[^a-zA-Z0-9_.-]/g, "-");
+  const fileName = `${randomUUID()}-${safeName}`;
+  const cleanupPath = path.join(renderSourceDir, fileName);
+  await mkdir(renderSourceDir, { recursive: true });
+  await copyFile(resolvedAsset, cleanupPath);
+  return {
+    publicPath: `render-sources/${fileName}`,
+    cleanupPath,
+  };
+}
+
+async function prepareAssetManifest(assetManifest: string | undefined) {
+  if (!assetManifest) {
+    return {
+      imageAssetPaths: [] as string[],
+      videoAssetPaths: [] as string[],
+      sceneAssetDecisions: [] as SceneAssetDecision[],
+      cleanupPaths: [] as string[],
+    };
+  }
+
+  const resolvedManifest = path.resolve(process.cwd(), assetManifest);
+  const manifest = visualAssetManifestSchema.parse(
+    JSON.parse(await readFile(resolvedManifest, "utf8")),
+  );
+  const cleanupPaths: string[] = [];
+  const preparedAssets = await Promise.all(
+    manifest.assets.map(async (asset): Promise<VisualAsset> => {
+      const copied = await copyRenderAsset(asset.path);
+      cleanupPaths.push(copied.cleanupPath);
+      return {
+        ...asset,
+        path: copied.publicPath,
+      };
+    }),
+  );
+  const decisions = decideSceneAssetUsage({ assets: preparedAssets }, 4);
+
+  return {
+    imageAssetPaths: preparedAssets
+      .filter((asset) => asset.kind === "image")
+      .map((asset) => asset.path),
+    videoAssetPaths: preparedAssets
+      .filter((asset) => asset.kind === "video")
+      .map((asset) => asset.path),
+    sceneAssetDecisions: decisions,
+    cleanupPaths,
+  };
+}
+
 async function prepareSyntheticAudio({
   renderTimeline,
   audioMode,
@@ -282,9 +346,13 @@ async function main() {
   const { videoAssetPaths, cleanupPaths: videoCleanupPaths } = await prepareStaticVideoAssets(
     args.videoAssets,
   );
-  const cleanupPaths = [cleanupPath, ...imageCleanupPaths, ...videoCleanupPaths].filter(
-    Boolean,
-  ) as string[];
+  const manifestAssets = await prepareAssetManifest(args.assetManifest);
+  const cleanupPaths = [
+    cleanupPath,
+    ...imageCleanupPaths,
+    ...videoCleanupPaths,
+    ...manifestAssets.cleanupPaths,
+  ].filter(Boolean) as string[];
   const highQualityCompositionIds = new Set([
     "HighQualityShort",
     "CoffeeLaunchShort",
@@ -307,8 +375,9 @@ async function main() {
     title: args.title || title || "爆款结构迁移引擎（结构演示稿）",
     productName: args.productName || "天然矿泉水",
     sourceVideoPath,
-    imageAssets: imageAssetPaths,
-    videoAssets: videoAssetPaths,
+    imageAssets: [...imageAssetPaths, ...manifestAssets.imageAssetPaths],
+    videoAssets: [...videoAssetPaths, ...manifestAssets.videoAssetPaths],
+    sceneAssetDecisions: manifestAssets.sceneAssetDecisions,
     renderTimeline: highQualityInput?.renderTimeline ?? null,
   };
 

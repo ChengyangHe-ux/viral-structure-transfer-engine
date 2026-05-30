@@ -12,6 +12,11 @@ import {
 } from "remotion";
 
 import type { RenderTimeline } from "@/lib/render-timeline";
+import {
+  heroVideoApprovalFlag,
+  isSceneVideoAllowed,
+  type SceneAssetDecision,
+} from "@/lib/render-policy";
 import type { MigratedVideoPlan } from "@/lib/schemas";
 
 export type CoconutLatteAigcCommercial15Props = {
@@ -21,6 +26,7 @@ export type CoconutLatteAigcCommercial15Props = {
   renderTimeline: RenderTimeline | null;
   imageAssets?: string[];
   videoAssets?: string[];
+  sceneAssetDecisions?: SceneAssetDecision[];
 };
 
 const TOTAL_FRAMES = 450;
@@ -78,12 +84,46 @@ function videoAt(videoAssets: string[] | undefined, index: number) {
   return videoAssets?.[index] || null;
 }
 
+function decisionAt(sceneAssetDecisions: SceneAssetDecision[] | undefined, index: number) {
+  return sceneAssetDecisions?.find((decision) => decision.sceneIndex === index);
+}
+
+function imageForScene({
+  imageAssets,
+  sceneAssetDecisions,
+  index,
+}: {
+  imageAssets: string[] | undefined;
+  sceneAssetDecisions: SceneAssetDecision[] | undefined;
+  index: number;
+}) {
+  return decisionAt(sceneAssetDecisions, index)?.imagePath || assetAt(imageAssets, index);
+}
+
+function videoForScene({
+  videoAssets,
+  sceneAssetDecisions,
+  index,
+}: {
+  videoAssets: string[] | undefined;
+  sceneAssetDecisions: SceneAssetDecision[] | undefined;
+  index: number;
+}) {
+  const decision = decisionAt(sceneAssetDecisions, index);
+  if (decision) {
+    return isSceneVideoAllowed(decision) ? decision.videoPath : null;
+  }
+  if (index === 0) return null;
+  return videoAt(videoAssets, index);
+}
+
 export function CoconutLatteAigcCommercial15({
   title,
   productName = "生椰轻乳拿铁",
   renderTimeline,
   imageAssets,
   videoAssets,
+  sceneAssetDecisions,
 }: CoconutLatteAigcCommercial15Props) {
   const frame = useCurrentFrame();
 
@@ -117,8 +157,12 @@ export function CoconutLatteAigcCommercial15({
       <AigcScene
         frame={frame}
         index={0}
-        imagePath={assetAt(imageAssets, 0)}
-        videoPath={videoAt(videoAssets, 0)}
+        imagePath={imageForScene({ imageAssets, sceneAssetDecisions, index: 0 })}
+        videoPath={
+          decisionAt(sceneAssetDecisions, 0)?.riskFlags.includes(heroVideoApprovalFlag)
+            ? videoForScene({ videoAssets, sceneAssetDecisions, index: 0 })
+            : null
+        }
         eyebrow="NEW / LOW SUGAR"
         headline={title || sceneRanges[0].title}
         subline="低糖、椰香、咖啡后劲，把下午三点拉回来。"
@@ -127,7 +171,8 @@ export function CoconutLatteAigcCommercial15({
       <AigcScene
         frame={frame}
         index={1}
-        imagePath={assetAt(imageAssets, 1)}
+        imagePath={imageForScene({ imageAssets, sceneAssetDecisions, index: 1 })}
+        videoPath={videoForScene({ videoAssets, sceneAssetDecisions, index: 1 })}
         eyebrow="CREAMY POUR"
         headline={sceneRanges[1].title}
         subline="咖啡后劲跟上，甜感收得更轻。"
@@ -137,7 +182,8 @@ export function CoconutLatteAigcCommercial15({
       <AigcScene
         frame={frame}
         index={2}
-        imagePath={assetAt(imageAssets, 2)}
+        imagePath={imageForScene({ imageAssets, sceneAssetDecisions, index: 2 })}
+        videoPath={videoForScene({ videoAssets, sceneAssetDecisions, index: 2 })}
         eyebrow="AFTERNOON RESET"
         headline={sceneRanges[2].title}
         subline="通勤、工位、赶作业，都要醒得柔和一点。"
@@ -146,7 +192,8 @@ export function CoconutLatteAigcCommercial15({
       <AigcScene
         frame={frame}
         index={3}
-        imagePath={assetAt(imageAssets, 3)}
+        imagePath={imageForScene({ imageAssets, sceneAssetDecisions, index: 3 })}
+        videoPath={videoForScene({ videoAssets, sceneAssetDecisions, index: 3 })}
         eyebrow="TRY TODAY"
         headline={sceneRanges[3].title}
         subline={`低糖轻乳 · ${productName}`}

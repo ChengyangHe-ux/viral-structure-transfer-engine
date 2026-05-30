@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 
@@ -17,6 +18,7 @@ import {
 type Args = {
   input: string;
   thresholds: VideoQualityThresholds;
+  jsonOut?: string;
 };
 
 type FfprobeStream = {
@@ -47,6 +49,7 @@ function parseNumber(value: string | number | null | undefined) {
 function parseArgs(argv: string[]): Args {
   const thresholds = { ...defaultVideoQualityThresholds };
   let input = "";
+  let parsedJsonOut = "";
 
   for (let index = 0; index < argv.length; index += 1) {
     const item = argv[index];
@@ -57,10 +60,11 @@ function parseArgs(argv: string[]): Args {
     if (item === "--max-duration") thresholds.maxDurationSeconds = Number(next);
     if (item === "--min-mean-volume") thresholds.minMeanVolumeDb = Number(next);
     if (item === "--max-peak-volume") thresholds.maxPeakVolumeDb = Number(next);
+    if (item === "--json-out") parsedJsonOut = next ?? "";
   }
 
   if (!input) throw new Error("Missing --input <video.mp4>");
-  return { input, thresholds };
+  return { input, thresholds, jsonOut: parsedJsonOut };
 }
 
 function run(command: string, args: string[]) {
@@ -164,6 +168,24 @@ async function main() {
   const probe = await probeVideo(inputPath);
   const result = evaluateVideoQuality(probe, args.thresholds);
   printReport(probe, result);
+  if (args.jsonOut) {
+    const jsonOutPath = path.resolve(process.cwd(), args.jsonOut);
+    await mkdir(path.dirname(jsonOutPath), { recursive: true });
+    await writeFile(
+      jsonOutPath,
+      JSON.stringify(
+        {
+          generatedAt: new Date().toISOString(),
+          probe,
+          thresholds: args.thresholds,
+          result,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+  }
   if (!result.passed) process.exit(1);
 }
 
