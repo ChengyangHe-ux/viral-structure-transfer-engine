@@ -1626,9 +1626,6 @@ export default function Home() {
         </div>
 
         <div className="studio-actions">
-          <Badge variant="secondary">比赛演示版</Badge>
-          <Badge variant="outline">Remotion</Badge>
-          <Badge variant="outline">结构指纹</Badge>
           <label className="studio-toggle">
             <input
               type="checkbox"
@@ -1667,25 +1664,6 @@ export default function Home() {
           <span className={`studio-step ${plan ? "is-done" : ""}`}>迁移脚本</span>
           <ArrowRight className="hidden size-4 md:block" />
           <span className={`studio-step ${plan ? "is-active" : ""}`}>编辑出片</span>
-        </div>
-
-        <div className="studio-metrics">
-          <div className="studio-metric">
-            <span>样例</span>
-            <strong>{analysis ? "已拆解" : "待输入"}</strong>
-          </div>
-          <div className="studio-metric">
-            <span>方案</span>
-            <strong>{plan ? `${plan.versions.length} 版` : "待生成"}</strong>
-          </div>
-          <div className="studio-metric">
-            <span>素材适配</span>
-            <strong>{plan?.materialAdaptation ? "已诊断" : "待诊断"}</strong>
-          </div>
-          <div className="studio-metric">
-            <span>出片</span>
-            <strong>{renderingVideo ? "渲染中" : plan ? "可渲染" : "待方案"}</strong>
-          </div>
         </div>
 
         <div className={`studio-status-message is-${status.type}`}>
