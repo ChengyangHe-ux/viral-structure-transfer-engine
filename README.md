@@ -57,6 +57,30 @@ npm run video:render -- --input cases/generated/demo-咖啡新品.json --out ren
 npm run video:check -- --input renders/coffee-launch-short-high.mp4
 ```
 
+## 一键全流程演示
+
+如果要给评委证明“样例视频 -> 整段理解 -> 结构拆解 -> 迁移方案 -> 有声成片”整条链路，可以运行：
+
+```bash
+npm run demo:full-flow -- \
+  --sample-video renders/coconut-latte-zhipu-motion-stable-15.mp4 \
+  --out-dir outputs/full-flow-demo
+
+npm run video:render -- \
+  --input outputs/full-flow-demo/case.json \
+  --out renders/full-flow-demo-15.mp4 \
+  --composition CoconutLatteAigcCommercial15 \
+  --quality high \
+  --title "别把它当普通拿铁" \
+  --product-name "生椰轻乳拿铁" \
+  --video-assets outputs/zhipu-video-clips/coconut-latte-hero-motion-stable.mp4 \
+  --image-assets "outputs/zhipu-video-assets/processed/hero-cup.png,outputs/zhipu-video-assets/processed/pour-macro.png,outputs/zhipu-video-assets/processed/commute-desk-v2.png,outputs/zhipu-video-assets/processed/cta-packshot.png"
+
+npm run video:check -- --input renders/full-flow-demo-15.mp4 --min-duration 14 --max-duration 16
+```
+
+`demo:full-flow` 会在 Markdown 开头写入运行证据，包括是否启用整段视频理解、采样帧数、是否使用本地保底和输出路径。
+
 ## 本地样例素材（可选）
 
 - 把 `mp4/mov` 放到 `data/uploads/`（已在 `.gitignore` 中，不会被提交）。
@@ -72,17 +96,21 @@ AI_BASE_URL="https://api.openai.com/v1"
 AI_API_KEY=""
 AI_MODEL_TEXT="gpt-4.1-mini"
 AI_MODEL_VISION="gpt-4.1-mini"
+AI_MODEL_VIDEO="gpt-4.1-mini"
 AI_SUPPORTS_STRUCTURED_OUTPUTS="false"
 AI_REQUEST_TIMEOUT_MS="45000"
 AI_MAX_OUTPUT_TOKENS="4096"
-AI_VISION_FRAME_LIMIT="3"
+AI_VIDEO_INPUT_MODE="hybrid"
+AI_DIRECT_VIDEO_MAX_MB="20"
+AI_DIRECT_VIDEO_FPS="1"
+AI_VIDEO_FRAME_COUNT="12"
 AI_DISABLE_THINKING="false"
 ASR_PROVIDER="manual"
 ```
 
 未配置 `AI_API_KEY` 时，系统会自动使用本地演示策略，保证样例拆解、迁移方案和导出链路可跑通。若 OpenAI-compatible 服务不支持 schema response format，系统会自动改用文本 JSON 生成、提取、修复和 Zod 校验，不会把模型自由文本直接写入方案。
 
-上传样例视频时，后端会用 FFmpeg 抽取关键帧，并把最多 `AI_VISION_FRAME_LIMIT` 张 JPG 作为多模态 `image` 输入发给 `AI_MODEL_VISION`。视觉模型先输出画面观察笔记，再由 `AI_MODEL_TEXT` 整理成严格 Zod JSON；这样既让大模型直接观察画面，又避免视觉模型直接写复杂 JSON 时格式不稳。如果网关或模型不支持视觉，会自动回落到文本/元数据分析和本地兜底。
+上传样例视频时，系统采用混合视频理解：若模型/网关支持 `video_url`，会先把整段视频发给 `AI_MODEL_VIDEO`；同时后端会用 FFmpeg 抽取带时间戳的时间轴关键帧，并把最多 `AI_VIDEO_FRAME_COUNT` 张 JPG 作为多模态 `image` 输入发给 `AI_MODEL_VISION`。视觉模型先输出画面观察笔记，再由 `AI_MODEL_TEXT` 整理成严格 Zod JSON；这样既能“整段理解”，又能在视频直传不稳定时靠时间轴关键帧保底。
 
 智谱 / Z.ai 可用配置示例：
 
@@ -90,16 +118,19 @@ ASR_PROVIDER="manual"
 AI_BASE_URL="https://open.bigmodel.cn/api/paas/v4"
 AI_MODEL_TEXT="glm-4.5-air"
 AI_MODEL_VISION="glm-4.5v"
+AI_MODEL_VIDEO="glm-4.5v"
 AI_SUPPORTS_STRUCTURED_OUTPUTS="false"
 AI_DISABLE_THINKING="true"
 AI_MAX_OUTPUT_TOKENS="4096"
-AI_VISION_FRAME_LIMIT="3"
+AI_VIDEO_INPUT_MODE="hybrid"
+AI_VIDEO_FRAME_COUNT="12"
 ```
 
 ## 当前能力
 
 - 提供演示预设，适合现场快速跑通完整链路。
 - 上传样例视频或填写样例链接/观察文本。
+- 支持整段视频理解（可用时）+ 时间轴关键帧理解（稳定保底）。
 - 自动生成样例结构拆解。
 - 生成“结构指纹”面板，把 Hook 强度、镜头密度、字幕密度、证据位置、CTA 位置和包装标签浓缩成可视化指标。
 - 生成前检索本地剪辑技巧库（RAG），让方案不只会写文案，也知道“怎么剪”。

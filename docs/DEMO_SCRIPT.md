@@ -18,6 +18,30 @@
 10. 在“自然语言编辑”里输入“开头更强一点，并补充可信证据”，展示系统重写当前方案。
 11. 导出 Markdown，说明可以进入 Obsidian 或剪辑团队协作流程。
 
+## 一键全流程演示
+
+如果现场不想完全依赖点击操作，可以先跑一遍端到端脚本生成证据材料：
+
+```bash
+npm run demo:full-flow -- \
+  --sample-video renders/coconut-latte-zhipu-motion-stable-15.mp4 \
+  --out-dir outputs/full-flow-demo
+
+npm run video:render -- \
+  --input outputs/full-flow-demo/case.json \
+  --out renders/full-flow-demo-15.mp4 \
+  --composition CoconutLatteAigcCommercial15 \
+  --quality high \
+  --title "别把它当普通拿铁" \
+  --product-name "生椰轻乳拿铁" \
+  --video-assets outputs/zhipu-video-clips/coconut-latte-hero-motion-stable.mp4 \
+  --image-assets "outputs/zhipu-video-assets/processed/hero-cup.png,outputs/zhipu-video-assets/processed/pour-macro.png,outputs/zhipu-video-assets/processed/commute-desk-v2.png,outputs/zhipu-video-assets/processed/cta-packshot.png"
+
+npm run video:check -- --input renders/full-flow-demo-15.mp4 --min-duration 14 --max-duration 16
+```
+
+这条链路会完成：样例视频解析 → 整段视频理解（可用时）→ 时间轴关键帧理解 → 结构拆解 → 迁移方案 → Markdown/JSON 证据 → Remotion 有声竖屏成片。
+
 ## 评委提问回答
 
 ### 和普通文案生成有什么区别？

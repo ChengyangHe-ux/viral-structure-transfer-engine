@@ -16,12 +16,15 @@
 
 ### LLM / 多模态模型
 
-- 通过 OpenAI-compatible 接口接入云模型，使用 `AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL_TEXT`、`AI_MODEL_VISION` 配置。
-- 上传视频会先由 FFmpeg 抽取关键帧，再把最多 `AI_VISION_FRAME_LIMIT` 张本地 JPG 作为多模态 `image` parts 传给 `AI_MODEL_VISION`，让模型直接观察样例画面并输出视觉观察笔记。
+- 通过 OpenAI-compatible 接口接入云模型，使用 `AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL_TEXT`、`AI_MODEL_VISION`、`AI_MODEL_VIDEO` 配置。
+- 上传视频采用混合理解：支持 `video_url` 的网关会先由 `AI_MODEL_VIDEO` 直接观察整段视频；同时 FFmpeg 抽取带时间戳的时间轴关键帧，把最多 `AI_VIDEO_FRAME_COUNT` 张本地 JPG 作为多模态 `image` parts 传给 `AI_MODEL_VISION`。
 - `AI_MODEL_TEXT` 再把视觉观察笔记、样例描述和媒体元数据整理成严格 Zod JSON，避免视觉模型直接输出复杂 JSON 时格式不稳。
 - 系统要求模型输出符合 Zod Schema 的结构化 JSON，而不是自由文本。
 - 对不支持 schema response format 的本地 OpenAI-compatible 网关，系统会退到 `generateText`，再执行 JSON 提取、一次修复和 Zod 校验；校验失败才进入本地 fallback。
 - 对智谱 / Z.ai 的推理模型，可设置 `AI_DISABLE_THINKING=true`，服务端会附加 `thinking: { type: "disabled" }`，减少推理 token 消耗并提升 JSON 输出稳定性。
+- `AI_VIDEO_INPUT_MODE=hybrid` 默认先尝试整段视频理解，再用时间轴关键帧作为稳定保底；可改成 `direct`、`frames` 或 `off`。
+- `AI_DIRECT_VIDEO_MAX_MB` 控制本地视频转 data URL 的最大体积，避免请求体过大。
+- `AI_DIRECT_VIDEO_FPS` 控制整段视频理解的采样频率，默认 1 FPS。
 - `AI_MAX_OUTPUT_TOKENS` 默认 4096，避免视觉模型输出结构化拆解时被截断成不完整 JSON。
 - 未配置密钥时使用本地 fallback 策略，保证演示链路可运行。
 

@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "vitest --run",
     "cases:generate": "tsx scripts/generate-demo-cases.ts",
+    "demo:full-flow": "tsx scripts/run-full-demo.ts",
     "award:check": "tsx scripts/award-check.ts",
     "video:prepare-motion": "tsx scripts/prepare-motion-clip.ts",
     "video:render": "tsx scripts/render-video.ts",

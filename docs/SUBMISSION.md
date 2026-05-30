@@ -66,6 +66,16 @@ npm run cases:generate
 
 该命令会基于 `src/lib/demo-presets.ts` 生成 `cases/generated/*`，用于在无模型密钥时也能展示“样例拆解 → RAG 剪辑技巧 → 结构迁移 → 大奖目标看板 → 映射 → 质量诊断”的完整链路，并提供可复现实验材料。
 
+## 在线全流程演示（推荐录屏前跑一次）
+
+```bash
+npm run demo:full-flow -- \
+  --sample-video renders/coconut-latte-zhipu-motion-stable-15.mp4 \
+  --out-dir outputs/full-flow-demo
+```
+
+该命令会输出 `outputs/full-flow-demo/case.md` 和 `outputs/full-flow-demo/case.json`，Markdown 开头包含运行证据：整段视频理解是否启用、时间轴采样帧数、样例拆解/方案生成是否走本地保底。随后可用 `case.json` 继续渲染 Remotion 成片。
+
 ## 一键生成演示视频（Remotion，可选加分项）
 
 ```bash
