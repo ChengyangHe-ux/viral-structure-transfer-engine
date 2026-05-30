@@ -1,6 +1,10 @@
 import type { MigratedVideoPlan, VideoStructureAnalysis } from "@/lib/schemas";
 import { buildMigrationMap, materialFitText } from "@/lib/mapping";
 import { buildStoryboardFrames } from "@/lib/storyboard";
+import {
+  buildTechniqueTransferRecipe,
+  type TechniqueTransferRecipe,
+} from "@/lib/technique-transfer";
 
 function list(items: string[]) {
   return items.map((item) => `- ${item}`).join("\n");
@@ -177,6 +181,31 @@ ${rows
 `;
 }
 
+export function renderTechniqueTransferMarkdown(recipe: TechniqueTransferRecipe) {
+  return `## 手法迁移配方
+
+### 样例手法指纹
+- 摘要：${recipe.sourceProfile.summary}
+- Hook 窗口：${recipe.sourceProfile.hookWindowSeconds}s
+- 镜头密度：${recipe.sourceProfile.shotDensityPer10s} 镜/10s
+- 字幕密度：${recipe.sourceProfile.subtitleDensityPer10s} 屏/10s（${recipe.sourceProfile.captionDensity}）
+- 字幕位置：${recipe.sourceProfile.captionPlacement}
+- 转场倾向：${recipe.sourceProfile.transitionStyle}
+- 运动手法：${recipe.sourceProfile.motionStyle}
+- 包装标签：${recipe.sourceProfile.packagingTags.join(" / ")}
+
+### 源样例 → 新片段
+| 序号 | 源样例时间段 | 源手法目的 | 可迁移规则 | 新片段 | 实际映射手法 | 素材状态 | 补全方式 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+${recipe.sceneTransfers
+  .map(
+    (scene) =>
+      `| ${scene.index} | ${scene.sampleTimeRange} | ${scene.sourcePurpose} | ${scene.transferableRule} | ${scene.outputTimeRange} ${scene.outputPurpose} | ${scene.mappedTechnique} | ${scene.materialSlotName}（${materialFitText(scene.materialFit)}） | ${scene.completionPlan} |`,
+  )
+  .join("\n")}
+`;
+}
+
 export function renderStoryboardMarkdown({
   analysis,
   plan,
@@ -209,13 +238,19 @@ export function renderProjectMarkdown({
   title,
   analysis,
   plan,
+  techniqueTransfer,
   source,
 }: {
   title: string;
   analysis?: VideoStructureAnalysis;
   plan?: MigratedVideoPlan;
+  techniqueTransfer?: TechniqueTransferRecipe;
   source?: string;
 }) {
+  const resolvedTechniqueTransfer =
+    techniqueTransfer ??
+    (analysis && plan ? buildTechniqueTransferRecipe({ analysis, plan }) : undefined);
+
   return `---
 title: ${JSON.stringify(title)}
 tags:
@@ -235,6 +270,8 @@ ${source ? `关联需求：[[${source}]]\n` : ""}
 ${analysis ? renderAnalysisMarkdown(analysis) : ""}
 
 ${analysis && plan ? renderMigrationMapMarkdown({ analysis, plan }) : ""}
+
+${resolvedTechniqueTransfer ? renderTechniqueTransferMarkdown(resolvedTechniqueTransfer) : ""}
 
 ${analysis && plan ? renderStoryboardMarkdown({ analysis, plan }) : ""}
 

@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-import type { MigratedVideoPlan, PlanVersion } from "@/lib/schemas";
+import type { MigratedVideoPlan, PlanVersion, VideoStructureAnalysis } from "@/lib/schemas";
+import {
+  buildTechniqueTransferRecipe,
+  sampleTechniqueProfileSchema,
+  techniqueTransferRecipeSchema,
+  type TechniqueTransferScene,
+} from "@/lib/technique-transfer";
 
 const DEFAULT_FPS = 30;
 const DEFAULT_WIDTH = 1080;
@@ -64,6 +70,8 @@ export const renderTimelineSchema = z.object({
   coverTitle: z.string().min(1),
   captionTitle: z.string().min(1),
   audioBedPath: z.string().min(1).nullable().default(null),
+  techniqueProfile: sampleTechniqueProfileSchema.nullable().default(null),
+  transferRecipe: techniqueTransferRecipeSchema.nullable().default(null),
   scenes: z.array(renderSceneSchema).min(1),
   audioCues: z.array(renderAudioCueSchema).default([]),
   notes: z.array(z.string().min(1)).default([]),
@@ -87,6 +95,7 @@ type MaterialLike = {
 
 type BuildRenderTimelineInput = {
   plan: MigratedVideoPlan;
+  analysis?: VideoStructureAnalysis | null;
   materials?: MaterialLike[];
   fps?: number;
   width?: number;
@@ -128,8 +137,15 @@ function classifyFocus(text: string): RenderScene["focus"] {
   return "推进";
 }
 
-function transitionForFocus(focus: RenderScene["focus"], index: number): RenderScene["transition"] {
+function transitionForFocus(
+  focus: RenderScene["focus"],
+  index: number,
+  transfer?: TechniqueTransferScene,
+): RenderScene["transition"] {
   if (index === 0) return { type: "cut", durationFrames: 0 };
+  if (transfer?.transitionStyle === "flash-cut") return { type: "cut", durationFrames: 6 };
+  if (transfer?.transitionStyle === "wipe-slide") return { type: "slide", durationFrames: 14 };
+  if (transfer?.transitionStyle === "soft-fade") return { type: "fade", durationFrames: 16 };
   if (focus === "Hook") return { type: "slide", durationFrames: 12 };
   if (focus === "CTA") return { type: "wipe", durationFrames: 16 };
   if (focus === "证据") return { type: "fade", durationFrames: 10 };
@@ -178,19 +194,28 @@ function audioCuesForScene({
   scene,
   startFrame,
   durationFrames,
+  transfer,
 }: {
   scene: Pick<RenderScene, "focus" | "title">;
   startFrame: number;
   durationFrames: number;
+  transfer?: TechniqueTransferScene;
 }): RenderAudioCue[] {
   const strong = scene.focus === "Hook" || scene.focus === "CTA";
+  const transferredIntensity = transfer ? transfer.beatIntensity / 100 : null;
   const midFrame = startFrame + Math.round(durationFrames * 0.48);
   const cues: RenderAudioCue[] = [
     {
       atFrame: startFrame,
       type: strong ? "hit" : "beat",
-      intensity: strong ? 0.92 : 0.58,
-      label: `${scene.focus} 入场`,
+      intensity: transferredIntensity
+        ? Math.max(strong ? 0.72 : 0.44, transferredIntensity)
+        : strong
+          ? 0.92
+          : 0.58,
+      label: transfer
+        ? `迁移 ${transfer.sampleTimeRange} ${transfer.sourcePurpose}`
+        : `${scene.focus} 入场`,
     },
   ];
 
@@ -198,8 +223,12 @@ function audioCuesForScene({
     cues.push({
       atFrame: midFrame,
       type: scene.focus === "CTA" ? "cta" : "rise",
-      intensity: strong ? 0.82 : 0.48,
-      label: compact(scene.title, 16),
+      intensity: transferredIntensity
+        ? Math.max(strong ? 0.66 : 0.38, transferredIntensity * 0.86)
+        : strong
+          ? 0.82
+          : 0.48,
+      label: transfer ? compact(transfer.transferableRule, 16) : compact(scene.title, 16),
     });
   }
 
@@ -245,12 +274,16 @@ export function selectBestPlanVersion(plan: MigratedVideoPlan): PlanVersion {
 
 export function buildRenderTimelineFromPlan({
   plan,
+  analysis = null,
   materials = [],
   fps = DEFAULT_FPS,
   width = DEFAULT_WIDTH,
   height = DEFAULT_HEIGHT,
 }: BuildRenderTimelineInput): RenderTimeline {
   const version = selectBestPlanVersion(plan);
+  const transferRecipe = analysis
+    ? buildTechniqueTransferRecipe({ analysis, plan, version })
+    : null;
   const scenes = version.scriptBeats.map((beat, index) => {
     const { startSecond, endSecond } = parseTimeRange(beat.timeRange, index);
     const startFrame = Math.round(startSecond * fps);
@@ -269,6 +302,7 @@ export function buildRenderTimelineFromPlan({
       focus,
       title: compact(beat.shotPurpose, 24),
     };
+    const transfer = transferRecipe?.sceneTransfers[index];
 
     return {
       id: `scene-${index + 1}`,
@@ -281,8 +315,8 @@ export function buildRenderTimelineFromPlan({
       subtitle: beat.voiceoverOrSubtitle,
       captionTokens: tokenizeCaption(beat.voiceoverOrSubtitle, startFrame, durationFrames, fps),
       visualLayers: [visualLayer],
-      transition: transitionForFocus(focus, index),
-      audioCues: audioCuesForScene({ scene: sceneCore, startFrame, durationFrames }),
+      transition: transitionForFocus(focus, index, transfer),
+      audioCues: audioCuesForScene({ scene: sceneCore, startFrame, durationFrames, transfer }),
       materialFit: visualLayer.fit,
       materialSlotName: visualLayer.slotName,
       completionPlan: visualLayer.completionPlan,
@@ -308,11 +342,16 @@ export function buildRenderTimelineFromPlan({
     coverTitle: version.coverTitle,
     captionTitle: version.captionTitle,
     audioBedPath: null,
+    techniqueProfile: transferRecipe?.sourceProfile ?? null,
+    transferRecipe,
     scenes,
     audioCues,
     notes: [
       "LLM 只生成受控 RenderTimeline JSON，Remotion 只渲染白名单组件。",
       "真实素材不足时，用字幕、包装卡片和 AIGC 占位提示补足结构槽位。",
+      transferRecipe
+        ? "最终成片的节奏、字幕密度、包装标签和转场倾向来自样例手法迁移配方。"
+        : "未提供样例分析时，渲染使用方案脚本的默认节奏。",
     ],
   });
 }

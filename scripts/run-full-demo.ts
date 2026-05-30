@@ -4,6 +4,7 @@ import path from "node:path";
 import { renderProjectMarkdown } from "../src/lib/markdown";
 import { extractPreviewFrameSet, inspectMedia } from "../src/lib/media";
 import { mediaMetaSchema } from "../src/lib/schemas";
+import { buildTechniqueTransferRecipe } from "../src/lib/technique-transfer";
 
 type EnvMap = Record<string, string>;
 
@@ -112,10 +113,15 @@ async function main() {
     direction: args.direction,
     analysis: analysisResult.analysis,
   });
+  const techniqueTransfer = buildTechniqueTransferRecipe({
+    analysis: analysisResult.analysis,
+    plan: planResult.plan,
+  });
   const markdown = renderProjectMarkdown({
     title: args.projectTitle,
     analysis: analysisResult.analysis,
     plan: planResult.plan,
+    techniqueTransfer,
     source: "scripts/run-full-demo.ts",
   });
 
@@ -132,6 +138,7 @@ async function main() {
     mediaMeta,
     analysis: analysisResult.analysis,
     plan: planResult.plan,
+    techniqueTransfer,
     diagnostics: {
       analysisUsedFallback: analysisResult.usedFallback,
       planUsedFallback: planResult.usedFallback,

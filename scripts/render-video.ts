@@ -15,7 +15,7 @@ import {
   type SceneAssetDecision,
   type VisualAsset,
 } from "../src/lib/render-policy";
-import { migratedVideoPlanSchema } from "../src/lib/schemas";
+import { migratedVideoPlanSchema, videoStructureAnalysisSchema } from "../src/lib/schemas";
 import { writeSyntheticVideoAudio } from "./synthesize-video-audio";
 
 type Args = {
@@ -34,6 +34,7 @@ type Args = {
 
 type LoadedRenderInput = {
   plan: unknown;
+  analysis: unknown;
   renderTimeline: unknown;
   title?: string;
 };
@@ -84,11 +85,12 @@ async function loadPlanJson(inputPath: string): Promise<LoadedRenderInput> {
     const preset = isRecord(data.preset) ? data.preset : null;
     return {
       plan: data.plan ?? null,
+      analysis: data.analysis ?? null,
       renderTimeline: data.renderTimeline ?? null,
       title: typeof preset?.projectTitle === "string" ? preset.projectTitle : undefined,
     };
   }
-  return { plan: data, renderTimeline: null, title: undefined };
+  return { plan: data, analysis: null, renderTimeline: null, title: undefined };
 }
 
 function runCommand(command: string, args: string[]) {
@@ -300,20 +302,24 @@ async function prepareSyntheticAudio({
 
 async function buildHighQualityInput({
   plan,
+  analysis,
   renderTimeline,
   sourceVideoPath,
   audioMode,
 }: {
   plan: unknown;
+  analysis: unknown;
   renderTimeline: unknown;
   sourceVideoPath: string | null;
   audioMode: Args["audioMode"];
 }) {
   const parsedPlan = migratedVideoPlanSchema.parse(plan);
+  const parsedAnalysis = analysis ? videoStructureAnalysisSchema.parse(analysis) : null;
   const parsedTimeline = renderTimeline
     ? renderTimelineSchema.parse(renderTimeline)
     : buildRenderTimelineFromPlan({
         plan: parsedPlan,
+        analysis: parsedAnalysis,
         materials: sourceVideoPath
           ? [
               {
@@ -338,7 +344,7 @@ async function main() {
 
   await mkdir(path.dirname(resolvedOut), { recursive: true });
 
-  const { plan, renderTimeline, title } = await loadPlanJson(resolvedInput);
+  const { plan, analysis, renderTimeline, title } = await loadPlanJson(resolvedInput);
   const { sourceVideoPath, cleanupPath } = await prepareStaticSourceVideo(args.sourceVideo);
   const { imageAssetPaths, cleanupPaths: imageCleanupPaths } = await prepareStaticImageAssets(
     args.imageAssets,
@@ -363,6 +369,7 @@ async function main() {
     highQualityCompositionIds.has(args.compositionId)
       ? await buildHighQualityInput({
           plan,
+          analysis,
           renderTimeline,
           sourceVideoPath,
           audioMode: args.audioMode,

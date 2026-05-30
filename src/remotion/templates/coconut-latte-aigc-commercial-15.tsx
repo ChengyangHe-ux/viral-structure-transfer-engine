@@ -20,6 +20,7 @@ import {
   type SceneAssetDecision,
 } from "@/lib/render-policy";
 import type { MigratedVideoPlan } from "@/lib/schemas";
+import type { TechniqueTransferScene } from "@/lib/technique-transfer";
 import { calculateSceneOpacity } from "@/remotion/video-style";
 
 export type CoconutLatteAigcCommercial15Props = {
@@ -33,7 +34,19 @@ export type CoconutLatteAigcCommercial15Props = {
 };
 
 const TOTAL_FRAMES = 450;
-const sceneRanges = [
+type SceneRange = {
+  start: number;
+  end: number;
+  accent: string;
+  title: string;
+};
+
+type TransferredScene = {
+  range: SceneRange;
+  transfer?: TechniqueTransferScene;
+};
+
+const fallbackSceneRanges = [
   { start: 0, end: 90, accent: "#35dec0", title: "别把它当普通拿铁" },
   { start: 90, end: 210, accent: "#ffd27a", title: "椰香先出来" },
   { start: 210, end: 330, accent: "#8bd1ff", title: "下午三点轻一点醒" },
@@ -51,8 +64,7 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-function sceneOpacity(frame: number, index: number) {
-  const scene = sceneRanges[index]!;
+function sceneOpacity(frame: number, scene: SceneRange) {
   return calculateSceneOpacity({
     frame,
     start: scene.start,
@@ -63,8 +75,7 @@ function sceneOpacity(frame: number, index: number) {
   });
 }
 
-function sceneProgress(frame: number, index: number) {
-  const scene = sceneRanges[index]!;
+function sceneProgress(frame: number, scene: SceneRange) {
   return interpolate(frame, [scene.start, scene.end], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -72,8 +83,7 @@ function sceneProgress(frame: number, index: number) {
   });
 }
 
-function localFrame(frame: number, index: number) {
-  const scene = sceneRanges[index]!;
+function localFrame(frame: number, scene: SceneRange) {
   return clamp(frame - scene.start, 0, scene.end - scene.start);
 }
 
@@ -118,6 +128,186 @@ function videoForScene({
   return videoAt(videoAssets, index);
 }
 
+function compactText(text: string | undefined, maxLength: number) {
+  const clean = (text || "").replace(/\s+/g, " ").trim();
+  if (clean.length <= maxLength) return clean;
+  return `${clean.slice(0, Math.max(0, maxLength - 1))}…`;
+}
+
+function transferText(transfer: TechniqueTransferScene | undefined) {
+  if (!transfer) return "";
+  return [
+    transfer.sourcePurpose,
+    transfer.transferableRule,
+    transfer.outputPurpose,
+    transfer.outputLine,
+    transfer.mappedTechnique,
+  ].join(" ");
+}
+
+function isCtaTransfer(transfer: TechniqueTransferScene | undefined) {
+  return /cta|结尾|行动|转化|收束|入口|收藏|领取|购买|下单/i.test(transferText(transfer));
+}
+
+function isProofTransfer(transfer: TechniqueTransferScene | undefined) {
+  return /证据|背书|可信|证明|评价|参数|为什么|成立|商品|特写|第一/.test(transferText(transfer));
+}
+
+function isBenefitTransfer(transfer: TechniqueTransferScene | undefined) {
+  return /收益|场景|适用|使用|通勤|工位|下午|第二|利益|价值/.test(transferText(transfer));
+}
+
+function uniqueTransfers(items: Array<TechniqueTransferScene | undefined>) {
+  const seen = new Set<number>();
+  return items.filter((item): item is TechniqueTransferScene => {
+    if (!item || seen.has(item.index)) return false;
+    seen.add(item.index);
+    return true;
+  });
+}
+
+function selectCommercialTransfers(renderTimeline: RenderTimeline | null) {
+  const transfers = renderTimeline?.transferRecipe?.sceneTransfers ?? [];
+  if (!transfers.length) return [] as TechniqueTransferScene[];
+
+  const first = transfers[0];
+  const cta = [...transfers].reverse().find(isCtaTransfer) ?? transfers.at(-1);
+  const proof = transfers.find((transfer, index) => index > 0 && isProofTransfer(transfer));
+  const benefit = transfers.find(
+    (transfer, index) =>
+      index > 0 && transfer.index !== proof?.index && transfer.index !== cta?.index && isBenefitTransfer(transfer),
+  );
+  const picked = uniqueTransfers([first, proof, benefit, cta]);
+  for (const transfer of transfers) {
+    if (picked.length >= 4) break;
+    if (!picked.some((item) => item.index === transfer.index)) picked.push(transfer);
+  }
+
+  return picked.slice(0, 4);
+}
+
+function allocateFrameDurations(transfers: TechniqueTransferScene[]) {
+  const count = Math.max(1, transfers.length);
+  const minimum = count >= 4 ? 76 : 90;
+  const weights = transfers.map((transfer) => Math.max(0.04, transfer.durationWeight || 0.1));
+  const fixed = new Set<number>();
+  const durations = new Array(count).fill(0) as number[];
+
+  for (let pass = 0; pass < count; pass += 1) {
+    const remainingTotal = TOTAL_FRAMES - [...fixed].reduce((sum, index) => sum + durations[index]!, 0);
+    const remainingWeight = weights.reduce(
+      (sum, weight, index) => (fixed.has(index) ? sum : sum + weight),
+      0,
+    );
+    let changed = false;
+    for (let index = 0; index < count; index += 1) {
+      if (fixed.has(index)) continue;
+      const duration = Math.round((weights[index]! / remainingWeight) * remainingTotal);
+      if (duration < minimum) {
+        durations[index] = minimum;
+        fixed.add(index);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+
+  const fixedTotal = [...fixed].reduce((sum, index) => sum + durations[index]!, 0);
+  const remainingIndices = weights.map((_, index) => index).filter((index) => !fixed.has(index));
+  const remainingWeight = remainingIndices.reduce((sum, index) => sum + weights[index]!, 0);
+  let cursorTotal = fixedTotal;
+  for (const index of remainingIndices) {
+    durations[index] = Math.round((weights[index]! / remainingWeight) * (TOTAL_FRAMES - fixedTotal));
+    cursorTotal += durations[index]!;
+  }
+  durations[count - 1] = Math.max(minimum, durations[count - 1]! + (TOTAL_FRAMES - cursorTotal));
+
+  return durations;
+}
+
+function buildTransferredScenes(renderTimeline: RenderTimeline | null): TransferredScene[] {
+  const transfers = selectCommercialTransfers(renderTimeline);
+  if (!transfers.length) {
+    return fallbackSceneRanges.map((range) => ({ range }));
+  }
+
+  const durations = allocateFrameDurations(transfers);
+  let cursor = 0;
+  return fallbackSceneRanges.map((fallback, index) => {
+    const transfer = transfers[index];
+    if (!transfer) return { range: fallback };
+    const duration = index === transfers.length - 1 ? TOTAL_FRAMES - cursor : durations[index]!;
+    const range = {
+      ...fallback,
+      start: cursor,
+      end: index === transfers.length - 1 ? TOTAL_FRAMES : cursor + duration,
+      title: compactText(transfer.outputPurpose, 18) || fallback.title,
+    };
+    cursor = range.end;
+    return { range, transfer };
+  });
+}
+
+function transferHeadline(transfer: TechniqueTransferScene | undefined, fallback: string) {
+  return compactText(transfer?.outputPurpose, 16) || fallback;
+}
+
+function transferSubline(transfer: TechniqueTransferScene | undefined, fallback: string) {
+  if (!transfer) return fallback;
+  return compactText(`源 ${transfer.sampleTimeRange}：${transfer.transferableRule}`, 31);
+}
+
+function transferCaption(transfer: TechniqueTransferScene | undefined, fallback: string[]) {
+  if (!transfer) return fallback;
+  const materialLabel =
+    transfer.materialFit === "missing"
+      ? "补素材"
+      : transfer.materialFit === "partial"
+        ? "包装补全"
+        : "素材已匹配";
+  const tags = [
+    `源${transfer.sampleTimeRange.replace(/秒/g, "s")}`,
+    compactText(transfer.outputPurpose, 7),
+    materialLabel,
+  ].filter(Boolean);
+  return tags.length >= 3 ? tags.slice(0, 3) : fallback;
+}
+
+function sourceFocusLabel(transfer: TechniqueTransferScene) {
+  const text = transferText(transfer);
+  if (/hook|开头|停留|吸引|反差/i.test(text)) return "HOOK";
+  if (/cta|结尾|行动|转化|收束|入口/i.test(text)) return "CTA";
+  if (/证据|背书|可信|证明|评价|参数/.test(text)) return "证据";
+  if (/收益|场景|使用|适用|通勤|工位/.test(text)) return "场景";
+  return "推进";
+}
+
+function transferStructure(transfer: TechniqueTransferScene | undefined, fallback: string) {
+  if (!transfer) return fallback;
+  return `${sourceFocusLabel(transfer)} / 源 ${transfer.sampleTimeRange}`;
+}
+
+function transferGapLabel(transfer: TechniqueTransferScene | undefined, fallback: string) {
+  if (!transfer) return fallback;
+  return compactText(`${transfer.materialSlotName}：${transfer.completionPlan}`, 32);
+}
+
+function materialActionLabel(transfer: TechniqueTransferScene | undefined) {
+  if (!transfer) return "补素材";
+  if (transfer.materialFit === "missing") return "补素材";
+  if (transfer.materialFit === "partial") return "包装补全";
+  return "素材";
+}
+
+function transferProofItems(transfer: TechniqueTransferScene | undefined, fallback: string[]) {
+  if (!transfer) return fallback;
+  return [
+    `样例 ${transfer.sampleTimeRange}`,
+    compactText(transfer.transferableRule, 12),
+    compactText(transfer.outputPurpose, 12),
+  ];
+}
+
 export function CoconutLatteAigcCommercial15({
   title,
   productName = "生椰轻乳拿铁",
@@ -127,6 +317,11 @@ export function CoconutLatteAigcCommercial15({
   sceneAssetDecisions,
 }: CoconutLatteAigcCommercial15Props) {
   const frame = useCurrentFrame();
+  const transferredScenes = buildTransferredScenes(renderTimeline);
+  const cutFrames = transferredScenes
+    .slice(1)
+    .map((scene) => scene.range.start)
+    .filter((cut) => cut > 0 && cut < TOTAL_FRAMES);
 
   return (
     <AbsoluteFill
@@ -158,6 +353,8 @@ export function CoconutLatteAigcCommercial15({
       <AigcScene
         frame={frame}
         index={0}
+        sceneRange={transferredScenes[0]?.range ?? fallbackSceneRanges[0]}
+        transfer={transferredScenes[0]?.transfer}
         imagePath={imageForScene({ imageAssets, sceneAssetDecisions, index: 0 })}
         videoPath={
           decisionAt(sceneAssetDecisions, 0)?.riskFlags.includes(heroVideoApprovalFlag)
@@ -165,58 +362,74 @@ export function CoconutLatteAigcCommercial15({
             : null
         }
         eyebrow="NEW / LOW SUGAR"
-        headline={title || sceneRanges[0].title}
-        subline="低糖、椰香、咖啡后劲，把下午三点拉回来。"
-        caption={["别划走", "关键不是甜", "是喝完很轻松"]}
-        structure="HOOK / 结果前置"
-        gapLabel="稳定商品图 + Remotion 推镜"
-        proofItems={["样例开头迁移", "反差字幕", "0-3s 抢停留"]}
+        headline={transferHeadline(transferredScenes[0]?.transfer, title || fallbackSceneRanges[0].title)}
+        subline={transferSubline(
+          transferredScenes[0]?.transfer,
+          "低糖、椰香、咖啡后劲，把下午三点拉回来。",
+        )}
+        caption={transferCaption(transferredScenes[0]?.transfer, ["别划走", "关键不是甜", "是喝完很轻松"])}
+        structure={transferStructure(transferredScenes[0]?.transfer, "HOOK / 结果前置")}
+        gapLabel={transferGapLabel(transferredScenes[0]?.transfer, "稳定商品图 + Remotion 推镜")}
+        proofItems={transferProofItems(transferredScenes[0]?.transfer, [
+          "样例开头迁移",
+          "反差字幕",
+          "0-3s 抢停留",
+        ])}
       />
       <AigcScene
         frame={frame}
         index={1}
+        sceneRange={transferredScenes[1]?.range ?? fallbackSceneRanges[1]}
+        transfer={transferredScenes[1]?.transfer}
         imagePath={imageForScene({ imageAssets, sceneAssetDecisions, index: 1 })}
         videoPath={videoForScene({ videoAssets, sceneAssetDecisions, index: 1 })}
         eyebrow="CREAMY POUR"
-        headline={sceneRanges[1].title}
-        subline="咖啡后劲跟上，甜感收得更轻。"
-        caption={["椰香先出来", "咖啡后劲跟上", "甜感收得轻"]}
-        structure="证据 / 卖点推进"
-        gapLabel="AIGC 微距补制作镜头"
-        proofItems={["椰香", "低糖", "咖啡后劲"]}
+        headline={transferHeadline(transferredScenes[1]?.transfer, fallbackSceneRanges[1].title)}
+        subline={transferSubline(transferredScenes[1]?.transfer, "咖啡后劲跟上，甜感收得更轻。")}
+        caption={transferCaption(transferredScenes[1]?.transfer, ["椰香先出来", "咖啡后劲跟上", "甜感收得轻"])}
+        structure={transferStructure(transferredScenes[1]?.transfer, "证据 / 卖点推进")}
+        gapLabel={transferGapLabel(transferredScenes[1]?.transfer, "AIGC 微距补制作镜头")}
+        proofItems={transferProofItems(transferredScenes[1]?.transfer, ["椰香", "低糖", "咖啡后劲"])}
         dark
       />
       <AigcScene
         frame={frame}
         index={2}
+        sceneRange={transferredScenes[2]?.range ?? fallbackSceneRanges[2]}
+        transfer={transferredScenes[2]?.transfer}
         imagePath={imageForScene({ imageAssets, sceneAssetDecisions, index: 2 })}
         videoPath={videoForScene({ videoAssets, sceneAssetDecisions, index: 2 })}
         eyebrow="AFTERNOON RESET"
-        headline={sceneRanges[2].title}
-        subline="通勤、工位、赶作业，都要醒得柔和一点。"
-        caption={["下午三点", "醒得柔和", "不腻口"]}
-        structure="场景 / 素材适配"
-        gapLabel="通勤场景补全"
-        proofItems={["工位", "通勤", "下午三点"]}
+        headline={transferHeadline(transferredScenes[2]?.transfer, fallbackSceneRanges[2].title)}
+        subline={transferSubline(
+          transferredScenes[2]?.transfer,
+          "通勤、工位、赶作业，都要醒得柔和一点。",
+        )}
+        caption={transferCaption(transferredScenes[2]?.transfer, ["下午三点", "醒得柔和", "不腻口"])}
+        structure={transferStructure(transferredScenes[2]?.transfer, "场景 / 素材适配")}
+        gapLabel={transferGapLabel(transferredScenes[2]?.transfer, "通勤场景补全")}
+        proofItems={transferProofItems(transferredScenes[2]?.transfer, ["工位", "通勤", "下午三点"])}
       />
       <AigcScene
         frame={frame}
         index={3}
+        sceneRange={transferredScenes[3]?.range ?? fallbackSceneRanges[3]}
+        transfer={transferredScenes[3]?.transfer}
         imagePath={imageForScene({ imageAssets, sceneAssetDecisions, index: 3 })}
         videoPath={videoForScene({ videoAssets, sceneAssetDecisions, index: 3 })}
         eyebrow="TRY TODAY"
-        headline={sceneRanges[3].title}
-        subline={`低糖轻乳 · ${productName}`}
-        caption={["低糖轻乳", "下午三点", "来一杯"]}
-        structure="CTA / 转化收束"
-        gapLabel="主视觉复用 + 行动入口"
-        proofItems={["限时", "低糖轻乳", "到店"]}
+        headline={transferHeadline(transferredScenes[3]?.transfer, fallbackSceneRanges[3].title)}
+        subline={transferSubline(transferredScenes[3]?.transfer, `低糖轻乳 · ${productName}`)}
+        caption={transferCaption(transferredScenes[3]?.transfer, ["低糖轻乳", "下午三点", "来一杯"])}
+        structure={transferStructure(transferredScenes[3]?.transfer, "CTA / 转化收束")}
+        gapLabel={transferGapLabel(transferredScenes[3]?.transfer, "主视觉复用 + 行动入口")}
+        proofItems={transferProofItems(transferredScenes[3]?.transfer, ["限时", "低糖轻乳", "到店"])}
         dark
         cta
       />
 
-      <CommercialLightLeaks />
-      <CutFlashes frame={frame} />
+      <CommercialLightLeaks cuts={cutFrames} />
+      <CutFlashes frame={frame} cuts={cutFrames} />
       <ProgressRail frame={frame} />
       <FilmGrain frame={frame} />
     </AbsoluteFill>
@@ -226,6 +439,8 @@ export function CoconutLatteAigcCommercial15({
 function AigcScene({
   frame,
   index,
+  sceneRange,
+  transfer,
   imagePath,
   videoPath,
   eyebrow,
@@ -240,6 +455,8 @@ function AigcScene({
 }: {
   frame: number;
   index: number;
+  sceneRange: SceneRange;
+  transfer?: TechniqueTransferScene;
   imagePath: string;
   videoPath?: string | null;
   eyebrow: string;
@@ -253,11 +470,11 @@ function AigcScene({
   cta?: boolean;
 }) {
   const { fps } = useVideoConfig();
-  const opacity = sceneOpacity(frame, index);
-  const progress = sceneProgress(frame, index);
-  const local = localFrame(frame, index);
+  const opacity = sceneOpacity(frame, sceneRange);
+  const progress = sceneProgress(frame, sceneRange);
+  const local = localFrame(frame, sceneRange);
   const enter = spring({ frame: local, fps, config: { damping: 160, stiffness: 190, mass: 0.78 } });
-  const scene = sceneRanges[index]!;
+  const scene = sceneRange;
   const textColor = dark ? "#fff8e9" : "#111716";
   const visualScale = 1.04 + progress * 0.08;
   const visualX = interpolate(
@@ -381,12 +598,14 @@ function AigcScene({
       <ProductionProofStack
         frame={local}
         items={proofItems}
+        transfer={transfer}
         accent={scene.accent}
         dark={dark}
       />
       <GapFillLabel
         frame={local}
         text={gapLabel}
+        label={materialActionLabel(transfer)}
         accent={scene.accent}
         dark={dark}
       />
@@ -397,22 +616,18 @@ function AigcScene({
   );
 }
 
-function CommercialLightLeaks() {
-  const cuts = [
-    { frame: 90, hueShift: 28, seed: 12 },
-    { frame: 210, hueShift: 204, seed: 29 },
-    { frame: 330, hueShift: 338, seed: 43 },
-  ];
+function CommercialLightLeaks({ cuts }: { cuts: number[] }) {
+  const hueShifts = [28, 204, 338];
 
   return (
     <>
-      {cuts.map((cut) => (
+      {cuts.map((cut, index) => (
         <LightLeak
           durationInFrames={28}
-          from={cut.frame - 14}
-          hueShift={cut.hueShift}
-          key={cut.frame}
-          seed={cut.seed}
+          from={cut - 14}
+          hueShift={hueShifts[index % hueShifts.length] ?? 28}
+          key={cut}
+          seed={12 + index * 17}
         />
       ))}
     </>
@@ -591,14 +806,24 @@ function BeatMeter({
 function ProductionProofStack({
   frame,
   items,
+  transfer,
   accent,
   dark,
 }: {
   frame: number;
   items: string[];
+  transfer?: TechniqueTransferScene;
   accent: string;
   dark: boolean;
 }) {
+  const visibleItems = transfer
+    ? [
+        `源 ${transfer.sampleTimeRange}`,
+        compactText(transfer.transferableRule, 14),
+        compactText(transfer.outputPurpose, 14),
+      ]
+    : items;
+
   return (
     <div
       style={{
@@ -611,7 +836,7 @@ function ProductionProofStack({
         gap: 14,
       }}
     >
-      {items.map((item, index) => {
+      {visibleItems.map((item, index) => {
         const rawReveal = interpolate(frame, [index * 6, 12 + index * 6], [0, 1], {
           extrapolateLeft: "clamp",
           extrapolateRight: "clamp",
@@ -665,11 +890,13 @@ function ProductionProofStack({
 function GapFillLabel({
   frame,
   text,
+  label,
   accent,
   dark,
 }: {
   frame: number;
   text: string;
+  label: string;
   accent: string;
   dark: boolean;
 }) {
@@ -699,7 +926,7 @@ function GapFillLabel({
         boxShadow: `0 16px 52px ${accent}22`,
       }}
     >
-      <span style={{ color: accent, fontWeight: 990 }}>补素材</span>
+      <span style={{ color: accent, fontWeight: 990 }}>{label}</span>
       <span>{text}</span>
     </div>
   );
@@ -822,8 +1049,8 @@ function SceneBadge({ index, accent, dark }: { index: number; accent: string; da
   );
 }
 
-function CutFlashes({ frame }: { frame: number }) {
-  const opacity = [90, 210, 330].reduce((max, cut) => {
+function CutFlashes({ frame, cuts }: { frame: number; cuts: number[] }) {
+  const opacity = cuts.reduce((max, cut) => {
     const value = interpolate(Math.abs(frame - cut), [0, 10], [0.28, 0], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
