@@ -210,3 +210,41 @@ export function extractHighlightText(text: string, maxLength = 8) {
   const picked = candidates[0] || clean;
   return compactText(picked, maxLength);
 }
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function linearProgress(value: number, inputStart: number, inputEnd: number) {
+  if (inputStart === inputEnd) return value >= inputEnd ? 1 : 0;
+  return clampNumber((value - inputStart) / (inputEnd - inputStart), 0, 1);
+}
+
+export function calculateSceneOpacity({
+  frame,
+  start,
+  end,
+  fadeInFrames = 12,
+  fadeOutFrames = 16,
+  overlapInFrames = 12,
+}: {
+  frame: number;
+  start: number;
+  end: number;
+  fadeInFrames?: number;
+  fadeOutFrames?: number;
+  overlapInFrames?: number;
+}) {
+  if (frame < start - overlapInFrames || frame >= end) return 0;
+
+  const fadeInStart = start <= 0 ? start : start - overlapInFrames;
+  const fadeInEnd = start + fadeInFrames;
+  const inOpacity =
+    start <= 0 && frame >= start + fadeInFrames
+      ? 1
+      : linearProgress(frame, fadeInStart, fadeInEnd);
+  const cutFloor = start > 0 && frame >= start && frame < start + fadeInFrames ? 0.86 : 0;
+  const outOpacity = 1 - linearProgress(frame, end - fadeOutFrames, end);
+
+  return clampNumber(Math.min(Math.max(inOpacity, cutFloor), outOpacity), 0, 1);
+}

@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 
@@ -94,6 +94,7 @@ async function main() {
   const qualityReportPath = path.join(outDir, "quality-report.json");
   const keyframesDir = path.join(outDir, "keyframes");
   await mkdir(outDir, { recursive: true });
+  await rm(keyframesDir, { recursive: true, force: true });
 
   const sampleVideo = args.sampleVideo
     ? args.sampleVideo
@@ -154,7 +155,7 @@ async function main() {
 
   const keyframes = [
     { at: 1, file: path.join(keyframesDir, "frame-01s.png") },
-    { at: 7, file: path.join(keyframesDir, "frame-07s.png") },
+    { at: 8, file: path.join(keyframesDir, "frame-08s.png") },
     { at: 13, file: path.join(keyframesDir, "frame-13s.png") },
   ];
   for (const keyframe of keyframes) {
@@ -177,13 +178,14 @@ async function main() {
 - 全流程 Markdown：${path.join(finalFlowDir, "case.md")}
 - 全流程 JSON：${path.join(finalFlowDir, "case.json")}
 - 关键帧 1s：${keyframes[0]!.file}
-- 关键帧 7s：${keyframes[1]!.file}
+- 关键帧 8s：${keyframes[1]!.file}
 - 关键帧 13s：${keyframes[2]!.file}
 
 ## 生成策略
 
 - 视频模型只用于补充素材槽位，例如 B-roll、氛围镜头、转场垫片。
 - 开场商品主视觉默认使用稳定图片 + Remotion 可控推镜，避免生成视频在杯身、冰块、液体边缘出现逐帧形变。
+- 画面包装会显示结构标签、节奏卡点、卖点证据卡和“补素材”来源，让评委直接看到结构迁移与素材补全。
 - 最终成片由 Remotion 白名单组件渲染，字幕、CTA、节奏、音频和质量门禁都可复现。
 `;
   await writeFile(reportPath, report, "utf8");

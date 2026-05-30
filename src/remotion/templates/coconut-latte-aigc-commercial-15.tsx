@@ -1,3 +1,5 @@
+import { LightLeak } from "@remotion/light-leaks";
+import { CameraMotionBlur } from "@remotion/motion-blur";
 import {
   AbsoluteFill,
   Audio,
@@ -18,6 +20,7 @@ import {
   type SceneAssetDecision,
 } from "@/lib/render-policy";
 import type { MigratedVideoPlan } from "@/lib/schemas";
+import { calculateSceneOpacity } from "@/remotion/video-style";
 
 export type CoconutLatteAigcCommercial15Props = {
   title: string;
@@ -50,16 +53,14 @@ function clamp(value: number, min: number, max: number) {
 
 function sceneOpacity(frame: number, index: number) {
   const scene = sceneRanges[index]!;
-  return (
-    interpolate(frame, [scene.start, scene.start + 12], [0, 1], {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    }) *
-    interpolate(frame, [scene.end - 16, scene.end], [1, 0], {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    })
-  );
+  return calculateSceneOpacity({
+    frame,
+    start: scene.start,
+    end: scene.end,
+    fadeInFrames: 12,
+    fadeOutFrames: 16,
+    overlapInFrames: 14,
+  });
 }
 
 function sceneProgress(frame: number, index: number) {
@@ -167,6 +168,9 @@ export function CoconutLatteAigcCommercial15({
         headline={title || sceneRanges[0].title}
         subline="低糖、椰香、咖啡后劲，把下午三点拉回来。"
         caption={["别划走", "关键不是甜", "是喝完很轻松"]}
+        structure="HOOK / 结果前置"
+        gapLabel="稳定商品图 + Remotion 推镜"
+        proofItems={["样例开头迁移", "反差字幕", "0-3s 抢停留"]}
       />
       <AigcScene
         frame={frame}
@@ -177,6 +181,9 @@ export function CoconutLatteAigcCommercial15({
         headline={sceneRanges[1].title}
         subline="咖啡后劲跟上，甜感收得更轻。"
         caption={["椰香先出来", "咖啡后劲跟上", "甜感收得轻"]}
+        structure="证据 / 卖点推进"
+        gapLabel="AIGC 微距补制作镜头"
+        proofItems={["椰香", "低糖", "咖啡后劲"]}
         dark
       />
       <AigcScene
@@ -188,6 +195,9 @@ export function CoconutLatteAigcCommercial15({
         headline={sceneRanges[2].title}
         subline="通勤、工位、赶作业，都要醒得柔和一点。"
         caption={["下午三点", "醒得柔和", "不腻口"]}
+        structure="场景 / 素材适配"
+        gapLabel="通勤场景补全"
+        proofItems={["工位", "通勤", "下午三点"]}
       />
       <AigcScene
         frame={frame}
@@ -198,10 +208,14 @@ export function CoconutLatteAigcCommercial15({
         headline={sceneRanges[3].title}
         subline={`低糖轻乳 · ${productName}`}
         caption={["低糖轻乳", "下午三点", "来一杯"]}
+        structure="CTA / 转化收束"
+        gapLabel="主视觉复用 + 行动入口"
+        proofItems={["限时", "低糖轻乳", "到店"]}
         dark
         cta
       />
 
+      <CommercialLightLeaks />
       <CutFlashes frame={frame} />
       <ProgressRail frame={frame} />
       <FilmGrain frame={frame} />
@@ -218,6 +232,9 @@ function AigcScene({
   headline,
   subline,
   caption,
+  structure,
+  gapLabel,
+  proofItems,
   dark = false,
   cta = false,
 }: {
@@ -229,6 +246,9 @@ function AigcScene({
   headline: string;
   subline: string;
   caption: string[];
+  structure: string;
+  gapLabel: string;
+  proofItems: string[];
   dark?: boolean;
   cta?: boolean;
 }) {
@@ -239,43 +259,56 @@ function AigcScene({
   const enter = spring({ frame: local, fps, config: { damping: 160, stiffness: 190, mass: 0.78 } });
   const scene = sceneRanges[index]!;
   const textColor = dark ? "#fff8e9" : "#111716";
+  const visualScale = 1.04 + progress * 0.08;
+  const visualX = interpolate(
+    progress,
+    [0, 1],
+    [index % 2 === 0 ? -22 : 22, index % 2 === 0 ? 18 : -18],
+  );
+  const visualY = interpolate(progress, [0, 1], [18, -22]);
 
   return (
     <AbsoluteFill style={{ opacity }}>
-      <Img
-        src={staticFile(imagePath)}
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          transform: `scale(${1.04 + progress * 0.08}) translate3d(${interpolate(
-            progress,
-            [0, 1],
-            [index % 2 === 0 ? -22 : 22, index % 2 === 0 ? 18 : -18],
-          )}px, ${interpolate(progress, [0, 1], [18, -22])}px, 0)`,
-          filter: cta ? "saturate(1.08) contrast(1.05)" : "saturate(1.14) contrast(1.06)",
-        }}
-      />
-      {videoPath ? (
-        <Video
-          src={staticFile(videoPath)}
-          muted
-          loop
-          startFrom={0}
-          delayRenderTimeoutInMilliseconds={120000}
+      <CameraMotionBlur samples={5} shutterAngle={150}>
+        <div
           style={{
             position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            transform: `scale(${1.06 + progress * 0.025}) translate3d(-8px, -10px, 0)`,
-            filter: "saturate(1.12) contrast(1.04)",
+            inset: -56,
+            transform: `scale(${visualScale}) translate3d(${visualX}px, ${visualY}px, 0)`,
+            transformOrigin: "50% 52%",
           }}
-        />
-      ) : null}
+        >
+          <Img
+            src={staticFile(imagePath)}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              filter: cta ? "saturate(1.08) contrast(1.05)" : "saturate(1.14) contrast(1.06)",
+            }}
+          />
+          {videoPath ? (
+            <Video
+              src={staticFile(videoPath)}
+              muted
+              loop
+              startFrom={0}
+              delayRenderTimeoutInMilliseconds={120000}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                transform: "scale(1.025) translate3d(-8px, -10px, 0)",
+                filter: "saturate(1.12) contrast(1.04)",
+              }}
+            />
+          ) : null}
+        </div>
+      </CameraMotionBlur>
       <AbsoluteFill
         style={{
           background: dark
@@ -283,7 +316,16 @@ function AigcScene({
             : "linear-gradient(180deg, rgba(255,248,230,0.32) 0%, rgba(255,248,230,0.08) 40%, rgba(0,0,0,0.52) 100%)",
         }}
       />
+      <BeatHitWash frame={local} accent={scene.accent} index={index} />
+      <LightSweep frame={frame + index * 17} accent={scene.accent} dark={dark} />
       {videoPath ? <VideoWatermarkCover /> : null}
+      <StructureRibbon
+        frame={local}
+        text={structure}
+        accent={scene.accent}
+        dark={dark}
+      />
+      <BeatMeter frame={local} accent={scene.accent} dark={dark} />
       <div
         style={{
           position: "absolute",
@@ -336,10 +378,93 @@ function AigcScene({
           {subline}
         </div>
       </div>
+      <ProductionProofStack
+        frame={local}
+        items={proofItems}
+        accent={scene.accent}
+        dark={dark}
+      />
+      <GapFillLabel
+        frame={local}
+        text={gapLabel}
+        accent={scene.accent}
+        dark={dark}
+      />
       {cta ? <CtaButton text={subline} accent={scene.accent} /> : null}
       <CaptionBlock frame={local} caption={caption} accent={scene.accent} dark={dark} />
       <SceneBadge index={index} accent={scene.accent} dark={dark} />
     </AbsoluteFill>
+  );
+}
+
+function CommercialLightLeaks() {
+  const cuts = [
+    { frame: 90, hueShift: 28, seed: 12 },
+    { frame: 210, hueShift: 204, seed: 29 },
+    { frame: 330, hueShift: 338, seed: 43 },
+  ];
+
+  return (
+    <>
+      {cuts.map((cut) => (
+        <LightLeak
+          durationInFrames={28}
+          from={cut.frame - 14}
+          hueShift={cut.hueShift}
+          key={cut.frame}
+          seed={cut.seed}
+        />
+      ))}
+    </>
+  );
+}
+
+function BeatHitWash({ frame, accent, index }: { frame: number; accent: string; index: number }) {
+  const opacity = interpolate((frame + index * 6) % 30, [0, 3, 12, 30], [0.26, 0.16, 0, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+
+  return (
+    <AbsoluteFill
+      style={{
+        background: `radial-gradient(circle at ${index % 2 === 0 ? 64 : 42}% ${
+          index < 2 ? 42 : 58
+        }%, ${accent}88, transparent 34%)`,
+        opacity,
+        mixBlendMode: "screen",
+      }}
+    />
+  );
+}
+
+function LightSweep({
+  frame,
+  accent,
+  dark,
+}: {
+  frame: number;
+  accent: string;
+  dark: boolean;
+}) {
+  const sweepX = -460 + ((frame * 8) % 1680);
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: sweepX,
+        top: -120,
+        width: 280,
+        height: 2180,
+        background: `linear-gradient(90deg, transparent, rgba(255,255,255,${
+          dark ? 0.32 : 0.48
+        }), ${accent}44, transparent)`,
+        transform: "skewX(-18deg)",
+        opacity: dark ? 0.46 : 0.34,
+        mixBlendMode: "screen",
+      }}
+    />
   );
 }
 
@@ -356,6 +481,227 @@ function VideoWatermarkCover() {
           "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.56) 52%, rgba(0,0,0,0.84) 100%)",
       }}
     />
+  );
+}
+
+function StructureRibbon({
+  frame,
+  text,
+  accent,
+  dark,
+}: {
+  frame: number;
+  text: string;
+  accent: string;
+  dark: boolean;
+}) {
+  const enter = interpolate(frame, [0, 16], [28, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+  return (
+    <div
+      style={{
+        position: "absolute",
+        right: 172,
+        top: 78,
+        height: 54,
+        padding: "0 20px",
+        borderRadius: 999,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        color: dark ? "#fff8e9" : "#101513",
+        background: dark ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.72)",
+        border: `1px solid ${accent}88`,
+        boxShadow: `0 18px 52px ${accent}22`,
+        fontSize: 22,
+        fontWeight: 960,
+        transform: `translateY(${enter}px)`,
+      }}
+    >
+      <span
+        style={{
+          width: 10,
+          height: 10,
+          borderRadius: "50%",
+          background: accent,
+          boxShadow: `0 0 24px ${accent}`,
+        }}
+      />
+      {text}
+    </div>
+  );
+}
+
+function BeatMeter({
+  frame,
+  accent,
+  dark,
+}: {
+  frame: number;
+  accent: string;
+  dark: boolean;
+}) {
+  const bars = [0, 1, 2, 3, 4, 5];
+  return (
+    <div
+      style={{
+        position: "absolute",
+        right: 62,
+        top: 230,
+        width: 50,
+        height: 270,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "18px 0",
+        borderRadius: 999,
+        background: dark ? "rgba(0,0,0,0.36)" : "rgba(255,255,255,0.48)",
+        border: `1px solid ${accent}55`,
+      }}
+    >
+      {bars.map((bar) => {
+        const pulse = interpolate((frame + bar * 5) % 30, [0, 4, 30], [1, 1.85, 1], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+          easing: Easing.out(Easing.cubic),
+        });
+        return (
+          <span
+            key={bar}
+            style={{
+              width: 8 + bar * 3,
+              height: 16 + bar * 2,
+              borderRadius: 999,
+              background: accent,
+              opacity: 0.42 + bar * 0.08,
+              transform: `scaleY(${pulse})`,
+              boxShadow: `0 0 18px ${accent}66`,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function ProductionProofStack({
+  frame,
+  items,
+  accent,
+  dark,
+}: {
+  frame: number;
+  items: string[];
+  accent: string;
+  dark: boolean;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 58,
+        top: 742,
+        width: 430,
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+      }}
+    >
+      {items.map((item, index) => {
+        const rawReveal = interpolate(frame, [index * 6, 12 + index * 6], [0, 1], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+          easing: Easing.out(Easing.cubic),
+        });
+        const reveal = index === 0 ? Math.max(rawReveal, 0.82) : rawReveal;
+        return (
+          <div
+            key={item}
+            style={{
+              minHeight: 58,
+              borderRadius: 18,
+              padding: "14px 18px",
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              color: dark ? "#fff8e9" : "#101513",
+              background: dark ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.78)",
+              border: `1px solid ${accent}66`,
+              boxShadow: "0 18px 50px rgba(0,0,0,0.2)",
+              opacity: reveal,
+              transform: `translateX(${interpolate(reveal, [0, 1], [-34, 0])}px)`,
+              fontSize: 25,
+              fontWeight: 920,
+            }}
+          >
+            <span
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 12,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#101513",
+                background: accent,
+                fontSize: 20,
+                fontWeight: 990,
+              }}
+            >
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            {item}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function GapFillLabel({
+  frame,
+  text,
+  accent,
+  dark,
+}: {
+  frame: number;
+  text: string;
+  accent: string;
+  dark: boolean;
+}) {
+  const opacity = interpolate(frame, [0, 10, 104, 118], [0.84, 1, 1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 58,
+        bottom: 252,
+        maxWidth: 760,
+        height: 58,
+        padding: "0 20px",
+        borderRadius: 999,
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        opacity,
+        background: dark ? "rgba(0,0,0,0.54)" : "rgba(255,255,255,0.74)",
+        color: dark ? "#fff8e9" : "#101513",
+        border: `1px solid ${accent}88`,
+        fontSize: 22,
+        fontWeight: 880,
+        boxShadow: `0 16px 52px ${accent}22`,
+      }}
+    >
+      <span style={{ color: accent, fontWeight: 990 }}>补素材</span>
+      <span>{text}</span>
+    </div>
   );
 }
 

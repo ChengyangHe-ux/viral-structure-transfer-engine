@@ -4,6 +4,7 @@ import { decideSceneAssetUsage, isSceneVideoAllowed } from "@/lib/render-policy"
 import {
   classifyBeatFocus,
   compactText,
+  calculateSceneOpacity,
   extractHighlightText,
   getFocusSceneStyle,
   getMaterialFitSummary,
@@ -84,5 +85,17 @@ describe("video-style", () => {
 
     expect(heroDecision?.useVideo).toBe(false);
     expect(isSceneVideoAllowed(heroDecision)).toBe(false);
+  });
+
+  it("keeps commercial scene cut frames visually covered", () => {
+    const firstSceneAtCut = calculateSceneOpacity({ frame: 90, start: 90, end: 210 });
+    const secondSceneAtCut = calculateSceneOpacity({ frame: 210, start: 210, end: 330 });
+    const thirdSceneAtCut = calculateSceneOpacity({ frame: 330, start: 330, end: 450 });
+    const previousSceneBeforeCut = calculateSceneOpacity({ frame: 209, start: 90, end: 210 });
+
+    expect(firstSceneAtCut).toBeGreaterThan(0.35);
+    expect(secondSceneAtCut).toBeGreaterThan(0.35);
+    expect(thirdSceneAtCut).toBeGreaterThan(0.35);
+    expect(previousSceneBeforeCut).toBeGreaterThan(0);
   });
 });
