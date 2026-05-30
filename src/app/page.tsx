@@ -1178,7 +1178,7 @@ export default function Home() {
   const [availableUploads, setAvailableUploads] = useState<
     Array<{ name: string; sizeBytes: number; modifiedAt: string }>
   >([]);
-  const [simpleMode, setSimpleMode] = useState(true);
+  const [simpleMode, setSimpleMode] = useState(false);
   const [showAllSampleBeats, setShowAllSampleBeats] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<VideoStructureAnalysis | null>(null);
@@ -1613,86 +1613,90 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen">
-      <section className="border-b bg-white/78">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">比赛演示版</Badge>
-                <Badge variant="outline">结构迁移</Badge>
-                <Badge variant="outline">可编辑时间线</Badge>
-                <Badge variant="outline">可出片视频</Badge>
-              </div>
-              <h1 className="mt-3 text-2xl font-semibold tracking-normal text-foreground sm:text-3xl">
-                爆款结构迁移引擎
-              </h1>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                把“样例为什么好用”拆成可复用结构，再迁移到你的新主题：生成能编辑、能导出、能一键渲染的视频方案稿。
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm text-foreground">
-                <input
-                  type="checkbox"
-                  checked={simpleMode}
-                  onChange={(event) => setSimpleMode(event.target.checked)}
-                />
-                简洁模式
-              </label>
-              <Button
-                disabled={!projectId}
-                onClick={() => projectId && downloadExport(projectId, "md", activePlanId)}
-                variant="outline"
-                title="导出 Markdown"
-              >
-                <Download />
-                Markdown
-              </Button>
-              <Button
-                disabled={!projectId}
-                onClick={() => projectId && downloadExport(projectId, "json", activePlanId)}
-                variant="outline"
-                title="导出 JSON"
-              >
-                <FileJson />
-                JSON
-              </Button>
-            </div>
+    <main className="studio-shell min-h-screen">
+      <header className="studio-topbar">
+        <div className="studio-brand">
+          <div className="studio-logo">
+            <Video className="size-5" />
           </div>
-
-          <div className="flex flex-col gap-3 rounded-lg border bg-background/60 px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <Badge variant={analysis ? "success" : "secondary"}>1. 样例拆解</Badge>
-              <ArrowRight className="hidden size-4 text-muted-foreground md:block" />
-              <Badge variant={hasTechniqueHits ? "success" : "outline"}>2. RAG 技巧检索</Badge>
-              <ArrowRight className="hidden size-4 text-muted-foreground md:block" />
-              <Badge variant={plan ? "success" : "outline"}>3. 迁移脚本</Badge>
-              <ArrowRight className="hidden size-4 text-muted-foreground md:block" />
-              <Badge variant={plan ? "success" : "outline"}>4. 编辑出片</Badge>
-            </div>
-
-            <div
-              className={`flex items-start gap-3 text-sm ${
-                status.type === "error"
-                  ? "text-red-800"
-                  : status.type === "warning"
-                    ? "text-amber-900"
-                    : status.type === "success"
-                      ? "text-emerald-800"
-                      : "text-muted-foreground"
-              }`}
-            >
-              <span className="[&_svg]:size-4">{statusIcon(status.type)}</span>
-              <span className="leading-6">{status.message}</span>
-            </div>
+          <div className="min-w-0">
+            <p className="studio-kicker">Viral Director Studio</p>
+            <h1>爆款结构迁移引擎</h1>
           </div>
+        </div>
+
+        <div className="studio-actions">
+          <Badge variant="secondary">比赛演示版</Badge>
+          <Badge variant="outline">Remotion</Badge>
+          <Badge variant="outline">结构指纹</Badge>
+          <label className="studio-toggle">
+            <input
+              type="checkbox"
+              checked={simpleMode}
+              onChange={(event) => setSimpleMode(event.target.checked)}
+            />
+            简洁模式
+          </label>
+          <Button
+            disabled={!projectId}
+            onClick={() => projectId && downloadExport(projectId, "md", activePlanId)}
+            variant="outline"
+            title="导出 Markdown"
+          >
+            <Download />
+            Markdown
+          </Button>
+          <Button
+            disabled={!projectId}
+            onClick={() => projectId && downloadExport(projectId, "json", activePlanId)}
+            variant="outline"
+            title="导出 JSON"
+          >
+            <FileJson />
+            JSON
+          </Button>
+        </div>
+      </header>
+
+      <section className="studio-statusbar">
+        <div className="studio-steps">
+          <span className={`studio-step ${analysis ? "is-done" : "is-active"}`}>样例拆解</span>
+          <ArrowRight className="hidden size-4 md:block" />
+          <span className={`studio-step ${hasTechniqueHits ? "is-done" : ""}`}>技巧检索</span>
+          <ArrowRight className="hidden size-4 md:block" />
+          <span className={`studio-step ${plan ? "is-done" : ""}`}>迁移脚本</span>
+          <ArrowRight className="hidden size-4 md:block" />
+          <span className={`studio-step ${plan ? "is-active" : ""}`}>编辑出片</span>
+        </div>
+
+        <div className="studio-metrics">
+          <div className="studio-metric">
+            <span>样例</span>
+            <strong>{analysis ? "已拆解" : "待输入"}</strong>
+          </div>
+          <div className="studio-metric">
+            <span>方案</span>
+            <strong>{plan ? `${plan.versions.length} 版` : "待生成"}</strong>
+          </div>
+          <div className="studio-metric">
+            <span>素材适配</span>
+            <strong>{plan?.materialAdaptation ? "已诊断" : "待诊断"}</strong>
+          </div>
+          <div className="studio-metric">
+            <span>出片</span>
+            <strong>{renderingVideo ? "渲染中" : plan ? "可渲染" : "待方案"}</strong>
+          </div>
+        </div>
+
+        <div className={`studio-status-message is-${status.type}`}>
+          <span className="[&_svg]:size-4">{statusIcon(status.type)}</span>
+          <span>{status.message}</span>
         </div>
       </section>
 
       <section
-        className={`workspace-grid mx-auto grid max-w-7xl gap-5 px-4 py-6 sm:px-6 lg:px-8 ${
-          simpleMode ? "lg:grid-cols-1" : "lg:grid-cols-[390px_minmax(0,1fr)]"
+        className={`workspace-grid studio-workspace mx-auto grid gap-5 px-4 py-5 sm:px-5 ${
+          simpleMode ? "lg:grid-cols-1" : "lg:grid-cols-[372px_minmax(0,1fr)]"
         }`}
       >
         <div className="control-rail space-y-5">
