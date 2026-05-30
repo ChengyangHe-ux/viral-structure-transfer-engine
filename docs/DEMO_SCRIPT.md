@@ -29,18 +29,18 @@ npm run demo:full-flow -- \
 
 npm run video:render -- \
   --input outputs/full-flow-demo/case.json \
-  --out renders/full-flow-demo-15.mp4 \
+  --out renders/full-flow-demo-no-shake-15.mp4 \
   --composition CoconutLatteAigcCommercial15 \
   --quality high \
   --title "别把它当普通拿铁" \
   --product-name "生椰轻乳拿铁" \
-  --video-assets outputs/zhipu-video-clips/coconut-latte-hero-motion-stable.mp4 \
   --image-assets "outputs/zhipu-video-assets/processed/hero-cup.png,outputs/zhipu-video-assets/processed/pour-macro.png,outputs/zhipu-video-assets/processed/commute-desk-v2.png,outputs/zhipu-video-assets/processed/cta-packshot.png"
 
-npm run video:check -- --input renders/full-flow-demo-15.mp4 --min-duration 14 --max-duration 16
+npm run video:check -- --input renders/full-flow-demo-no-shake-15.mp4 --min-duration 14 --max-duration 16
 ```
 
 这条链路会完成：样例视频解析 → 整段视频理解（可用时）→ 时间轴关键帧理解 → 结构拆解 → 迁移方案 → Markdown/JSON 证据 → Remotion 有声竖屏成片。
+主推荐出片使用稳定商品图做开场可控推镜，避免图生视频在杯身、冰块和液体边缘产生逐帧抖动；CogVideoX 生成视频保留为补充镜头能力，不作为开场主视觉。
 
 ## 评委提问回答
 

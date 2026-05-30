@@ -74,7 +74,7 @@ npm run demo:full-flow -- \
   --out-dir outputs/full-flow-demo
 ```
 
-该命令会输出 `outputs/full-flow-demo/case.md` 和 `outputs/full-flow-demo/case.json`，Markdown 开头包含运行证据：整段视频理解是否启用、时间轴采样帧数、样例拆解/方案生成是否走本地保底。随后可用 `case.json` 继续渲染 Remotion 成片。
+该命令会输出 `outputs/full-flow-demo/case.md` 和 `outputs/full-flow-demo/case.json`，Markdown 开头包含运行证据：整段视频理解是否启用、时间轴采样帧数、样例拆解/方案生成是否走本地保底。随后可用 `case.json` 继续渲染 Remotion 成片。主推荐成片使用 AIGC 静帧 + Remotion 可控推镜作为开场，以避免图生视频大特写逐帧形变；视频生成模型用于补充镜头和素材缺口，不强行作为开场主画面。
 
 ## 一键生成演示视频（Remotion，可选加分项）
 

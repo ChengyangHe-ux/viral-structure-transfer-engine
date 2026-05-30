@@ -68,18 +68,19 @@ npm run demo:full-flow -- \
 
 npm run video:render -- \
   --input outputs/full-flow-demo/case.json \
-  --out renders/full-flow-demo-15.mp4 \
+  --out renders/full-flow-demo-no-shake-15.mp4 \
   --composition CoconutLatteAigcCommercial15 \
   --quality high \
   --title "别把它当普通拿铁" \
   --product-name "生椰轻乳拿铁" \
-  --video-assets outputs/zhipu-video-clips/coconut-latte-hero-motion-stable.mp4 \
   --image-assets "outputs/zhipu-video-assets/processed/hero-cup.png,outputs/zhipu-video-assets/processed/pour-macro.png,outputs/zhipu-video-assets/processed/commute-desk-v2.png,outputs/zhipu-video-assets/processed/cta-packshot.png"
 
-npm run video:check -- --input renders/full-flow-demo-15.mp4 --min-duration 14 --max-duration 16
+npm run video:check -- --input renders/full-flow-demo-no-shake-15.mp4 --min-duration 14 --max-duration 16
 ```
 
 `demo:full-flow` 会在 Markdown 开头写入运行证据，包括是否启用整段视频理解、采样帧数、是否使用本地保底和输出路径。
+
+说明：主推荐演示片不把图生视频直接放在开场大特写，因为饮品杯身、冰块和液体边缘容易出现逐帧形变。最终出片用 AIGC 静帧 + Remotion 可控推镜保证开场稳定；智谱/CogVideoX 更适合生成补充 B-roll 或非核心主视觉镜头。
 
 ## 本地样例素材（可选）
 
