@@ -35,6 +35,14 @@ npm run award:check
 
 该命令会用离线案例跑“大奖目标看板”，要求所有演示案例达到 90+，防止提交前只看功能可用、没看参赛说服力。
 
+## 评委快速验收
+
+- 快速指南：`docs/JUDGE_GUIDE.md`
+- 提交清单：`docs/SUBMISSION.md`
+- AI 架构 / 工具协议 / 安全边界：`docs/ARCHITECTURE.md`
+- 最终演示包：`npm run demo:final -- --out-dir submissions/final-coconut-latte --quality high`
+- 打包源码和最终演示证据：`npm run submission:pack -- --include-final-demo-dir submissions/final-coconut-latte`
+
 ## 一键生成演示视频（Remotion）
 
 ```bash

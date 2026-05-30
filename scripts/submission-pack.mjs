@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execSync } from "node:child_process";
-import { mkdirSync, existsSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 
 function run(cmd, options = {}) {
@@ -26,6 +26,16 @@ function getArg(name) {
 
 function hasFlag(name) {
   return process.argv.includes(name);
+}
+
+function requiredFinalDemoFiles(dir) {
+  return [
+    "final-video.mp4",
+    "final-demo-report.md",
+    "quality-report.json",
+    "final-flow/case.md",
+    "final-flow/case.json",
+  ].map((file) => path.join(dir, file));
 }
 
 try {
@@ -56,8 +66,31 @@ try {
     fail("Missing value for --include-demo-video <path>");
   }
 
+  const finalDemoDirArg = getArg("--include-final-demo-dir");
+  if (finalDemoDirArg) {
+    const finalDemoDir = path.resolve(finalDemoDirArg);
+    if (!existsSync(finalDemoDir) || !statSync(finalDemoDir).isDirectory()) {
+      fail(`Final demo dir not found: ${finalDemoDirArg}`);
+    }
+
+    for (const requiredFile of requiredFinalDemoFiles(finalDemoDir)) {
+      if (!existsSync(requiredFile)) {
+        fail(`Final demo dir is missing required file: ${path.relative(finalDemoDir, requiredFile)}`);
+      }
+    }
+
+    const packTempDir = path.join(outDir, `.pack-final-demo-${shortSha}`);
+    rmSync(packTempDir, { recursive: true, force: true });
+    mkdirSync(packTempDir, { recursive: true });
+    cpSync(finalDemoDir, path.join(packTempDir, "final-demo"), { recursive: true });
+    runInherit(`zip -q -r "${outZip}" final-demo`, { cwd: packTempDir });
+    rmSync(packTempDir, { recursive: true, force: true });
+    console.log(`[submission-pack] Included final demo dir: ${finalDemoDir}`);
+  } else if (hasFlag("--include-final-demo-dir")) {
+    fail("Missing value for --include-final-demo-dir <dir>");
+  }
+
   console.log(`[submission-pack] OK: ${outZip}`);
 } catch (err) {
   fail(err?.message ?? String(err));
 }
-

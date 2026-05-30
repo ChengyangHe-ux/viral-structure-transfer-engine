@@ -58,6 +58,18 @@ npm run submission:pack
 npm run submission:pack -- --include-demo-video renders/demo.mp4
 ```
 
+如果已经运行过最终演示包，推荐把完整证据目录一起打入压缩包：
+
+```bash
+npm run submission:pack -- --include-final-demo-dir submissions/final-coconut-latte
+```
+
+该命令会把 `final-video.mp4`、`final-demo-report.md`、`quality-report.json`、关键帧和 `case.md/case.json` 放到压缩包内的 `final-demo/` 目录。
+
+## 评委快速验收
+
+评委或导师可以直接阅读 `docs/JUDGE_GUIDE.md`，按 5 分钟路径检查页面、最终视频、质量报告、AI 架构和安全边界。
+
 ## 离线案例生成（推荐）
 
 ```bash
