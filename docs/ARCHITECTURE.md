@@ -26,6 +26,7 @@
 - `AI_DIRECT_VIDEO_MAX_MB` 控制本地视频转 data URL 的最大体积，避免请求体过大。
 - `AI_DIRECT_VIDEO_FPS` 控制整段视频理解的采样频率，默认 1 FPS。
 - `AI_MAX_OUTPUT_TOKENS` 默认 4096，避免视觉模型输出结构化拆解时被截断成不完整 JSON。
+- `AI_PLAN_TIMEOUT_MS` 默认 22000，`AI_REFINE_TIMEOUT_MS` 默认 18000；当方案生成或自然语言修订超过时限，会自动进入本地保底生成，避免答辩现场卡在模型网关。
 - 未配置密钥时使用本地 fallback 策略，保证演示链路可运行。
 
 ### FFmpeg / ffprobe

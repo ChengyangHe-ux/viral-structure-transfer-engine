@@ -10,6 +10,7 @@ import {
   type MigratedVideoPlan,
   type VideoStructureAnalysis,
 } from "@/lib/schemas";
+import { raceWithTimeout, readTimeoutMs } from "@/lib/ai-timeout";
 import {
   createFallbackAnalysis,
   createFallbackPlan,
@@ -70,6 +71,14 @@ function supportsStructuredOutputs() {
 function requestTimeoutMs() {
   const parsed = Number(process.env.AI_REQUEST_TIMEOUT_MS);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 45000;
+}
+
+function planGenerationTimeoutMs() {
+  return readTimeoutMs("AI_PLAN_TIMEOUT_MS", Math.min(requestTimeoutMs(), 22000));
+}
+
+function planRefineTimeoutMs() {
+  return readTimeoutMs("AI_REFINE_TIMEOUT_MS", Math.min(requestTimeoutMs(), 18000));
 }
 
 function maxOutputTokens() {
@@ -289,13 +298,16 @@ async function generateSchemaObject<T>({
   schema,
   system,
   prompt,
+  timeoutMs,
 }: {
   modelId: string;
   schema: z.ZodType<T>;
   system: string;
   prompt: SchemaPrompt;
+  timeoutMs?: number;
 }): Promise<T> {
   let structuredError: unknown = null;
+  const modelTimeoutMs = timeoutMs && timeoutMs > 0 ? timeoutMs : requestTimeoutMs();
 
   if (supportsStructuredOutputs()) {
     try {
@@ -305,7 +317,7 @@ async function generateSchemaObject<T>({
         system,
         ...promptOptions(prompt),
         maxRetries: 0,
-        timeout: requestTimeoutMs(),
+        timeout: modelTimeoutMs,
         maxOutputTokens: maxOutputTokens(),
       });
 
@@ -332,7 +344,7 @@ ${schemaDescription}
       model: provider(modelId),
       system,
       maxRetries: 0,
-      timeout: requestTimeoutMs(),
+      timeout: modelTimeoutMs,
       maxOutputTokens: maxOutputTokens(),
       ...promptOptions(textPrompt),
     });
@@ -345,7 +357,7 @@ ${schemaDescription}
         system:
           "你是 JSON 修复器。只返回合法 JSON，不要解释，不要 Markdown。保留原意，补齐缺失字段。",
         maxRetries: 0,
-        timeout: requestTimeoutMs(),
+        timeout: modelTimeoutMs,
         maxOutputTokens: maxOutputTokens(),
         prompt: `原始任务：
 ${promptForError(prompt)}
@@ -490,12 +502,14 @@ export async function generateMigratedPlan(input: {
   }
 
   try {
-    const generatedDraft = await generateSchemaObject({
-      modelId: process.env.AI_MODEL_TEXT || "gpt-4.1-mini",
-      schema: aiPlanDraftSchema,
-      system:
-        "你是 AIGC 短视频创意导演。把样例结构迁移到新主题中，生成方案脚本，不复制样例内容。",
-      prompt: `请基于样例结构拆解，为新主题生成 3 个可比较的视频方案版本。
+    const timeoutMs = planGenerationTimeoutMs();
+    const generatedDraft = await raceWithTimeout(
+      generateSchemaObject({
+        modelId: process.env.AI_MODEL_TEXT || "gpt-4.1-mini",
+        schema: aiPlanDraftSchema,
+        system:
+          "你是 AIGC 短视频创意导演。把样例结构迁移到新主题中，生成方案脚本，不复制样例内容。",
+        prompt: `请基于样例结构拆解，为新主题生成 3 个可比较的视频方案版本。
 
 项目：${input.projectTitle}
 新主题/商品 Brief：${input.targetBrief}
@@ -517,7 +531,11 @@ ${formatEditingTechniquesForPrompt(retrievedTechniques)}
 6. 主版本开头口播必须包含“别”“变化”“错”或“关键”之一，以形成强 Hook。
 7. 每个版本必须写出证据/对比/反馈/评价中的至少 2 类；每段 replaceableAssets 必须明确“可替换素材”；每段 riskNotes 必须包含“避免”或“追溯”。
 8. productionNotes 至少写出 3 条具体剪辑执行提醒。`,
-    });
+        timeoutMs,
+      }),
+      timeoutMs,
+      "AI plan generation",
+    );
     const generatedPlan = migratedVideoPlanSchema.parse(generatedDraft);
     const plan = attachEditingTechniquesToPlan({
       plan: generatedPlan,
@@ -568,12 +586,14 @@ export async function refineMigratedPlan(input: {
   }
 
   try {
-    const generatedDraft = await generateSchemaObject({
-      modelId: process.env.AI_MODEL_TEXT || "gpt-4.1-mini",
-      schema: aiPlanDraftSchema,
-      system:
-        "你是短视频创作平台的自然语言编辑器。基于用户修改指令，保留原结构并生成修订后的完整方案。",
-      prompt: `请根据用户修改指令重写方案，保持 JSON 结构完整。
+    const timeoutMs = planRefineTimeoutMs();
+    const generatedDraft = await raceWithTimeout(
+      generateSchemaObject({
+        modelId: process.env.AI_MODEL_TEXT || "gpt-4.1-mini",
+        schema: aiPlanDraftSchema,
+        system:
+          "你是短视频创作平台的自然语言编辑器。基于用户修改指令，保留原结构并生成修订后的完整方案。",
+        prompt: `请根据用户修改指令重写方案，保持 JSON 结构完整。
 
 项目：${input.projectTitle}
 修改指令：${input.instruction}
@@ -585,7 +605,11 @@ ${JSON.stringify(input.analysis, null, 2)}
 ${JSON.stringify(input.plan, null, 2)}
 
 要求：保留可迁移结构，不复刻样例内容；输出完整多版本方案，而不是局部补丁。每个版本至少 5 段，开头要强 Hook，证据/对比/反馈/评价、可替换素材和风险追溯提醒必须完整。`,
-    });
+        timeoutMs,
+      }),
+      timeoutMs,
+      "AI plan refinement",
+    );
     const generatedPlan = migratedVideoPlanSchema.parse(generatedDraft);
 
     const nextPlan = input.plan.retrievedTechniques.length

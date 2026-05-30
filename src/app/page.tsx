@@ -1536,7 +1536,10 @@ export default function Home() {
       return;
     }
 
-    setStatus({ type: "loading", message: "正在迁移结构并生成多版本脚本..." });
+    setStatus({
+      type: "loading",
+      message: "正在迁移结构并生成多版本脚本；模型较慢时会自动切换到本地保底方案。",
+    });
     const response = await fetch("/api/generate-plan", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -1580,7 +1583,10 @@ export default function Home() {
       return;
     }
 
-    setStatus({ type: "loading", message: "正在按自然语言指令修订方案..." });
+    setStatus({
+      type: "loading",
+      message: "正在按自然语言指令修订方案；模型较慢时会自动切换到本地保底方案。",
+    });
     const response = await fetch("/api/refine-plan", {
       method: "POST",
       headers: { "content-type": "application/json" },

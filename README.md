@@ -97,6 +97,8 @@ AI_MODEL_VISION="gpt-4.1-mini"
 AI_MODEL_VIDEO="gpt-4.1-mini"
 AI_SUPPORTS_STRUCTURED_OUTPUTS="false"
 AI_REQUEST_TIMEOUT_MS="45000"
+AI_PLAN_TIMEOUT_MS="22000"
+AI_REFINE_TIMEOUT_MS="18000"
 AI_MAX_OUTPUT_TOKENS="4096"
 AI_VIDEO_INPUT_MODE="hybrid"
 AI_DIRECT_VIDEO_MAX_MB="20"
@@ -106,7 +108,7 @@ AI_DISABLE_THINKING="false"
 ASR_PROVIDER="manual"
 ```
 
-未配置 `AI_API_KEY` 时，系统会自动使用本地演示策略，保证样例拆解、迁移方案和导出链路可跑通。若 OpenAI-compatible 服务不支持 schema response format，系统会自动改用文本 JSON 生成、提取、修复和 Zod 校验，不会把模型自由文本直接写入方案。
+未配置 `AI_API_KEY` 时，系统会自动使用本地演示策略，保证样例拆解、迁移方案和导出链路可跑通。若 OpenAI-compatible 服务不支持 schema response format，系统会自动改用文本 JSON 生成、提取、修复和 Zod 校验，不会把模型自由文本直接写入方案。`AI_PLAN_TIMEOUT_MS` 和 `AI_REFINE_TIMEOUT_MS` 用于答辩稳定性：模型过慢时自动切到本地保底方案；设置为 `0` 可关闭该保护。
 
 上传样例视频时，系统采用混合视频理解：若模型/网关支持 `video_url`，会先把整段视频发给 `AI_MODEL_VIDEO`；同时后端会用 FFmpeg 抽取带时间戳的时间轴关键帧，并把最多 `AI_VIDEO_FRAME_COUNT` 张 JPG 作为多模态 `image` 输入发给 `AI_MODEL_VISION`。视觉模型先输出画面观察笔记，再由 `AI_MODEL_TEXT` 整理成严格 Zod JSON；这样既能“整段理解”，又能在视频直传不稳定时靠时间轴关键帧保底。
 
