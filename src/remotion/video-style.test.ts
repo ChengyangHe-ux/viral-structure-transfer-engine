@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { decideSceneAssetUsage, isSceneVideoAllowed } from "@/lib/render-policy";
+import {
+  decideSceneAssetUsage,
+  heroVideoApprovalFlag,
+  isSceneVideoAllowed,
+} from "@/lib/render-policy";
 import {
   classifyBeatFocus,
   compactText,
@@ -85,6 +89,28 @@ describe("video-style", () => {
 
     expect(heroDecision?.useVideo).toBe(false);
     expect(isSceneVideoAllowed(heroDecision)).toBe(false);
+  });
+
+  it("allows a generated hero video only after explicit human approval", () => {
+    const [heroDecision] = decideSceneAssetUsage(
+      {
+        assets: [
+          {
+            id: "approved-generated-closeup",
+            path: "render-sources/approved-closeup.mp4",
+            kind: "video",
+            slotKind: "hero",
+            sceneIndex: 0,
+            source: "generated-video",
+            riskFlags: [heroVideoApprovalFlag],
+          },
+        ],
+      },
+      4,
+    );
+
+    expect(heroDecision?.useVideo).toBe(true);
+    expect(isSceneVideoAllowed(heroDecision)).toBe(true);
   });
 
   it("keeps commercial scene cut frames visually covered", () => {

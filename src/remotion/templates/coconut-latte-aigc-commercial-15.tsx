@@ -5,10 +5,10 @@ import {
   Audio,
   Easing,
   Img,
+  OffthreadVideo,
   interpolate,
   spring,
   staticFile,
-  Video,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
@@ -53,15 +53,28 @@ const fallbackSceneRanges = [
   { start: 330, end: 450, accent: "#ff6683", title: "今天下午别硬扛" },
 ] as const;
 
-const fallbackImages = [
-  "zhipu-video-assets/hero-cup.png",
-  "zhipu-video-assets/pour-macro.png",
-  "zhipu-video-assets/commute-desk-v2.png",
-  "zhipu-video-assets/cta-packshot.png",
-] as const;
+const finalCommercialStability = {
+  heroScaleStart: 1.012,
+  heroScaleEnd: 1.022,
+  heroPanX: 2.4,
+  heroPanY: 2.0,
+  sceneScaleStart: 1.018,
+  sceneScaleEnd: 1.05,
+  scenePanX: 10,
+  scenePanY: 10,
+  cutFlashOpacity: 0.18,
+  heroWashOpacity: 0.06,
+  sceneWashOpacity: 0.22,
+  movingGrainStartsAt: 96,
+} as const;
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function snap(value: number, decimals = 2) {
+  const scale = 10 ** decimals;
+  return Math.round(value * scale) / scale;
 }
 
 function sceneOpacity(frame: number, scene: SceneRange) {
@@ -88,7 +101,7 @@ function localFrame(frame: number, scene: SceneRange) {
 }
 
 function assetAt(imageAssets: string[] | undefined, index: number) {
-  return imageAssets?.[index] || fallbackImages[index] || fallbackImages[0];
+  return imageAssets?.[index] ?? null;
 }
 
 function videoAt(videoAssets: string[] | undefined, index: number) {
@@ -437,7 +450,7 @@ function AigcScene({
   frame: number;
   index: number;
   sceneRange: SceneRange;
-  imagePath: string;
+  imagePath: string | null;
   videoPath?: string | null;
   eyebrow: string;
   headline: string;
@@ -456,56 +469,74 @@ function AigcScene({
   const enter = spring({ frame: local, fps, config: { damping: 160, stiffness: 190, mass: 0.78 } });
   const scene = sceneRange;
   const textColor = dark ? "#fff8e9" : "#111716";
-  const visualScale = 1.018 + progress * 0.032;
+  const hero = index === 0;
+  const visualScale = hero
+    ? finalCommercialStability.heroScaleStart +
+      progress * (finalCommercialStability.heroScaleEnd - finalCommercialStability.heroScaleStart)
+    : finalCommercialStability.sceneScaleStart +
+      progress * (finalCommercialStability.sceneScaleEnd - finalCommercialStability.sceneScaleStart);
+  const panX = hero ? finalCommercialStability.heroPanX : finalCommercialStability.scenePanX;
+  const panY = hero ? finalCommercialStability.heroPanY : finalCommercialStability.scenePanY;
   const visualX = interpolate(
     progress,
     [0, 1],
-    [index % 2 === 0 ? -8 : 8, index % 2 === 0 ? 10 : -10],
+    [index % 2 === 0 ? -panX : panX, index % 2 === 0 ? panX : -panX],
   );
-  const visualY = interpolate(progress, [0, 1], [8, -10]);
+  const visualY = interpolate(progress, [0, 1], [panY, -panY]);
+  const visualLayer = (
+    <div
+      style={{
+        position: "absolute",
+        inset: -56,
+        transform: `scale(${snap(visualScale)}) translate3d(${snap(visualX)}px, ${snap(visualY)}px, 0)`,
+        transformOrigin: "50% 52%",
+      }}
+    >
+      {imagePath ? (
+        <Img
+          src={staticFile(imagePath)}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            filter: cta ? "saturate(1.08) contrast(1.05)" : "saturate(1.14) contrast(1.06)",
+          }}
+        />
+      ) : (
+        <FallbackCommercialVisual index={index} accent={scene.accent} dark={dark} cta={cta} />
+      )}
+      {videoPath ? (
+        <OffthreadVideo
+          src={staticFile(videoPath)}
+          muted
+          trimBefore={0}
+          delayRenderTimeoutInMilliseconds={120000}
+          pauseWhenBuffering
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            transform: "scale(1.025) translate3d(-8px, -10px, 0)",
+            filter: "saturate(1.12) contrast(1.04)",
+          }}
+        />
+      ) : null}
+    </div>
+  );
 
   return (
     <AbsoluteFill style={{ opacity }}>
-      <CameraMotionBlur samples={3} shutterAngle={90}>
-        <div
-          style={{
-            position: "absolute",
-            inset: -56,
-            transform: `scale(${visualScale}) translate3d(${visualX}px, ${visualY}px, 0)`,
-            transformOrigin: "50% 52%",
-          }}
-        >
-          <Img
-            src={staticFile(imagePath)}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              filter: cta ? "saturate(1.08) contrast(1.05)" : "saturate(1.14) contrast(1.06)",
-            }}
-          />
-          {videoPath ? (
-            <Video
-              src={staticFile(videoPath)}
-              muted
-              loop
-              startFrom={0}
-              delayRenderTimeoutInMilliseconds={120000}
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                transform: "scale(1.025) translate3d(-8px, -10px, 0)",
-                filter: "saturate(1.12) contrast(1.04)",
-              }}
-            />
-          ) : null}
-        </div>
-      </CameraMotionBlur>
+      {hero ? (
+        visualLayer
+      ) : (
+        <CameraMotionBlur samples={2} shutterAngle={72}>
+          {visualLayer}
+        </CameraMotionBlur>
+      )}
       <AbsoluteFill
         style={{
           background: dark
@@ -514,7 +545,7 @@ function AigcScene({
         }}
       />
       <BeatHitWash frame={local} accent={scene.accent} index={index} />
-      <LightSweep frame={frame + index * 17} accent={scene.accent} dark={dark} />
+      {hero ? null : <LightSweep frame={frame + index * 17} accent={scene.accent} dark={dark} />}
       {videoPath ? <VideoWatermarkCover /> : null}
       <StructureRibbon
         frame={local}
@@ -594,6 +625,117 @@ function AigcScene({
   );
 }
 
+function FallbackCommercialVisual({
+  index,
+  accent,
+  dark,
+  cta,
+}: {
+  index: number;
+  accent: string;
+  dark: boolean;
+  cta: boolean;
+}) {
+  const base = dark ? "#111413" : "#f6efe2";
+  const secondary = dark ? "#29302d" : "#d9f1e6";
+  const cupShadow = dark ? "rgba(0,0,0,0.42)" : "rgba(42,31,16,0.2)";
+  const steamOffset = index % 2 === 0 ? 0 : 38;
+
+  return (
+    <AbsoluteFill
+      style={{
+        background: `linear-gradient(145deg, ${base} 0%, ${secondary} 54%, ${accent}22 100%)`,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          left: -180,
+          top: 180,
+          width: 760,
+          height: 760,
+          borderRadius: "50%",
+          background: `${accent}24`,
+          filter: "blur(6px)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          right: -120,
+          bottom: cta ? 120 : 280,
+          width: 620,
+          height: 620,
+          borderRadius: "50%",
+          background: "rgba(255,255,255,0.22)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: 306,
+          top: cta ? 480 : 430,
+          width: 468,
+          height: 560,
+          borderRadius: "44px 44px 116px 116px",
+          background: `linear-gradient(160deg, rgba(255,255,255,0.96), ${accent}44 48%, rgba(66,44,28,0.92))`,
+          boxShadow: `0 80px 160px ${cupShadow}`,
+          border: "6px solid rgba(255,255,255,0.72)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: 360,
+          top: cta ? 524 : 474,
+          width: 360,
+          height: 92,
+          borderRadius: "50%",
+          background: `radial-gradient(circle, #fff8ea 0%, ${accent} 72%, rgba(80,48,28,0.96) 100%)`,
+          boxShadow: "inset 0 18px 34px rgba(70,40,20,0.24)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: 386,
+          top: cta ? 650 : 600,
+          width: 306,
+          height: 92,
+          borderRadius: 28,
+          background: "rgba(255,255,255,0.82)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#18201d",
+          fontSize: 30,
+          fontWeight: 980,
+          letterSpacing: 0,
+        }}
+      >
+        COCONUT LATTE
+      </div>
+      {[0, 1, 2].map((item) => (
+        <div
+          key={item}
+          style={{
+            position: "absolute",
+            left: 438 + item * 78 + steamOffset,
+            top: 246 - item * 18,
+            width: 30,
+            height: 132,
+            borderRadius: 999,
+            background: "rgba(255,255,255,0.34)",
+            transform: "rotate(14deg)",
+            filter: "blur(1px)",
+          }}
+        />
+      ))}
+    </AbsoluteFill>
+  );
+}
+
 function CommercialLightLeaks({ cuts }: { cuts: number[] }) {
   const hueShifts = [28, 204, 338];
 
@@ -613,11 +755,20 @@ function CommercialLightLeaks({ cuts }: { cuts: number[] }) {
 }
 
 function BeatHitWash({ frame, accent, index }: { frame: number; accent: string; index: number }) {
-  const opacity = interpolate((frame + index * 6) % 30, [0, 3, 12, 30], [0.26, 0.16, 0, 0], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: Easing.out(Easing.cubic),
-  });
+  const maxOpacity =
+    index === 0
+      ? finalCommercialStability.heroWashOpacity
+      : finalCommercialStability.sceneWashOpacity;
+  const opacity = interpolate(
+    (frame + index * 6) % 30,
+    [0, 3, 12, 30],
+    [maxOpacity, maxOpacity * 0.62, 0, 0],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+      easing: Easing.out(Easing.cubic),
+    },
+  );
 
   return (
     <AbsoluteFill
@@ -967,7 +1118,7 @@ function SceneBadge({ index, accent, dark }: { index: number; accent: string; da
 
 function CutFlashes({ frame, cuts }: { frame: number; cuts: number[] }) {
   const opacity = cuts.reduce((max, cut) => {
-    const value = interpolate(Math.abs(frame - cut), [0, 10], [0.28, 0], {
+    const value = interpolate(Math.abs(frame - cut), [0, 10], [finalCommercialStability.cutFlashOpacity, 0], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     });
@@ -1003,6 +1154,7 @@ function ProgressRail({ frame }: { frame: number }) {
 }
 
 function FilmGrain({ frame }: { frame: number }) {
+  const movingFrame = Math.max(0, frame - finalCommercialStability.movingGrainStartsAt);
   return (
     <AbsoluteFill style={{ pointerEvents: "none", boxShadow: "inset 0 0 180px rgba(0,0,0,0.24)" }}>
       {Array.from({ length: 44 }).map((_, index) => (
@@ -1010,13 +1162,13 @@ function FilmGrain({ frame }: { frame: number }) {
           key={`grain-${index}`}
           style={{
             position: "absolute",
-            left: `${(index * 41 + frame * 0.6) % 100}%`,
-            top: `${(index * 67 + frame * 0.4) % 100}%`,
+            left: `${(index * 41 + movingFrame * 0.28) % 100}%`,
+            top: `${(index * 67 + movingFrame * 0.18) % 100}%`,
             width: 2 + (index % 3),
             height: 2 + (index % 3),
             borderRadius: "50%",
             background: index % 2 ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.1)",
-            opacity: 0.2,
+            opacity: frame < finalCommercialStability.movingGrainStartsAt ? 0.11 : 0.16,
           }}
         />
       ))}
