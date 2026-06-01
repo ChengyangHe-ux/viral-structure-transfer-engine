@@ -248,64 +248,57 @@ function buildTransferredScenes(renderTimeline: RenderTimeline | null): Transfer
   });
 }
 
-function transferHeadline(transfer: TechniqueTransferScene | undefined, fallback: string) {
-  return compactText(transfer?.outputPurpose, 16) || fallback;
+const commercialSceneCopy = [
+  {
+    eyebrow: "NEW / LOW SUGAR",
+    headline: "别把它当普通拿铁",
+    subline: "一口先给冰感，椰香干净，咖啡后劲慢慢跟上。",
+    captions: ["低糖轻乳", "椰香先出来", "咖啡后劲在"],
+    proofItems: ["低糖轻乳", "冰感入口", "清爽不腻"],
+    ctaText: "下午第一杯",
+  },
+  {
+    eyebrow: "CREAMY POUR",
+    headline: "椰香先出来",
+    subline: "轻乳把冷萃包住，甜感收得更干净。",
+    captions: ["轻乳顺滑", "层次更清楚", "甜感收得住"],
+    proofItems: ["冷萃基底", "轻乳口感", "风味层次"],
+    ctaText: "看得到的顺滑",
+  },
+  {
+    eyebrow: "AFTERNOON RESET",
+    headline: "下午三点，轻一点醒",
+    subline: "通勤到工位都刚好，提神不顶胃。",
+    captions: ["通勤友好", "低负担", "醒得柔和"],
+    proofItems: ["工位场景", "低负担", "不腻口"],
+    ctaText: "工位也适合",
+  },
+  {
+    eyebrow: "TRY TODAY",
+    headline: "今天别硬扛",
+    subline: "生椰轻乳拿铁，限时口味，到店来一杯。",
+    captions: ["限时口味", "到店来一杯", "收藏别忘"],
+    proofItems: ["限时上新", "低糖轻乳", "清爽收尾"],
+    ctaText: "到店试饮",
+  },
+] as const;
+
+function commercialCopy(index: number, productName: string, title: string) {
+  const copy = commercialSceneCopy[index] ?? commercialSceneCopy[0];
+  if (index === 0 && title.trim().length > 0) {
+    return { ...copy, headline: compactText(title, 12) };
+  }
+  if (index === 3) {
+    return {
+      ...copy,
+      subline: `${productName}，限时口味，到店来一杯。`,
+    };
+  }
+  return copy;
 }
 
-function transferSubline(transfer: TechniqueTransferScene | undefined, fallback: string) {
-  if (!transfer) return fallback;
-  return compactText(`源 ${transfer.sampleTimeRange}：${transfer.transferableRule}`, 31);
-}
-
-function transferCaption(transfer: TechniqueTransferScene | undefined, fallback: string[]) {
-  if (!transfer) return fallback;
-  const materialLabel =
-    transfer.materialFit === "missing"
-      ? "补素材"
-      : transfer.materialFit === "partial"
-        ? "包装补全"
-        : "素材已匹配";
-  const tags = [
-    `源${transfer.sampleTimeRange.replace(/秒/g, "s")}`,
-    compactText(transfer.outputPurpose, 7),
-    materialLabel,
-  ].filter(Boolean);
-  return tags.length >= 3 ? tags.slice(0, 3) : fallback;
-}
-
-function sourceFocusLabel(transfer: TechniqueTransferScene) {
-  const text = transferText(transfer);
-  if (/hook|开头|停留|吸引|反差/i.test(text)) return "HOOK";
-  if (/cta|结尾|行动|转化|收束|入口/i.test(text)) return "CTA";
-  if (/证据|背书|可信|证明|评价|参数/.test(text)) return "证据";
-  if (/收益|场景|使用|适用|通勤|工位/.test(text)) return "场景";
-  return "推进";
-}
-
-function transferStructure(transfer: TechniqueTransferScene | undefined, fallback: string) {
-  if (!transfer) return fallback;
-  return `${sourceFocusLabel(transfer)} / 源 ${transfer.sampleTimeRange}`;
-}
-
-function transferGapLabel(transfer: TechniqueTransferScene | undefined, fallback: string) {
-  if (!transfer) return fallback;
-  return compactText(`${transfer.materialSlotName}：${transfer.completionPlan}`, 32);
-}
-
-function materialActionLabel(transfer: TechniqueTransferScene | undefined) {
-  if (!transfer) return "补素材";
-  if (transfer.materialFit === "missing") return "补素材";
-  if (transfer.materialFit === "partial") return "包装补全";
-  return "素材";
-}
-
-function transferProofItems(transfer: TechniqueTransferScene | undefined, fallback: string[]) {
-  if (!transfer) return fallback;
-  return [
-    `样例 ${transfer.sampleTimeRange}`,
-    compactText(transfer.transferableRule, 12),
-    compactText(transfer.outputPurpose, 12),
-  ];
+function subtleBrandLabel() {
+  return "LIGHT COCONUT LATTE";
 }
 
 export function CoconutLatteAigcCommercial15({
@@ -322,6 +315,9 @@ export function CoconutLatteAigcCommercial15({
     .slice(1)
     .map((scene) => scene.range.start)
     .filter((cut) => cut > 0 && cut < TOTAL_FRAMES);
+  const sceneCopies = fallbackSceneRanges.map((_, index) =>
+    commercialCopy(index, productName, title || ""),
+  );
 
   return (
     <AbsoluteFill
@@ -354,76 +350,62 @@ export function CoconutLatteAigcCommercial15({
         frame={frame}
         index={0}
         sceneRange={transferredScenes[0]?.range ?? fallbackSceneRanges[0]}
-        transfer={transferredScenes[0]?.transfer}
         imagePath={imageForScene({ imageAssets, sceneAssetDecisions, index: 0 })}
         videoPath={
           decisionAt(sceneAssetDecisions, 0)?.riskFlags.includes(heroVideoApprovalFlag)
             ? videoForScene({ videoAssets, sceneAssetDecisions, index: 0 })
             : null
         }
-        eyebrow="NEW / LOW SUGAR"
-        headline={transferHeadline(transferredScenes[0]?.transfer, title || fallbackSceneRanges[0].title)}
-        subline={transferSubline(
-          transferredScenes[0]?.transfer,
-          "低糖、椰香、咖啡后劲，把下午三点拉回来。",
-        )}
-        caption={transferCaption(transferredScenes[0]?.transfer, ["别划走", "关键不是甜", "是喝完很轻松"])}
-        structure={transferStructure(transferredScenes[0]?.transfer, "HOOK / 结果前置")}
-        gapLabel={transferGapLabel(transferredScenes[0]?.transfer, "稳定商品图 + Remotion 推镜")}
-        proofItems={transferProofItems(transferredScenes[0]?.transfer, [
-          "样例开头迁移",
-          "反差字幕",
-          "0-3s 抢停留",
-        ])}
+        eyebrow={sceneCopies[0]!.eyebrow}
+        headline={sceneCopies[0]!.headline}
+        subline={sceneCopies[0]!.subline}
+        caption={sceneCopies[0]!.captions}
+        structure={subtleBrandLabel()}
+        gapLabel={sceneCopies[0]!.ctaText}
+        proofItems={sceneCopies[0]!.proofItems}
       />
       <AigcScene
         frame={frame}
         index={1}
         sceneRange={transferredScenes[1]?.range ?? fallbackSceneRanges[1]}
-        transfer={transferredScenes[1]?.transfer}
         imagePath={imageForScene({ imageAssets, sceneAssetDecisions, index: 1 })}
         videoPath={videoForScene({ videoAssets, sceneAssetDecisions, index: 1 })}
-        eyebrow="CREAMY POUR"
-        headline={transferHeadline(transferredScenes[1]?.transfer, fallbackSceneRanges[1].title)}
-        subline={transferSubline(transferredScenes[1]?.transfer, "咖啡后劲跟上，甜感收得更轻。")}
-        caption={transferCaption(transferredScenes[1]?.transfer, ["椰香先出来", "咖啡后劲跟上", "甜感收得轻"])}
-        structure={transferStructure(transferredScenes[1]?.transfer, "证据 / 卖点推进")}
-        gapLabel={transferGapLabel(transferredScenes[1]?.transfer, "AIGC 微距补制作镜头")}
-        proofItems={transferProofItems(transferredScenes[1]?.transfer, ["椰香", "低糖", "咖啡后劲"])}
+        eyebrow={sceneCopies[1]!.eyebrow}
+        headline={sceneCopies[1]!.headline}
+        subline={sceneCopies[1]!.subline}
+        caption={sceneCopies[1]!.captions}
+        structure={subtleBrandLabel()}
+        gapLabel={sceneCopies[1]!.ctaText}
+        proofItems={sceneCopies[1]!.proofItems}
         dark
       />
       <AigcScene
         frame={frame}
         index={2}
         sceneRange={transferredScenes[2]?.range ?? fallbackSceneRanges[2]}
-        transfer={transferredScenes[2]?.transfer}
         imagePath={imageForScene({ imageAssets, sceneAssetDecisions, index: 2 })}
         videoPath={videoForScene({ videoAssets, sceneAssetDecisions, index: 2 })}
-        eyebrow="AFTERNOON RESET"
-        headline={transferHeadline(transferredScenes[2]?.transfer, fallbackSceneRanges[2].title)}
-        subline={transferSubline(
-          transferredScenes[2]?.transfer,
-          "通勤、工位、赶作业，都要醒得柔和一点。",
-        )}
-        caption={transferCaption(transferredScenes[2]?.transfer, ["下午三点", "醒得柔和", "不腻口"])}
-        structure={transferStructure(transferredScenes[2]?.transfer, "场景 / 素材适配")}
-        gapLabel={transferGapLabel(transferredScenes[2]?.transfer, "通勤场景补全")}
-        proofItems={transferProofItems(transferredScenes[2]?.transfer, ["工位", "通勤", "下午三点"])}
+        eyebrow={sceneCopies[2]!.eyebrow}
+        headline={sceneCopies[2]!.headline}
+        subline={sceneCopies[2]!.subline}
+        caption={sceneCopies[2]!.captions}
+        structure={subtleBrandLabel()}
+        gapLabel={sceneCopies[2]!.ctaText}
+        proofItems={sceneCopies[2]!.proofItems}
       />
       <AigcScene
         frame={frame}
         index={3}
         sceneRange={transferredScenes[3]?.range ?? fallbackSceneRanges[3]}
-        transfer={transferredScenes[3]?.transfer}
         imagePath={imageForScene({ imageAssets, sceneAssetDecisions, index: 3 })}
         videoPath={videoForScene({ videoAssets, sceneAssetDecisions, index: 3 })}
-        eyebrow="TRY TODAY"
-        headline={transferHeadline(transferredScenes[3]?.transfer, fallbackSceneRanges[3].title)}
-        subline={transferSubline(transferredScenes[3]?.transfer, `低糖轻乳 · ${productName}`)}
-        caption={transferCaption(transferredScenes[3]?.transfer, ["低糖轻乳", "下午三点", "来一杯"])}
-        structure={transferStructure(transferredScenes[3]?.transfer, "CTA / 转化收束")}
-        gapLabel={transferGapLabel(transferredScenes[3]?.transfer, "主视觉复用 + 行动入口")}
-        proofItems={transferProofItems(transferredScenes[3]?.transfer, ["限时", "低糖轻乳", "到店"])}
+        eyebrow={sceneCopies[3]!.eyebrow}
+        headline={sceneCopies[3]!.headline}
+        subline={sceneCopies[3]!.subline}
+        caption={sceneCopies[3]!.captions}
+        structure={subtleBrandLabel()}
+        gapLabel={sceneCopies[3]!.ctaText}
+        proofItems={sceneCopies[3]!.proofItems}
         dark
         cta
       />
@@ -440,7 +422,6 @@ function AigcScene({
   frame,
   index,
   sceneRange,
-  transfer,
   imagePath,
   videoPath,
   eyebrow,
@@ -456,16 +437,15 @@ function AigcScene({
   frame: number;
   index: number;
   sceneRange: SceneRange;
-  transfer?: TechniqueTransferScene;
   imagePath: string;
   videoPath?: string | null;
   eyebrow: string;
   headline: string;
   subline: string;
-  caption: string[];
+  caption: readonly string[];
   structure: string;
   gapLabel: string;
-  proofItems: string[];
+  proofItems: readonly string[];
   dark?: boolean;
   cta?: boolean;
 }) {
@@ -476,17 +456,17 @@ function AigcScene({
   const enter = spring({ frame: local, fps, config: { damping: 160, stiffness: 190, mass: 0.78 } });
   const scene = sceneRange;
   const textColor = dark ? "#fff8e9" : "#111716";
-  const visualScale = 1.04 + progress * 0.08;
+  const visualScale = 1.018 + progress * 0.032;
   const visualX = interpolate(
     progress,
     [0, 1],
-    [index % 2 === 0 ? -22 : 22, index % 2 === 0 ? 18 : -18],
+    [index % 2 === 0 ? -8 : 8, index % 2 === 0 ? 10 : -10],
   );
-  const visualY = interpolate(progress, [0, 1], [18, -22]);
+  const visualY = interpolate(progress, [0, 1], [8, -10]);
 
   return (
     <AbsoluteFill style={{ opacity }}>
-      <CameraMotionBlur samples={5} shutterAngle={150}>
+      <CameraMotionBlur samples={3} shutterAngle={90}>
         <div
           style={{
             position: "absolute",
@@ -542,7 +522,6 @@ function AigcScene({
         accent={scene.accent}
         dark={dark}
       />
-      <BeatMeter frame={local} accent={scene.accent} dark={dark} />
       <div
         style={{
           position: "absolute",
@@ -598,19 +577,18 @@ function AigcScene({
       <ProductionProofStack
         frame={local}
         items={proofItems}
-        transfer={transfer}
         accent={scene.accent}
         dark={dark}
       />
       <GapFillLabel
         frame={local}
         text={gapLabel}
-        label={materialActionLabel(transfer)}
+        label="风味"
         accent={scene.accent}
         dark={dark}
       />
-      {cta ? <CtaButton text={subline} accent={scene.accent} /> : null}
-      <CaptionBlock frame={local} caption={caption} accent={scene.accent} dark={dark} />
+      {cta ? <CtaButton text="到店试饮 / 限时口味" accent={scene.accent} /> : null}
+      <CaptionBlock frame={local} caption={caption} accent={scene.accent} />
       <SceneBadge index={index} accent={scene.accent} dark={dark} />
     </AbsoluteFill>
   );
@@ -673,10 +651,10 @@ function LightSweep({
         width: 280,
         height: 2180,
         background: `linear-gradient(90deg, transparent, rgba(255,255,255,${
-          dark ? 0.32 : 0.48
+          dark ? 0.2 : 0.28
         }), ${accent}44, transparent)`,
         transform: "skewX(-18deg)",
-        opacity: dark ? 0.46 : 0.34,
+        opacity: dark ? 0.28 : 0.22,
         mixBlendMode: "screen",
       }}
     />
@@ -719,20 +697,20 @@ function StructureRibbon({
     <div
       style={{
         position: "absolute",
-        right: 172,
-        top: 78,
-        height: 54,
-        padding: "0 20px",
+        right: 158,
+        top: 74,
+        height: 40,
+        padding: "0 15px",
         borderRadius: 999,
         display: "flex",
         alignItems: "center",
         gap: 12,
         color: dark ? "#fff8e9" : "#101513",
-        background: dark ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.72)",
-        border: `1px solid ${accent}88`,
-        boxShadow: `0 18px 52px ${accent}22`,
-        fontSize: 22,
-        fontWeight: 960,
+        background: dark ? "rgba(0,0,0,0.34)" : "rgba(255,255,255,0.56)",
+        border: `1px solid ${accent}55`,
+        boxShadow: `0 12px 36px ${accent}18`,
+        fontSize: 17,
+        fontWeight: 860,
         transform: `translateY(${enter}px)`,
       }}
     >
@@ -750,90 +728,29 @@ function StructureRibbon({
   );
 }
 
-function BeatMeter({
-  frame,
-  accent,
-  dark,
-}: {
-  frame: number;
-  accent: string;
-  dark: boolean;
-}) {
-  const bars = [0, 1, 2, 3, 4, 5];
-  return (
-    <div
-      style={{
-        position: "absolute",
-        right: 62,
-        top: 230,
-        width: 50,
-        height: 270,
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "18px 0",
-        borderRadius: 999,
-        background: dark ? "rgba(0,0,0,0.36)" : "rgba(255,255,255,0.48)",
-        border: `1px solid ${accent}55`,
-      }}
-    >
-      {bars.map((bar) => {
-        const pulse = interpolate((frame + bar * 5) % 30, [0, 4, 30], [1, 1.85, 1], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-          easing: Easing.out(Easing.cubic),
-        });
-        return (
-          <span
-            key={bar}
-            style={{
-              width: 8 + bar * 3,
-              height: 16 + bar * 2,
-              borderRadius: 999,
-              background: accent,
-              opacity: 0.42 + bar * 0.08,
-              transform: `scaleY(${pulse})`,
-              boxShadow: `0 0 18px ${accent}66`,
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
 function ProductionProofStack({
   frame,
   items,
-  transfer,
   accent,
   dark,
 }: {
   frame: number;
-  items: string[];
-  transfer?: TechniqueTransferScene;
+  items: readonly string[];
   accent: string;
   dark: boolean;
 }) {
-  const visibleItems = transfer
-    ? [
-        `源 ${transfer.sampleTimeRange}`,
-        compactText(transfer.transferableRule, 14),
-        compactText(transfer.outputPurpose, 14),
-      ]
-    : items;
+  const visibleItems = items;
 
   return (
     <div
       style={{
         position: "absolute",
         left: 58,
-        top: 742,
-        width: 430,
+        top: 768,
+        width: 390,
         display: "flex",
         flexDirection: "column",
-        gap: 14,
+        gap: 12,
       }}
     >
       {visibleItems.map((item, index) => {
@@ -847,33 +764,33 @@ function ProductionProofStack({
           <div
             key={item}
             style={{
-              minHeight: 58,
-              borderRadius: 18,
-              padding: "14px 18px",
+              minHeight: 52,
+              borderRadius: 999,
+              padding: "12px 18px 12px 12px",
               display: "flex",
               alignItems: "center",
-              gap: 14,
+              gap: 12,
               color: dark ? "#fff8e9" : "#101513",
-              background: dark ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.78)",
-              border: `1px solid ${accent}66`,
-              boxShadow: "0 18px 50px rgba(0,0,0,0.2)",
+              background: dark ? "rgba(0,0,0,0.34)" : "rgba(255,255,255,0.64)",
+              border: `1px solid ${accent}55`,
+              boxShadow: "0 14px 38px rgba(0,0,0,0.16)",
               opacity: reveal,
-              transform: `translateX(${interpolate(reveal, [0, 1], [-34, 0])}px)`,
-              fontSize: 25,
+              transform: `translateX(${interpolate(reveal, [0, 1], [-22, 0])}px)`,
+              fontSize: 23,
               fontWeight: 920,
             }}
           >
             <span
               style={{
-                width: 42,
-                height: 42,
-                borderRadius: 12,
+                width: 34,
+                height: 34,
+                borderRadius: "50%",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 color: "#101513",
                 background: accent,
-                fontSize: 20,
+                fontSize: 17,
                 fontWeight: 990,
               }}
             >
@@ -909,25 +826,25 @@ function GapFillLabel({
       style={{
         position: "absolute",
         left: 58,
-        bottom: 252,
-        maxWidth: 760,
-        height: 58,
-        padding: "0 20px",
+        bottom: 246,
+        maxWidth: 700,
+        height: 52,
+        padding: "0 18px",
         borderRadius: 999,
         display: "flex",
         alignItems: "center",
         gap: 14,
         opacity,
-        background: dark ? "rgba(0,0,0,0.54)" : "rgba(255,255,255,0.74)",
+        background: dark ? "rgba(0,0,0,0.42)" : "rgba(255,255,255,0.68)",
         color: dark ? "#fff8e9" : "#101513",
-        border: `1px solid ${accent}88`,
-        fontSize: 22,
+        border: `1px solid ${accent}55`,
+        fontSize: 21,
         fontWeight: 880,
-        boxShadow: `0 16px 52px ${accent}22`,
+        boxShadow: `0 14px 42px ${accent}18`,
       }}
     >
       <span style={{ color: accent, fontWeight: 990 }}>{label}</span>
-      <span>{text}</span>
+      <span>{compactText(text, 18)}</span>
     </div>
   );
 }
@@ -936,12 +853,10 @@ function CaptionBlock({
   frame,
   caption,
   accent,
-  dark,
 }: {
   frame: number;
-  caption: string[];
+  caption: readonly string[];
   accent: string;
-  dark: boolean;
 }) {
   const opacity = interpolate(frame, [0, 10, 104, 120], [0, 1, 1, 0], {
     extrapolateLeft: "clamp",
@@ -954,11 +869,11 @@ function CaptionBlock({
         position: "absolute",
         left: 58,
         right: 58,
-        bottom: 112,
+        bottom: 110,
         opacity,
         display: "flex",
         flexWrap: "wrap",
-        gap: 12,
+        gap: 14,
         alignItems: "center",
         justifyContent: "center",
       }}
@@ -973,11 +888,11 @@ function CaptionBlock({
           <div
             key={`${text}-${itemIndex}`}
             style={{
-              padding: highlighted ? "12px 18px" : "8px 4px",
-              borderRadius: highlighted ? 18 : 0,
+              padding: highlighted ? "13px 20px" : "8px 2px",
+              borderRadius: highlighted ? 20 : 0,
               background: highlighted ? accent : "transparent",
-              color: highlighted ? "#101513" : dark ? "#fff8e9" : "#fff8e9",
-              fontSize: itemIndex === 1 ? 49 : 54,
+              color: highlighted ? "#101513" : "#fff8e9",
+              fontSize: itemIndex === 1 ? 50 : 56,
               lineHeight: 1,
               fontWeight: 990,
               letterSpacing: 0,
@@ -1003,10 +918,10 @@ function CtaButton({ text, accent }: { text: string; accent: string }) {
         position: "absolute",
         left: 82,
         right: 82,
-        top: 1230,
+        top: 1206,
         height: 92,
         borderRadius: 999,
-        background: "#101513",
+        background: "rgba(16,21,19,0.88)",
         color: "#fff8e9",
         display: "flex",
         alignItems: "center",
@@ -1014,7 +929,8 @@ function CtaButton({ text, accent }: { text: string; accent: string }) {
         gap: 18,
         fontSize: 33,
         fontWeight: 980,
-        boxShadow: `0 24px 72px ${accent}55`,
+        border: `1px solid ${accent}66`,
+        boxShadow: `0 24px 72px ${accent}40`,
       }}
     >
       <span style={{ color: accent }}>TODAY</span>
@@ -1029,9 +945,9 @@ function SceneBadge({ index, accent, dark }: { index: number; accent: string; da
       style={{
         position: "absolute",
         right: 58,
-        top: 72,
-        width: 92,
-        height: 92,
+        top: 68,
+        width: 74,
+        height: 74,
         borderRadius: "50%",
         background: dark ? "rgba(0,0,0,0.52)" : "rgba(255,255,255,0.72)",
         color: accent,
@@ -1039,7 +955,7 @@ function SceneBadge({ index, accent, dark }: { index: number; accent: string; da
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: 28,
+        fontSize: 23,
         fontWeight: 990,
         boxShadow: "0 18px 44px rgba(0,0,0,0.24)",
       }}

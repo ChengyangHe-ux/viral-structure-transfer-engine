@@ -186,7 +186,8 @@ async function main() {
 - 视频模型只用于补充素材槽位，例如 B-roll、氛围镜头、转场垫片。
 - 开场商品主视觉默认使用稳定图片 + Remotion 可控推镜，避免生成视频在杯身、冰块、液体边缘出现逐帧形变。
 - 全流程会生成 TechniqueTransferRecipe，把样例 Hook 窗口、镜头密度、字幕密度、转场倾向、包装标签映射到新视频镜头。
-- 画面包装会显示源样例时间段、可迁移规则、素材槽位和“补素材”来源，让评委直接看到手法迁移与素材补全。
+- 主视频采用 clean commercial cut：只保留广告字幕、卖点 chips、风味标签和 CTA，不把源时间段/素材状态等证据层压到画面上。
+- 迁移证据保留在页面和 Markdown：源样例时间段、可迁移规则、素材槽位和补全计划都可在 case 中逐项核验。
 - 最终成片由 Remotion 白名单组件渲染，字幕、CTA、节奏、音频和质量门禁都可复现。
 `;
   await writeFile(reportPath, report, "utf8");
