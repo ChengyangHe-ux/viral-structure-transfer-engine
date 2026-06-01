@@ -43,6 +43,7 @@ export function RemotionRoot() {
         defaultProps={{
           title: "爆款结构迁移引擎（结构演示稿）",
           plan: null,
+          analysis: null,
         } satisfies VideoFromPlanProps}
       />
       <Composition

@@ -9,7 +9,15 @@ import {
   useVideoConfig,
 } from "remotion";
 
-import { type MigratedVideoPlan } from "@/lib/schemas";
+import {
+  type MigratedVideoPlan,
+  type VideoStructureAnalysis,
+} from "@/lib/schemas";
+import {
+  buildTechniqueTransferRecipe,
+  type TechniqueTransferRecipe,
+  type TechniqueTransferScene,
+} from "@/lib/technique-transfer";
 import {
   classifyBeatFocus,
   compactText,
@@ -28,6 +36,7 @@ type MaterialSlot = NonNullable<LoadedPlan["materialAdaptation"]>["slots"][numbe
 export type VideoFromPlanProps = {
   title: string;
   plan: LoadedPlan | null;
+  analysis?: VideoStructureAnalysis | null;
 };
 
 type Segment = {
@@ -45,6 +54,7 @@ type Segment = {
   replaceableAssets: string;
   riskNotes: string;
   materialSlot: MaterialSlot | null;
+  transfer: TechniqueTransferScene | null;
 };
 
 function parseTimeRangeSeconds(timeRange: string) {
@@ -91,7 +101,7 @@ function fitLabelToReadiness(readiness?: NonNullable<LoadedPlan["evaluation"]>["
   return "待评估";
 }
 
-export function VideoFromPlan({ title, plan }: VideoFromPlanProps) {
+export function VideoFromPlan({ title, plan, analysis = null }: VideoFromPlanProps) {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
@@ -106,6 +116,11 @@ export function VideoFromPlan({ title, plan }: VideoFromPlanProps) {
       bestVersionName: plan.evaluation?.bestVersion || bestVersion?.versionName || "",
     };
   }, [plan]);
+
+  const transferRecipe = useMemo<TechniqueTransferRecipe | null>(() => {
+    if (!plan || !version || !analysis) return null;
+    return buildTechniqueTransferRecipe({ analysis, plan, version });
+  }, [analysis, plan, version]);
 
   const segments = useMemo<Segment[]>(() => {
     if (!plan || !version) return [];
@@ -131,6 +146,7 @@ export function VideoFromPlan({ title, plan }: VideoFromPlanProps) {
         transitionAndRhythm: beat.transitionAndRhythm,
         replaceableAssets: beat.replaceableAssets,
         riskNotes: beat.riskNotes,
+        transfer: transferRecipe?.sceneTransfers[index] ?? null,
         materialSlot: pickMaterialSlot({
           slots: plan.materialAdaptation?.slots,
           index,
@@ -138,7 +154,7 @@ export function VideoFromPlan({ title, plan }: VideoFromPlanProps) {
         }),
       };
     });
-  }, [plan, version]);
+  }, [plan, transferRecipe, version]);
 
   const timeline = useMemo(() => {
     const introFrames = Math.round(2.1 * fps);
@@ -187,6 +203,7 @@ export function VideoFromPlan({ title, plan }: VideoFromPlanProps) {
           title={title}
           versionName={bestVersionName || version.versionName}
           plan={plan}
+          transferRecipe={transferRecipe}
         />
       </Sequence>
 
@@ -227,10 +244,12 @@ function IntroScene({
   title,
   versionName,
   plan,
+  transferRecipe,
 }: {
   title: string;
   versionName: string;
   plan: LoadedPlan;
+  transferRecipe: TechniqueTransferRecipe | null;
 }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -290,17 +309,17 @@ function IntroScene({
         />
         <div
           style={{
-            marginTop: 34,
-            fontSize: 94,
+            marginTop: 30,
+            fontSize: 84,
             lineHeight: 0.98,
             fontWeight: 920,
             letterSpacing: 0,
             textShadow: "0 28px 74px rgba(0,0,0,0.42)",
           }}
         >
-          结构迁移
+          样例手法
           <br />
-          成片预览
+          迁移成片
         </div>
         <div
           style={{
@@ -314,13 +333,101 @@ function IntroScene({
         >
           {compactText(title, 36)}
         </div>
+        <div
+          style={{
+            marginTop: 18,
+            fontSize: 24,
+            lineHeight: 1.42,
+            maxWidth: 810,
+            opacity: 0.78,
+            fontWeight: 620,
+          }}
+        >
+          抽取样例的镜头目的、节奏曲线、字幕密度和包装方式，再映射到新主题与素材槽位。
+        </div>
         <div style={{ marginTop: 32, display: "flex", gap: 14, flexWrap: "wrap" }}>
           <IntroChip label="主版本" value={versionName || "未命名"} />
           <IntroChip label="评分" value={typeof score === "number" ? `${score}/100` : "待评估"} />
           <IntroChip label="状态" value={fitLabelToReadiness(plan.evaluation?.readiness)} />
+          <IntroChip
+            label="迁移"
+            value={transferRecipe ? `${transferRecipe.sceneTransfers.length} 段手法` : "结构脚本"}
+          />
         </div>
+        <IntroTransferFlow recipe={transferRecipe} accent={style.accent} />
       </div>
     </AbsoluteFill>
+  );
+}
+
+function IntroTransferFlow({
+  recipe,
+  accent,
+}: {
+  recipe: TechniqueTransferRecipe | null;
+  accent: string;
+}) {
+  const rows =
+    recipe?.sceneTransfers.slice(0, 3).map((scene) => ({
+      source: `${scene.sampleTimeRange} ${scene.sourcePurpose}`,
+      rule: scene.transferableRule,
+      target: `${scene.outputTimeRange} ${scene.outputPurpose}`,
+    })) ?? [
+      { source: "样例 Hook", rule: "结果前置", target: "新片开头" },
+      { source: "样例证据", rule: "证据递进", target: "卖点证明" },
+      { source: "样例 CTA", rule: "行动收束", target: "转化结尾" },
+    ];
+
+  return (
+    <div
+      style={{
+        marginTop: 32,
+        display: "grid",
+        gap: 10,
+        maxWidth: 880,
+      }}
+    >
+      {rows.map((row, index) => (
+        <div
+          key={`${row.source}-${index}`}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 0.72fr 1fr",
+            gap: 10,
+            alignItems: "center",
+            borderRadius: 14,
+            padding: "11px 12px",
+            background: "rgba(5,8,14,0.34)",
+            border: "1px solid rgba(255,255,255,0.16)",
+          }}
+        >
+          <IntroFlowCell label="样例节拍" value={row.source} accent={accent} />
+          <IntroFlowCell label="迁移规则" value={row.rule} accent={accent} align="center" />
+          <IntroFlowCell label="新片槽位" value={row.target} accent={accent} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function IntroFlowCell({
+  label,
+  value,
+  accent,
+  align = "left",
+}: {
+  label: string;
+  value: string;
+  accent: string;
+  align?: "left" | "center";
+}) {
+  return (
+    <div style={{ minWidth: 0, textAlign: align }}>
+      <div style={{ color: accent, fontSize: 13, fontWeight: 900 }}>{label}</div>
+      <div style={{ marginTop: 4, fontSize: 17, lineHeight: 1.2, fontWeight: 800 }}>
+        {compactText(value, 26)}
+      </div>
+    </div>
   );
 }
 
@@ -342,6 +449,7 @@ function BeatScene({
   const localFrame = clamp(frame, 0, sequenceDurationInFrames);
   const style = getFocusSceneStyle(segment.focus, segment.index);
   const material = getMaterialFitSummary(segment.materialSlot?.fit);
+  const intensity = (segment.transfer?.beatIntensity ?? (segment.focus === "Hook" ? 88 : 64)) / 100;
   const enter = spring({ fps, frame: localFrame, config: { damping: 160, mass: 0.82 } });
   const exit = interpolate(
     localFrame,
@@ -353,7 +461,7 @@ function BeatScene({
     interpolate(enter, [0, 1], [0, 1], { extrapolateRight: "clamp" }) *
     interpolate(exit, [0, 1], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const y = interpolate(enter, [0, 1], [54, 0], { extrapolateRight: "clamp" });
-  const scale = interpolate(localFrame, [0, sequenceDurationInFrames], [1.04, 1.13], {
+  const scale = interpolate(localFrame, [0, sequenceDurationInFrames], [1.012, 1.045 + intensity * 0.025], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
     easing: Easing.bezier(0.16, 1, 0.3, 1),
@@ -380,6 +488,7 @@ function BeatScene({
         segment={segment}
         totalSegments={totalSegments}
       />
+      {segment.transfer ? <SourceTransferBadge segment={segment} style={style} /> : null}
       <div
         style={{
           position: "absolute",
@@ -405,6 +514,7 @@ function BeatScene({
         scale={scale}
         translateY={y}
       />
+      <CutFlashOverlay frame={localFrame} durationInFrames={sequenceDurationInFrames} intensity={intensity} />
 
       <div
         style={{
@@ -468,8 +578,84 @@ function BeatScene({
         rhythm={segment.transitionAndRhythm}
         risk={segment.riskNotes}
         localProgress={localProgress}
+        transfer={segment.transfer}
       />
     </AbsoluteFill>
+  );
+}
+
+function SourceTransferBadge({
+  segment,
+  style,
+}: {
+  segment: Segment;
+  style: FocusSceneStyle;
+}) {
+  const transfer = segment.transfer;
+  if (!transfer) return null;
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 70,
+        right: 70,
+        top: 142,
+        display: "grid",
+        gridTemplateColumns: "1fr 32px 1fr",
+        gap: 12,
+        alignItems: "center",
+        color: style.ink,
+        zIndex: 6,
+      }}
+    >
+      <TransferPill
+        label={`样例 ${transfer.sampleTimeRange}`}
+        value={transfer.sourcePurpose}
+        accent={style.accent}
+      />
+      <div
+        style={{
+          height: 2,
+          borderRadius: 999,
+          background: style.accent,
+          boxShadow: `0 0 22px ${style.accent}`,
+        }}
+      />
+      <TransferPill
+        label={`新片 ${transfer.outputTimeRange}`}
+        value={transfer.outputPurpose}
+        accent={style.accent}
+      />
+    </div>
+  );
+}
+
+function TransferPill({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent: string;
+}) {
+  return (
+    <div
+      style={{
+        minWidth: 0,
+        borderRadius: 999,
+        background: "rgba(6,10,18,0.46)",
+        border: `1px solid ${accent}80`,
+        padding: "10px 14px",
+        boxShadow: "0 16px 42px rgba(0,0,0,0.24)",
+      }}
+    >
+      <div style={{ fontSize: 14, color: accent, fontWeight: 900 }}>{label}</div>
+      <div style={{ marginTop: 2, fontSize: 17, lineHeight: 1.2, fontWeight: 820 }}>
+        {compactText(value, 24)}
+      </div>
+    </div>
   );
 }
 
@@ -544,7 +730,7 @@ function VisualStage({
   translateY: number;
 }) {
   const progress = clamp(localFrame / Math.max(1, sequenceDurationInFrames), 0, 1);
-  const phoneTilt = interpolate(progress, [0, 1], [-1.5, 1.8], {
+  const phoneTilt = interpolate(progress, [0, 1], [-0.7, 0.9], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -556,13 +742,13 @@ function VisualStage({
         position: "absolute",
         left: 72,
         right: 72,
-        top: 258,
-        height: 815,
-        borderRadius: 38,
+        top: 276,
+        height: 748,
+        borderRadius: 30,
         overflow: "hidden",
         background: style.heroGradient,
         border: "1px solid rgba(255,255,255,0.34)",
-        boxShadow: "0 38px 110px rgba(0,0,0,0.36)",
+        boxShadow: "0 34px 92px rgba(0,0,0,0.28)",
         transform: `translateY(${translateY}px) scale(${scale}) rotate(${phoneTilt}deg)`,
         transformOrigin: "center center",
       }}
@@ -586,12 +772,13 @@ function VisualStage({
           transform: "rotate(16deg)",
           background:
             "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.34), rgba(255,255,255,0))",
-          opacity: 0.7,
+          opacity: 0.38,
         }}
       />
       <ShotMockup segment={segment} style={style} progress={progress} />
       <MaterialBadge segment={segment} material={material} />
-      <RhythmMeter style={style} progress={progress} />
+      <EditDecisionRail segment={segment} style={style} />
+      <RhythmMeter style={style} progress={progress} intensity={segment.transfer?.beatIntensity ?? 70} />
     </div>
   );
 }
@@ -605,9 +792,11 @@ function ShotMockup({
   style: FocusSceneStyle;
   progress: number;
 }) {
-  const title = compactText(segment.shotPurpose, 18);
-  const visual = compactText(segment.visualSuggestion, 42);
-  const asset = compactText(segment.materialSlot?.slotName || segment.replaceableAssets, 16);
+  const sourcePurpose = compactText(segment.transfer?.sourcePurpose ?? "样例镜头目的", 22);
+  const targetPurpose = compactText(segment.transfer?.outputPurpose ?? segment.shotPurpose, 22);
+  const rule = compactText(segment.transfer?.transferableRule ?? segment.transitionAndRhythm, 28);
+  const visual = compactText(segment.visualSuggestion, 46);
+  const asset = compactText(segment.materialSlot?.slotName || segment.replaceableAssets, 18);
   const move = interpolate(progress, [0, 1], [0, -26], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -620,7 +809,7 @@ function ShotMockup({
           position: "absolute",
           left: 48,
           top: 52,
-          width: 360,
+          width: 390,
           minHeight: 104,
           borderRadius: 8,
           background: "rgba(7,10,18,0.38)",
@@ -640,7 +829,7 @@ function ShotMockup({
             textShadow: "0 10px 28px rgba(0,0,0,0.32)",
           }}
         >
-          {title}
+          {targetPurpose}
         </div>
       </div>
 
@@ -660,65 +849,79 @@ function ShotMockup({
       <div
         style={{
           position: "absolute",
-          left: 148,
-          top: 284 + move,
-          width: 322,
-          height: 346,
-          borderRadius: 36,
-          background: "rgba(255,255,255,0.82)",
+          left: 92,
+          top: 236 + move,
+          width: 430,
+          height: 372,
+          borderRadius: 26,
+          background: "rgba(255,255,255,0.9)",
           color: "#121722",
-          padding: 28,
+          padding: 24,
           boxShadow: "0 22px 58px rgba(0,0,0,0.22)",
         }}
       >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ fontSize: 18, color: "#64748B", fontWeight: 820 }}>迁移分镜板</div>
+          <div style={{ fontSize: 15, color: style.accent, fontWeight: 900 }}>
+            {segment.transfer ? `样例 ${segment.transfer.sampleTimeRange}` : "样例结构"}
+          </div>
+        </div>
         <div
           style={{
-            height: 150,
-            borderRadius: 10,
-            background:
-              "linear-gradient(135deg, rgba(15,23,42,0.08), rgba(15,23,42,0.2))",
-            position: "relative",
-            overflow: "hidden",
+            marginTop: 18,
+            display: "grid",
+            gridTemplateColumns: "1fr 34px 1fr",
+            gap: 10,
+            alignItems: "stretch",
           }}
         >
-          <div
-            style={{
-              position: "absolute",
-              left: 24,
-              right: 24,
-              bottom: 26,
-              height: 12,
-              borderRadius: 99,
-              background: style.accent,
-            }}
+          <StoryboardPanel
+            eyebrow="样例"
+            title={sourcePurpose}
+            detail={rule}
+            accent={style.accent}
           />
           <div
             style={{
-              position: "absolute",
-              left: 40,
-              top: 34,
-              width: 88,
-              height: 88,
-              borderRadius: 999,
-              background: style.accentSoft,
-              border: `2px solid ${style.accent}`,
+              display: "grid",
+              placeItems: "center",
+              color: style.accent,
+              fontSize: 30,
+              fontWeight: 900,
             }}
+          >
+            →
+          </div>
+          <StoryboardPanel
+            eyebrow="新片"
+            title={targetPurpose}
+            detail={visual}
+            accent={style.accent}
           />
         </div>
-        <div style={{ marginTop: 22, fontSize: 23, fontWeight: 900, lineHeight: 1.15 }}>
-          {asset}
+        <div style={{ marginTop: 18, fontSize: 22, fontWeight: 900, lineHeight: 1.15 }}>
+          素材槽位：{asset}
         </div>
-        <div style={{ marginTop: 12, fontSize: 17, lineHeight: 1.35, opacity: 0.7 }}>
-          {visual}
+        <div
+          style={{
+            marginTop: 8,
+            maxHeight: 42,
+            overflow: "hidden",
+            fontSize: 14,
+            lineHeight: 1.36,
+            opacity: 0.68,
+          }}
+        >
+          {compactText(segment.materialSlot?.completionPlan || segment.replaceableAssets, 34)}
         </div>
       </div>
 
       <div
         style={{
           position: "absolute",
-          right: 58,
-          top: 156,
-          width: 330,
+          right: 42,
+          top: 132,
+          width: 300,
           display: "flex",
           flexDirection: "column",
           gap: 18,
@@ -730,6 +933,93 @@ function ShotMockup({
         <FloatingNote title="补全方式" value={segment.materialSlot?.completionPlan || segment.replaceableAssets} style={style} index={2} />
       </div>
     </>
+  );
+}
+
+function StoryboardPanel({
+  eyebrow,
+  title,
+  detail,
+  accent,
+}: {
+  eyebrow: string;
+  title: string;
+  detail: string;
+  accent: string;
+}) {
+  return (
+    <div
+      style={{
+        minWidth: 0,
+        minHeight: 178,
+        borderRadius: 16,
+        padding: "15px 13px",
+        background: "rgba(15,23,42,0.08)",
+        border: "1px solid rgba(15,23,42,0.12)",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+      }}
+    >
+      <div>
+        <div style={{ fontSize: 13, color: accent, fontWeight: 950 }}>{eyebrow}</div>
+        <div style={{ marginTop: 8, fontSize: 19, lineHeight: 1.16, fontWeight: 920 }}>
+          {title}
+        </div>
+      </div>
+      <div style={{ fontSize: 13, lineHeight: 1.3, color: "#475569", fontWeight: 640 }}>
+        {compactText(detail, 30)}
+      </div>
+    </div>
+  );
+}
+
+function EditDecisionRail({
+  segment,
+  style,
+}: {
+  segment: Segment;
+  style: FocusSceneStyle;
+}) {
+  const transfer = segment.transfer;
+  const decisions = [
+    ["转场", transfer?.transitionStyle ?? compactText(segment.transitionAndRhythm, 10)],
+    ["字幕", transfer ? `${transfer.captionPlacement}/${transfer.captionDensity}` : "按脚本"],
+    ["强度", transfer ? `${transfer.beatIntensity}` : segment.focus],
+    ["补全", transfer ? compactText(transfer.completionPlan, 12) : compactText(segment.replaceableAssets, 12)],
+  ];
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 48,
+        right: 48,
+        bottom: 136,
+        display: "grid",
+        gridTemplateColumns: "repeat(4, 1fr)",
+        gap: 10,
+      }}
+    >
+      {decisions.map(([label, value]) => (
+        <div
+          key={label}
+          style={{
+            minHeight: 54,
+            borderRadius: 12,
+            padding: "9px 10px",
+            color: style.ink,
+            background: "rgba(7,10,18,0.38)",
+            border: `1px solid ${style.accent}66`,
+          }}
+        >
+          <div style={{ fontSize: 12, color: style.accent, fontWeight: 900 }}>{label}</div>
+          <div style={{ marginTop: 4, fontSize: 15, lineHeight: 1.15, fontWeight: 760 }}>
+            {compactText(value, 18)}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -821,27 +1111,66 @@ function MaterialBadge({
   );
 }
 
+function CutFlashOverlay({
+  frame,
+  durationInFrames,
+  intensity,
+}: {
+  frame: number;
+  durationInFrames: number;
+  intensity: number;
+}) {
+  const cutPoints = [0, Math.round(durationInFrames * 0.48), Math.max(0, durationInFrames - 8)];
+  const pulse = Math.max(
+    ...cutPoints.map((point) =>
+      interpolate(Math.abs(frame - point), [0, 8, 18], [1, 0.34, 0], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+      }),
+    ),
+  );
+
+  if (pulse <= 0.01) return null;
+
+  return (
+    <AbsoluteFill
+      style={{
+        background: `rgba(255,255,255,${pulse * 0.16 * intensity})`,
+        boxShadow: `inset 0 0 ${Math.round(120 * pulse)}px rgba(255,184,77,${pulse * 0.42})`,
+        mixBlendMode: "screen",
+        pointerEvents: "none",
+      }}
+    />
+  );
+}
+
 function RhythmMeter({
   style,
   progress,
+  intensity,
 }: {
   style: FocusSceneStyle;
   progress: number;
+  intensity: number;
 }) {
   return (
     <div
       style={{
         position: "absolute",
         right: 44,
-        bottom: 126,
+        top: 46,
         display: "flex",
         alignItems: "flex-end",
         gap: 7,
+        padding: "10px 12px",
+        borderRadius: 16,
+        background: "rgba(7,10,18,0.22)",
+        border: "1px solid rgba(255,255,255,0.16)",
       }}
     >
       {Array.from({ length: 12 }).map((_, index) => {
         const active = index / 12 <= progress;
-        const height = 24 + ((index * 17) % 54);
+        const height = 22 + ((index * 17) % 46) + (intensity / 100) * 18;
         return (
           <div
             key={index}
@@ -865,17 +1194,28 @@ function PackagingStrip({
   rhythm,
   risk,
   localProgress,
+  transfer,
 }: {
   style: FocusSceneStyle;
   packaging: string;
   rhythm: string;
   risk: string;
   localProgress: number;
+  transfer: TechniqueTransferScene | null;
 }) {
   const chips = [
-    { label: "字幕包装", value: packaging },
-    { label: "镜头节奏", value: rhythm },
-    { label: "风险边界", value: risk },
+    {
+      label: "字幕包装",
+      value: transfer ? `${transfer.captionDensity} · ${compactText(packaging, 28)}` : packaging,
+    },
+    {
+      label: "剪辑节奏",
+      value: transfer ? `${transfer.transitionStyle} · ${compactText(rhythm, 28)}` : rhythm,
+    },
+    {
+      label: "迁移规则",
+      value: transfer ? transfer.transferableRule : risk,
+    },
   ];
 
   return (

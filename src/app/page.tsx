@@ -142,6 +142,78 @@ type VideoGenerateResponse = {
   error?: string;
 };
 
+type InputCoverageItem = {
+  group: "样例侧" | "目标侧";
+  label: string;
+  detail: string;
+  ready: boolean;
+};
+
+function buildInputCoverageItems({
+  sampleFile,
+  localUploadName,
+  sampleUrl,
+  sampleNotes,
+  additionalSampleNotes,
+  targetBrief,
+  userMaterials,
+  availableUploadCount,
+}: {
+  sampleFile: File | null;
+  localUploadName: string;
+  sampleUrl: string;
+  sampleNotes: string;
+  additionalSampleNotes: string;
+  targetBrief: string;
+  userMaterials: string;
+  availableUploadCount: number;
+}): InputCoverageItem[] {
+  return [
+    {
+      group: "样例侧",
+      label: "样例视频文件",
+      detail: sampleFile ? sampleFile.name : "上传 mp4/mov，抽帧+元数据解析",
+      ready: Boolean(sampleFile),
+    },
+    {
+      group: "样例侧",
+      label: "本地视频库",
+      detail: localUploadName || (availableUploadCount ? `${availableUploadCount} 个可选` : "data/uploads"),
+      ready: Boolean(localUploadName),
+    },
+    {
+      group: "样例侧",
+      label: "样例链接",
+      detail: sampleUrl.trim() ? "URL 已填写" : "公开视频链接或参考地址",
+      ready: Boolean(sampleUrl.trim()),
+    },
+    {
+      group: "样例侧",
+      label: "观察/转写文本",
+      detail: sampleNotes.trim() ? "可离线拆解脚本、节奏、包装" : "可贴口播、字幕或画面观察",
+      ready: Boolean(sampleNotes.trim()),
+    },
+    {
+      group: "样例侧",
+      label: "多样例补充",
+      detail: additionalSampleNotes.trim() ? "已启用共性结构抽取" : "用 --- 分隔多条样例",
+      ready: Boolean(additionalSampleNotes.trim()),
+    },
+    {
+      group: "目标侧",
+      label: "新主题 Brief",
+      detail: targetBrief.trim() ? "迁移目标已填写" : "主题/商品/受众/卖点",
+      ready: Boolean(targetBrief.trim()),
+    },
+    {
+      group: "目标侧",
+      label: "用户素材",
+      detail: userMaterials.trim() ? "用于素材槽位匹配和缺口识别" : "图片/视频/文案至少一种",
+      ready: Boolean(userMaterials.trim()),
+    },
+  ];
+}
+
 type StatusState =
   | { type: "idle"; message: string }
   | { type: "loading"; message: string }
@@ -240,6 +312,151 @@ function MediaMetaPanel({ mediaMeta }: { mediaMeta: MediaMeta }) {
           未抽取预览帧（可能缺少 ffmpeg），但仍可基于转写/观察继续拆解。
         </p>
       )}
+    </div>
+  );
+}
+
+function InputCoveragePanel({
+  sampleFile,
+  localUploadName,
+  sampleUrl,
+  sampleNotes,
+  additionalSampleNotes,
+  targetBrief,
+  userMaterials,
+  availableUploadCount,
+}: {
+  sampleFile: File | null;
+  localUploadName: string;
+  sampleUrl: string;
+  sampleNotes: string;
+  additionalSampleNotes: string;
+  targetBrief: string;
+  userMaterials: string;
+  availableUploadCount: number;
+}) {
+  const items = buildInputCoverageItems({
+    sampleFile,
+    localUploadName,
+    sampleUrl,
+    sampleNotes,
+    additionalSampleNotes,
+    targetBrief,
+    userMaterials,
+    availableUploadCount,
+  });
+  const readyCount = items.filter((item) => item.ready).length;
+
+  return (
+    <div className="rounded-lg border bg-background/80 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary">输入方式覆盖</Badge>
+          <Badge variant="outline">{readyCount}/{items.length}</Badge>
+        </div>
+        <span className="text-xs font-medium text-muted-foreground">
+          视频 / 链接 / 文案 / 多样例 / 用户素材
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {items.map((item) => (
+          <div
+            className={`rounded-md border p-2.5 ${
+              item.ready ? "border-emerald-200 bg-emerald-50/70" : "bg-white"
+            }`}
+            key={item.label}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-foreground">{item.label}</span>
+              <Badge variant={item.ready ? "success" : "outline"}>
+                {item.ready ? "已接入" : "可选"}
+              </Badge>
+            </div>
+            <p className="mt-1 truncate text-[11px] text-muted-foreground">{item.detail}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InputMethodBoard({
+  sampleFile,
+  localUploadName,
+  sampleUrl,
+  sampleNotes,
+  additionalSampleNotes,
+  targetBrief,
+  userMaterials,
+  availableUploadCount,
+}: {
+  sampleFile: File | null;
+  localUploadName: string;
+  sampleUrl: string;
+  sampleNotes: string;
+  additionalSampleNotes: string;
+  targetBrief: string;
+  userMaterials: string;
+  availableUploadCount: number;
+}) {
+  const items = buildInputCoverageItems({
+    sampleFile,
+    localUploadName,
+    sampleUrl,
+    sampleNotes,
+    additionalSampleNotes,
+    targetBrief,
+    userMaterials,
+    availableUploadCount,
+  });
+  const sampleItems = items.filter((item) => item.group === "样例侧");
+  const targetItems = items.filter((item) => item.group === "目标侧");
+  const readyCount = items.filter((item) => item.ready).length;
+
+  return (
+    <section className="studio-input-board mx-auto px-4 sm:px-5">
+      <div className="studio-input-board-inner">
+        <div className="studio-input-board-copy">
+          <Badge variant="secondary">多输入闭环</Badge>
+          <h2>样例视频 / 链接 / 文案 / 多样例 / 用户素材都能进入迁移链路</h2>
+          <p>
+            左侧输入抽取脚本、节奏、包装和 BGM 卡点；右侧输入用于素材槽位匹配、缺口判断和补全策略生成。
+          </p>
+        </div>
+        <div className="studio-input-board-flow">
+          <InputGroupColumn title="样例理解输入" items={sampleItems} />
+          <div className="studio-input-arrow">
+            <ArrowRight className="size-5" />
+            <span>结构手法迁移</span>
+          </div>
+          <InputGroupColumn title="新内容输入" items={targetItems} />
+        </div>
+        <div className="studio-input-score">
+          <strong>{readyCount}/{items.length}</strong>
+          <span>输入覆盖</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function InputGroupColumn({ title, items }: { title: string; items: InputCoverageItem[] }) {
+  return (
+    <div className="studio-input-column">
+      <div className="studio-input-column-title">{title}</div>
+      <div className="studio-input-items">
+        {items.map((item) => (
+          <div className={`studio-input-item ${item.ready ? "is-ready" : ""}`} key={item.label}>
+            <div>
+              <span>{item.label}</span>
+              <p>{item.detail}</p>
+            </div>
+            <Badge variant={item.ready ? "success" : "outline"}>
+              {item.ready ? "已接入" : "可选"}
+            </Badge>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1963,6 +2180,17 @@ export default function Home() {
         </div>
       </section>
 
+      <InputMethodBoard
+        sampleFile={sampleFile}
+        localUploadName={localUploadName}
+        sampleUrl={sampleUrl}
+        sampleNotes={sampleNotes}
+        additionalSampleNotes={additionalSampleNotes}
+        targetBrief={targetBrief}
+        userMaterials={userMaterials}
+        availableUploadCount={availableUploads.length}
+      />
+
       <section
         className={`workspace-grid studio-workspace mx-auto grid gap-5 px-4 py-5 sm:px-5 ${
           simpleMode ? "lg:grid-cols-1" : "lg:grid-cols-[372px_minmax(0,1fr)]"
@@ -1994,6 +2222,16 @@ export default function Home() {
                   ))}
                 </div>
               </div>
+              <InputCoveragePanel
+                sampleFile={sampleFile}
+                localUploadName={localUploadName}
+                sampleUrl={sampleUrl}
+                sampleNotes={sampleNotes}
+                additionalSampleNotes={additionalSampleNotes}
+                targetBrief={targetBrief}
+                userMaterials={userMaterials}
+                availableUploadCount={availableUploads.length}
+              />
               <div className="space-y-2">
                 <Label htmlFor="projectTitle">项目名称</Label>
                 <Input
@@ -2319,7 +2557,7 @@ export default function Home() {
                           headers: { "content-type": "application/json" },
                           body: JSON.stringify({
                             planId: activePlanId,
-                            quality: "draft",
+                            quality: "high",
                             mode: "high-quality",
                             title: projectTitle,
                           }),
@@ -2346,6 +2584,49 @@ export default function Home() {
                   >
                     {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
                     高质量有声
+                  </Button>
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                    disabled={renderingVideo || status.type === "loading"}
+                    onClick={async () => {
+                      if (!projectId) return;
+                      setRenderingVideo(true);
+                      setStatus({ type: "loading", message: "正在渲染手法迁移说明片..." });
+                      try {
+                        const response = await fetch(`/api/projects/${projectId}/render`, {
+                          method: "POST",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({
+                            planId: activePlanId,
+                            quality: "high",
+                            mode: "technique",
+                            title: projectTitle,
+                          }),
+                        });
+                        const data = (await response.json()) as {
+                          downloadUrl?: string;
+                          error?: string;
+                        };
+                        if (!response.ok || !data.downloadUrl) {
+                          throw new Error(data.error || "渲染失败");
+                        }
+                        window.location.href = data.downloadUrl;
+                        setStatus({ type: "success", message: "手法迁移说明片已生成，开始下载。" });
+                      } catch (error) {
+                        setStatus({
+                          type: "error",
+                          message:
+                            error instanceof Error ? error.message : "渲染失败（请检查 media:install-binaries）",
+                        });
+                      } finally {
+                        setRenderingVideo(false);
+                      }
+                    }}
+                  >
+                    {renderingVideo ? <Loader2 className="animate-spin" /> : <GitBranch />}
+                    手法迁移说明片
                   </Button>
                   <Button
                     size="sm"

@@ -379,6 +379,7 @@ async function main() {
 
   const inputProps = {
     plan,
+    analysis,
     title: args.title || title || "爆款结构迁移引擎（结构演示稿）",
     productName: args.productName || "天然矿泉水",
     sourceVideoPath,

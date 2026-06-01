@@ -14,7 +14,7 @@ import {
 export const runtime = "nodejs";
 
 type RenderQuality = "high" | "draft";
-type RenderMode = "structure" | "commercial" | "high-quality";
+type RenderMode = "structure" | "commercial" | "high-quality" | "technique";
 
 type RequestBody = {
   planId?: string | null;
@@ -81,6 +81,8 @@ export async function POST(
         ? "commercial"
         : body.mode === "high-quality"
           ? "high-quality"
+          : body.mode === "technique"
+            ? "technique"
           : "structure";
     const title = normalizeText(body.title) ?? project.title ?? "爆款结构迁移引擎（结构演示稿）";
 
@@ -113,12 +115,20 @@ export async function POST(
           ]
         : mode === "high-quality"
           ? [
-            "--composition",
-            /咖啡|冷萃|coffee/i.test(plan.projectTitle) ? "CoffeeLaunchShort" : "HighQualityShort",
+              "--composition",
+              /咖啡|冷萃|coffee/i.test(plan.projectTitle) ? "CoffeeLaunchShort" : "HighQualityShort",
               "--audio-mode",
               "auto",
               ...(project.mediaPath ? ["--source-video", project.mediaPath] : []),
             ]
+          : mode === "technique"
+            ? [
+                "--composition",
+                "VideoFromPlan",
+                "--audio-mode",
+                "auto",
+                ...(project.mediaPath ? ["--source-video", project.mediaPath] : []),
+              ]
         : []),
     ]);
 
