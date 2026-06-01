@@ -120,6 +120,28 @@ type PlanLoadResponse = {
   error?: string;
 };
 
+type VideoGenerateResponse = {
+  mode?: "hook" | "full-video";
+  audioMode?: "natural-sfx" | "model-voiceover";
+  localVideoUrl?: string | null;
+  videoUrl?: string | null;
+  segmentSeconds?: string;
+  segments?: Array<{
+    order: number;
+    role: string;
+    downloaded?: {
+      filePath: string;
+      bytes: number;
+    } | null;
+  }>;
+  downloaded?: {
+    filePath: string;
+    bytes: number;
+  } | null;
+  debugFilePath?: string;
+  error?: string;
+};
+
 type StatusState =
   | { type: "idle"; message: string }
   | { type: "loading"; message: string }
@@ -2324,6 +2346,57 @@ export default function Home() {
                   >
                     {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
                     高质量有声
+                  </Button>
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                    disabled={renderingVideo || status.type === "loading"}
+                    onClick={async () => {
+                      if (!projectId) return;
+                      setRenderingVideo(true);
+                      setStatus({
+                        type: "loading",
+                        message: "正在按分镜调用视频 API 分段生成素材，并自动拼接...",
+                      });
+                      try {
+                        const response = await fetch(`/api/projects/${projectId}/generate-video`, {
+                          method: "POST",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({
+                            planId: activePlanId,
+                            versionIndex: activeVersion,
+                            beatIndex: 0,
+                            mode: "full-video",
+                            audioMode: "natural-sfx",
+                          }),
+                        });
+                        const data = (await response.json()) as VideoGenerateResponse;
+                        if (!response.ok || !data.downloaded) {
+                          throw new Error(data.error || "视频 API 分段生成失败");
+                        }
+                        if (data.localVideoUrl || data.videoUrl) {
+                          window.open(data.localVideoUrl || data.videoUrl || "", "_blank");
+                        }
+                        setStatus({
+                          type: "success",
+                          message: `视频 API 分段生成完成：${data.segments?.length || 0} 段，已拼接到 ${data.downloaded.filePath}。`,
+                        });
+                      } catch (error) {
+                        setStatus({
+                          type: "error",
+                          message:
+                            error instanceof Error
+                              ? error.message
+                              : "视频 API 分段生成失败（请检查 VIDEO_API_* 配置）",
+                        });
+                      } finally {
+                        setRenderingVideo(false);
+                      }
+                    }}
+                  >
+                    {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
+                    API 分段生成
                   </Button>
                   <Button
                     size="sm"

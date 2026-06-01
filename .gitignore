@@ -22,6 +22,8 @@ prisma/dev.db-journal
 data/uploads
 data/frames
 data/renders
+data/template-videos/*
+!data/template-videos/README.md
 data/*.png
 data/*.jpg
 screenshots/
