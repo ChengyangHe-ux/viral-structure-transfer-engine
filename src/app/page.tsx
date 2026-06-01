@@ -52,6 +52,11 @@ import {
   type MigrationMapRow,
 } from "@/lib/mapping";
 import { diffPlans } from "@/lib/plan-diff";
+import {
+  buildContestRequirementCoverage,
+  type ContestRequirementCoverageItem,
+  type ContestRequirementCoverageReport,
+} from "@/lib/requirement-coverage";
 import { buildStoryboardFrames, type StoryboardFrame } from "@/lib/storyboard";
 import {
   buildStructureFingerprint,
@@ -1132,6 +1137,122 @@ function ChampionRubricPanel({
   );
 }
 
+function requirementStatusText(status: ContestRequirementCoverageItem["status"]) {
+  if (status === "ready") return "已完成";
+  if (status === "partial") return "部分完成";
+  return "待生成";
+}
+
+function requirementStatusVariant(status: ContestRequirementCoverageItem["status"]) {
+  if (status === "ready") return "success";
+  if (status === "partial") return "warning";
+  return "outline";
+}
+
+function RequirementCoveragePanel({
+  report,
+  compact = false,
+}: {
+  report: ContestRequirementCoverageReport;
+  compact?: boolean;
+}) {
+  const groups = useMemo(() => {
+    const names: ContestRequirementCoverageItem["priority"][] = ["P0", "P1", "加分"];
+    return names
+      .map((name) => {
+        const rows = report.items.filter((item) => item.priority === name);
+        return {
+          name,
+          rows,
+          readyCount: rows.filter((item) => item.status === "ready").length,
+        };
+      })
+      .filter((group) => group.rows.length);
+  }, [report]);
+
+  return (
+    <div className="space-y-4 rounded-lg border bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="mb-2 flex items-center gap-2">
+            <ClipboardList className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">全要求验收导航</h3>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={report.completedCount === report.totalCount ? "success" : "secondary"}>
+              {report.completedCount}/{report.totalCount} 项完成
+            </Badge>
+            <Badge variant="outline">P0 {report.p0CompletedCount}/8</Badge>
+            <Badge variant="outline">P1 {report.p1CompletedCount}/4</Badge>
+            <Badge variant="outline">加分 {report.bonusReadyCount}/1</Badge>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            按题目任务 1-13 逐项显示产品证据、评委入口和下一步动作，避免答辩时功能做了但找不到。
+          </p>
+        </div>
+        <div className="min-w-[118px] rounded-lg border bg-background px-4 py-3 text-center">
+          <p className="text-xs text-muted-foreground">覆盖率</p>
+          <p className="mt-1 text-3xl font-semibold text-primary">
+            {Math.round((report.completedCount / report.totalCount) * 100)}%
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        {groups.map((group) => (
+          <div className="rounded-lg border bg-background p-3" key={group.name}>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-foreground">{group.name}</p>
+              <span className="text-xs font-semibold text-primary">
+                {group.readyCount}/{group.rows.length}
+              </span>
+            </div>
+            <div className="mt-2 h-1.5 rounded-full bg-secondary">
+              <div
+                className="h-1.5 rounded-full bg-primary"
+                style={{ width: `${Math.round((group.readyCount / group.rows.length) * 100)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+              {group.rows.map((row) => row.taskId).join(" / ")}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2">
+        {(compact ? report.items.slice(0, 5) : report.items).map((item) => (
+          <div
+            className="grid gap-2 rounded-md border bg-background p-3 lg:grid-cols-[78px_minmax(140px,0.55fr)_92px_minmax(0,1fr)_minmax(150px,0.55fr)]"
+            key={item.taskId}
+          >
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">{item.taskId}</Badge>
+              <span className="text-xs font-semibold text-muted-foreground">{item.priority}</span>
+            </div>
+            <p className="text-xs font-semibold text-foreground">{item.title}</p>
+            <Badge variant={requirementStatusVariant(item.status)}>
+              {requirementStatusText(item.status)}
+            </Badge>
+            <div>
+              <p className="text-xs leading-5 text-muted-foreground">{item.evidence}</p>
+              {!compact ? (
+                <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                  要求：{item.requirement}
+                </p>
+              ) : null}
+            </div>
+            <div>
+              <p className="text-xs font-medium leading-5 text-foreground">{item.judgePanel}</p>
+              <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{item.nextAction}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function fitText(fit: MaterialAdaptation["slots"][number]["fit"]) {
   if (fit === "matched") return "已匹配";
   if (fit === "partial") return "部分匹配";
@@ -1739,6 +1860,16 @@ export default function Home() {
       techniqueTransfer: activeTechniqueRecipe || undefined,
     });
   }, [activeTechniqueRecipe, analysis, plan]);
+  const requirementCoverage = useMemo(
+    () =>
+      buildContestRequirementCoverage({
+        analysis,
+        plan,
+        techniqueTransfer: activeTechniqueRecipe,
+        championRubric,
+      }),
+    [activeTechniqueRecipe, analysis, championRubric, plan],
+  );
   const previewMarkdown = useMemo(() => {
     if (analysis && plan) {
       return renderProjectMarkdown({
@@ -2856,6 +2987,8 @@ export default function Home() {
 
                   <EditingTechniquePanel techniques={plan.retrievedTechniques} />
 
+                  <RequirementCoveragePanel report={requirementCoverage} />
+
                   {plan.awardReadiness ? (
                     <AwardReadinessPanel readiness={plan.awardReadiness} />
                   ) : null}
@@ -3070,12 +3203,15 @@ export default function Home() {
                   <VersionTimeline version={activePlanVersion} />
                 </div>
               ) : (
-                <div className="flex min-h-[360px] flex-col items-center justify-center rounded-lg border border-dashed bg-background px-6 text-center">
-                  <Trophy className="size-8 text-muted-foreground" />
-                  <p className="mt-3 text-sm font-medium">等待迁移方案</p>
-                  <p className="mt-1 max-w-md text-sm leading-6 text-muted-foreground">
-                    完成样例拆解并填写 Brief 后，系统会生成稳妥转化、强 Hook、内容种草等版本。
-                  </p>
+                <div className="space-y-4">
+                  <div className="flex min-h-[260px] flex-col items-center justify-center rounded-lg border border-dashed bg-background px-6 text-center">
+                    <Trophy className="size-8 text-muted-foreground" />
+                    <p className="mt-3 text-sm font-medium">等待迁移方案</p>
+                    <p className="mt-1 max-w-md text-sm leading-6 text-muted-foreground">
+                      完成样例拆解并填写 Brief 后，系统会生成稳妥转化、强 Hook、内容种草等版本。
+                    </p>
+                  </div>
+                  <RequirementCoveragePanel report={requirementCoverage} compact />
                 </div>
               )}
             </CardContent>
