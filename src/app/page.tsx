@@ -1742,7 +1742,7 @@ export default function Home() {
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
-        ? "当前为离线演示模式：已用本地策略生成脚本。"
+        ? "已用本地策略生成脚本，后续可切换云模型增强。"
         : "迁移脚本已生成，可直接编辑并导出。",
     });
   }
@@ -1787,7 +1787,7 @@ export default function Home() {
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
-        ? "当前为离线演示模式：已用本地策略完成修订。"
+        ? "已用本地策略完成修订，后续可切换云模型增强。"
         : "已按你的自然语言指令更新方案。",
     });
   }
@@ -2276,7 +2276,7 @@ export default function Home() {
                       setRenderingVideo(true);
                       setStatus({
                         type: "loading",
-                        message: "正在按迁移分镜调用视频 API 分段生成素材，并自动拼接...",
+                        message: "正在按迁移分镜智能生成补充素材，并自动拼接...",
                       });
                       try {
                         const response = await fetch(`/api/projects/${projectId}/generate-video`, {
@@ -2292,14 +2292,14 @@ export default function Home() {
                         });
                         const data = (await response.json()) as VideoGenerateResponse;
                         if (!response.ok || !data.downloaded) {
-                          throw new Error(data.error || "视频 API 分段生成失败");
+                          throw new Error(data.error || "智能补全生成失败");
                         }
                         if (data.localVideoUrl || data.videoUrl) {
                           window.open(data.localVideoUrl || data.videoUrl || "", "_blank");
                         }
                         setStatus({
                           type: "success",
-                          message: `视频 API 分段生成完成：${data.segments?.length || 0} 段，已拼接到 ${data.downloaded.filePath}。`,
+                          message: `智能补全生成完成：${data.segments?.length || 0} 段，已拼接到 ${data.downloaded.filePath}。`,
                         });
                       } catch (error) {
                         setStatus({
@@ -2307,7 +2307,7 @@ export default function Home() {
                           message:
                             error instanceof Error
                               ? error.message
-                              : "视频 API 分段生成失败（请检查 VIDEO_API_* 配置）",
+                              : "视频分段生成失败，请检查视频生成配置。",
                         });
                       } finally {
                         setRenderingVideo(false);
@@ -2315,7 +2315,7 @@ export default function Home() {
                     }}
                   >
                     {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
-                    API 分段生成
+                    智能补全生成
                   </Button>
                   <Button
                     size="sm"
