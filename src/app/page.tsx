@@ -19,7 +19,6 @@ import {
   PencilLine,
   Plus,
   RefreshCw,
-  Trophy,
   Trash2,
   Upload,
   Video,
@@ -132,78 +131,6 @@ type VideoGenerateResponse = {
   error?: string;
 };
 
-type InputCoverageItem = {
-  group: "样例侧" | "目标侧";
-  label: string;
-  detail: string;
-  ready: boolean;
-};
-
-function buildInputCoverageItems({
-  sampleFile,
-  localUploadName,
-  sampleUrl,
-  sampleNotes,
-  additionalSampleNotes,
-  targetBrief,
-  userMaterials,
-  availableUploadCount,
-}: {
-  sampleFile: File | null;
-  localUploadName: string;
-  sampleUrl: string;
-  sampleNotes: string;
-  additionalSampleNotes: string;
-  targetBrief: string;
-  userMaterials: string;
-  availableUploadCount: number;
-}): InputCoverageItem[] {
-  return [
-    {
-      group: "样例侧",
-      label: "样例视频文件",
-      detail: sampleFile ? sampleFile.name : "上传 mp4/mov，抽帧+元数据解析",
-      ready: Boolean(sampleFile),
-    },
-    {
-      group: "样例侧",
-      label: "本地视频库",
-      detail: localUploadName || (availableUploadCount ? `${availableUploadCount} 个可选` : "data/uploads"),
-      ready: Boolean(localUploadName),
-    },
-    {
-      group: "样例侧",
-      label: "样例链接",
-      detail: sampleUrl.trim() ? "URL 已填写" : "公开视频链接或参考地址",
-      ready: Boolean(sampleUrl.trim()),
-    },
-    {
-      group: "样例侧",
-      label: "观察/转写文本",
-      detail: sampleNotes.trim() ? "可离线拆解脚本、节奏、包装" : "可贴口播、字幕或画面观察",
-      ready: Boolean(sampleNotes.trim()),
-    },
-    {
-      group: "样例侧",
-      label: "多样例补充",
-      detail: additionalSampleNotes.trim() ? "已启用共性结构抽取" : "用 --- 分隔多条样例",
-      ready: Boolean(additionalSampleNotes.trim()),
-    },
-    {
-      group: "目标侧",
-      label: "新主题 Brief",
-      detail: targetBrief.trim() ? "迁移目标已填写" : "主题/商品/受众/卖点",
-      ready: Boolean(targetBrief.trim()),
-    },
-    {
-      group: "目标侧",
-      label: "用户素材",
-      detail: userMaterials.trim() ? "用于素材槽位匹配和缺口识别" : "图片/视频/文案至少一种",
-      ready: Boolean(userMaterials.trim()),
-    },
-  ];
-}
-
 type StatusState =
   | { type: "idle"; message: string }
   | { type: "loading"; message: string }
@@ -302,70 +229,6 @@ function MediaMetaPanel({ mediaMeta }: { mediaMeta: MediaMeta }) {
           未抽取预览帧（可能缺少 ffmpeg），但仍可基于转写/观察继续拆解。
         </p>
       )}
-    </div>
-  );
-}
-
-function InputCoveragePanel({
-  sampleFile,
-  localUploadName,
-  sampleUrl,
-  sampleNotes,
-  additionalSampleNotes,
-  targetBrief,
-  userMaterials,
-  availableUploadCount,
-}: {
-  sampleFile: File | null;
-  localUploadName: string;
-  sampleUrl: string;
-  sampleNotes: string;
-  additionalSampleNotes: string;
-  targetBrief: string;
-  userMaterials: string;
-  availableUploadCount: number;
-}) {
-  const items = buildInputCoverageItems({
-    sampleFile,
-    localUploadName,
-    sampleUrl,
-    sampleNotes,
-    additionalSampleNotes,
-    targetBrief,
-    userMaterials,
-    availableUploadCount,
-  });
-  const readyCount = items.filter((item) => item.ready).length;
-
-  return (
-    <div className="rounded-lg border bg-background/80 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">输入入口</Badge>
-          <Badge variant="outline">已填写 {readyCount}</Badge>
-        </div>
-        <span className="text-xs font-medium text-muted-foreground">
-          视频 / 链接 / 文案 / 多样例 / 用户素材
-        </span>
-      </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        {items.map((item) => (
-          <div
-            className={`rounded-md border p-2.5 ${
-              item.ready ? "border-emerald-200 bg-emerald-50/70" : "bg-white"
-            }`}
-            key={item.label}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-foreground">{item.label}</span>
-              <Badge variant={item.ready ? "success" : "outline"}>
-                {item.ready ? "已接入" : "可选"}
-              </Badge>
-            </div>
-            <p className="mt-1 truncate text-[11px] text-muted-foreground">{item.detail}</p>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -1038,11 +901,11 @@ function EditingTechniquePanel({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">RAG 技巧库</Badge>
-            <Badge variant="outline">命中 {techniques.length} 条</Badge>
+            <Badge variant="secondary">剪辑手法参考</Badge>
+            <Badge variant="outline">匹配 {techniques.length} 条</Badge>
           </div>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            生成前用 Brief、素材线索和样例结构检索剪辑技巧库，把“怎么剪”注入到脚本、转场、字幕和制作备注里。
+            根据 Brief、素材线索和样例结构匹配剪辑手法，把“怎么剪”落实到脚本、转场、字幕和制作备注里。
           </p>
         </div>
         <Database className="size-8 shrink-0 text-primary" />
@@ -1192,7 +1055,7 @@ function TimelineOverview({ rows }: { rows: MigrationMapRow[] }) {
             </Badge>
           </div>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            按真实秒数把脚本拆成可生产的时间线，颜色标签对应每段结构任务，素材状态提示该段是否需要补拍或包装兜底。
+            按真实秒数把脚本拆成可生产的时间线，颜色标签对应每段结构作用，素材状态提示该段是否需要补拍或包装兜底。
           </p>
         </div>
         <BarChart3 className="size-8 shrink-0 text-primary" />
@@ -1528,9 +1391,9 @@ export default function Home() {
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
-        ? `未检测到可用 AI 密钥，已使用本地演示策略完成 ${payload.sourceSampleCount ?? 1} 条样例拆解。`
+        ? `样例结构拆解完成：已整理 ${payload.sourceSampleCount ?? 1} 条样例的 hook、节奏和包装线索。`
         : payload.directVideoUsed
-          ? `样例结构拆解完成：已启用整段视频理解，并结合 ${payload.visionFrameCount ?? 0} 个时间轴关键帧；样例数 ${payload.sourceSampleCount ?? 1}。`
+          ? `样例结构拆解完成：已结合整段视频与 ${payload.visionFrameCount ?? 0} 个时间轴关键帧；样例数 ${payload.sourceSampleCount ?? 1}。`
           : `样例结构拆解完成：已结合 ${payload.visionFrameCount ?? 0} 个时间轴关键帧；样例数 ${payload.sourceSampleCount ?? 1}。`,
     });
   }
@@ -1712,7 +1575,7 @@ export default function Home() {
 
     setStatus({
       type: "loading",
-      message: "正在迁移结构并生成多版本脚本；模型较慢时会自动切换到本地保底方案。",
+      message: "正在把样例手法迁移成多版本脚本...",
     });
     const response = await fetch("/api/generate-plan", {
       method: "POST",
@@ -1741,9 +1604,7 @@ export default function Home() {
     await refreshPlanHistory(payload.projectId);
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
-      message: payload.usedFallback
-        ? "已用本地策略生成脚本，后续可切换云模型增强。"
-        : "迁移脚本已生成，可直接编辑并导出。",
+      message: "迁移脚本已生成，可直接编辑并导出。",
     });
   }
 
@@ -1759,7 +1620,7 @@ export default function Home() {
 
     setStatus({
       type: "loading",
-      message: "正在按自然语言指令修订方案；模型较慢时会自动切换到本地保底方案。",
+      message: "正在按你的指令修订方案...",
     });
     const response = await fetch("/api/refine-plan", {
       method: "POST",
@@ -1786,9 +1647,7 @@ export default function Home() {
     await refreshPlanHistory(payload.projectId);
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
-      message: payload.usedFallback
-        ? "已用本地策略完成修订，后续可切换云模型增强。"
-        : "已按你的自然语言指令更新方案。",
+      message: "已按你的自然语言指令更新方案。",
     });
   }
 
@@ -1816,7 +1675,7 @@ export default function Home() {
         <div className="studio-steps">
           <span className={`studio-step ${analysis ? "is-done" : "is-active"}`}>样例拆解</span>
           <ArrowRight className="hidden size-4 md:block" />
-          <span className={`studio-step ${hasTechniqueHits ? "is-done" : ""}`}>技巧检索</span>
+          <span className={`studio-step ${hasTechniqueHits ? "is-done" : ""}`}>手法匹配</span>
           <ArrowRight className="hidden size-4 md:block" />
           <span className={`studio-step ${plan ? "is-done" : ""}`}>迁移脚本</span>
           <ArrowRight className="hidden size-4 md:block" />
@@ -1860,16 +1719,6 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-              <InputCoveragePanel
-                sampleFile={sampleFile}
-                localUploadName={localUploadName}
-                sampleUrl={sampleUrl}
-                sampleNotes={sampleNotes}
-                additionalSampleNotes={additionalSampleNotes}
-                targetBrief={targetBrief}
-                userMaterials={userMaterials}
-                availableUploadCount={availableUploads.length}
-              />
               <div className="space-y-2">
                 <Label htmlFor="projectTitle">项目名称</Label>
                 <Input
@@ -1887,7 +1736,7 @@ export default function Home() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="localUploadName">本地已导入视频（data/uploads）</Label>
+                <Label htmlFor="localUploadName">从素材库选择样例</Label>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <select
@@ -1915,11 +1764,11 @@ export default function Home() {
                   </div>
                   {availableUploads.length === 0 ? (
                     <p className="text-xs text-muted-foreground">
-                      未检测到本地导入的视频文件。可把 mp4/mov 放到 data/uploads（已在 .gitignore 中）。
+                      暂无可选视频。也可以直接上传样例文件。
                     </p>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      选择后将直接读取本地文件生成元数据与抽帧，无需重复上传。
+                      选择后会直接用于样例拆解，无需重复上传。
                     </p>
                   )}
                 </div>
@@ -1971,7 +1820,7 @@ export default function Home() {
                   rows={3}
                 />
                 <p className="text-xs leading-5 text-muted-foreground">
-                  用来证明系统能从多条优质样例中汇总共性结构，上传视频仍以主样例为准。
+                  可粘贴更多优质样例，系统会汇总共性结构；上传视频仍以主样例为准。
                 </p>
               </div>
               <Button className="w-full" onClick={handleAnalyze}>
@@ -2006,11 +1855,11 @@ export default function Home() {
               </div>
               <div className="rounded-lg border bg-accent/20 p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">剪辑技巧库 RAG</Badge>
-                  <span className="text-xs font-semibold text-foreground">生成前检索</span>
+                  <Badge variant="secondary">剪辑手法参考</Badge>
+                  <span className="text-xs font-semibold text-foreground">自动匹配</span>
                 </div>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  系统会用 Brief、用户素材和样例节拍命中剪辑技巧，例如前 3 秒 Hook、B-roll 场景阶梯、卡点字幕、动作匹配转场和 CTA 收束。
+                  系统会根据 Brief、用户素材和样例节拍匹配剪辑技巧，例如前 3 秒 Hook、场景阶梯、卡点字幕、动作匹配转场和 CTA 收束。
                 </p>
               </div>
               <Button
@@ -2091,7 +1940,7 @@ export default function Home() {
                   一键出片
                 </CardTitle>
                 <CardDescription>
-                  直接在页面渲染并下载 mp4（首次请先执行 npm run media:install-binaries）。
+                  直接生成可下载视频，用于现场演示和案例提交。
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -2104,7 +1953,7 @@ export default function Home() {
                     onClick={async () => {
                       if (!projectId) return;
                       setRenderingVideo(true);
-                      setStatus({ type: "loading", message: "正在渲染视频（draft）..." });
+                      setStatus({ type: "loading", message: "正在生成快速预览..." });
                       try {
                         const response = await fetch(`/api/projects/${projectId}/render`, {
                           method: "POST",
@@ -2124,11 +1973,10 @@ export default function Home() {
                         }
                         window.location.href = data.downloadUrl;
                         setStatus({ type: "success", message: "渲染完成，已开始下载。" });
-                      } catch (error) {
+                      } catch {
                         setStatus({
                           type: "error",
-                          message:
-                            error instanceof Error ? error.message : "渲染失败（请检查 media:install-binaries）",
+                          message: "视频生成失败，请稍后重试或先导出方案。",
                         });
                       } finally {
                         setRenderingVideo(false);
@@ -2136,7 +1984,7 @@ export default function Home() {
                     }}
                   >
                     {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
-                    渲染并下载（draft）
+                    快速预览
                   </Button>
                   <Button
                     size="sm"
@@ -2146,7 +1994,7 @@ export default function Home() {
                     onClick={async () => {
                       if (!projectId) return;
                       setRenderingVideo(true);
-                      setStatus({ type: "loading", message: "正在渲染视频（high）..." });
+                      setStatus({ type: "loading", message: "正在生成清晰成片..." });
                       try {
                         const response = await fetch(`/api/projects/${projectId}/render`, {
                           method: "POST",
@@ -2166,19 +2014,18 @@ export default function Home() {
                         }
                         window.location.href = data.downloadUrl;
                         setStatus({ type: "success", message: "渲染完成，已开始下载。" });
-                      } catch (error) {
+                      } catch {
                         setStatus({
                           type: "error",
-                          message:
-                            error instanceof Error ? error.message : "渲染失败（请检查 media:install-binaries）",
+                          message: "视频生成失败，请稍后重试或先导出方案。",
                         });
                       } finally {
                         setRenderingVideo(false);
                       }
                     }}
                   >
-                    {renderingVideo ? <Loader2 className="animate-spin" /> : <Trophy />}
-                    渲染并下载（high）
+                    {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
+                    清晰成片
                   </Button>
                   <Button
                     size="sm"
@@ -2209,11 +2056,10 @@ export default function Home() {
                         }
                         window.location.href = data.downloadUrl;
                         setStatus({ type: "success", message: "高质量有声视频已生成，开始下载。" });
-                      } catch (error) {
+                      } catch {
                         setStatus({
                           type: "error",
-                          message:
-                            error instanceof Error ? error.message : "渲染失败（请检查 media:install-binaries）",
+                          message: "视频生成失败，请稍后重试或先导出方案。",
                         });
                       } finally {
                         setRenderingVideo(false);
@@ -2252,11 +2098,10 @@ export default function Home() {
                         }
                         window.location.href = data.downloadUrl;
                         setStatus({ type: "success", message: "手法迁移说明片已生成，开始下载。" });
-                      } catch (error) {
+                      } catch {
                         setStatus({
                           type: "error",
-                          message:
-                            error instanceof Error ? error.message : "渲染失败（请检查 media:install-binaries）",
+                          message: "视频生成失败，请稍后重试或先导出方案。",
                         });
                       } finally {
                         setRenderingVideo(false);
@@ -2276,7 +2121,7 @@ export default function Home() {
                       setRenderingVideo(true);
                       setStatus({
                         type: "loading",
-                        message: "正在按迁移分镜智能生成补充素材，并自动拼接...",
+                        message: "正在按迁移分镜生成补充画面并自动拼接...",
                       });
                       try {
                         const response = await fetch(`/api/projects/${projectId}/generate-video`, {
@@ -2299,15 +2144,12 @@ export default function Home() {
                         }
                         setStatus({
                           type: "success",
-                          message: `智能补全生成完成：${data.segments?.length || 0} 段，已拼接到 ${data.downloaded.filePath}。`,
+                          message: `智能补全生成完成：已生成 ${data.segments?.length || 0} 段并自动拼接。`,
                         });
-                      } catch (error) {
+                      } catch {
                         setStatus({
                           type: "error",
-                          message:
-                            error instanceof Error
-                              ? error.message
-                              : "视频分段生成失败，请检查视频生成配置。",
+                          message: "智能补全生成失败，请先确认方案完整。",
                         });
                       } finally {
                         setRenderingVideo(false);
@@ -2337,7 +2179,7 @@ export default function Home() {
                   </Button>
                 </div>
                 <p className="text-xs leading-6 text-muted-foreground">
-                  提示：首次渲染前先执行一次 <span className="font-mono">npm run media:install-binaries</span>；draft 更快，high 更清晰更慢。
+                  建议先生成快速预览确认节奏，再生成清晰成片或有声成片用于展示。
                 </p>
               </CardContent>
             </Card>
@@ -2474,7 +2316,7 @@ export default function Home() {
                 <FileText className="size-4 text-primary" />
                 多版本方案脚本
               </CardTitle>
-              <CardDescription>每个版本都保留时间线字段，后续可扩展到视频合成。</CardDescription>
+              <CardDescription>脚本、分镜和时间线同步展示，方便直接改稿和出片。</CardDescription>
             </CardHeader>
             <CardContent>
               {plan && activePlanVersion ? (
@@ -2566,7 +2408,7 @@ export default function Home() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-foreground">
-                          自然语言微调（离线）
+                          自然语言微调
                         </p>
                         <p className="mt-1 text-xs leading-5 text-muted-foreground">
                           一句话改细节并保存为新版本：支持封面/文案标题、话题标签、按段落改字段、按秒延长/缩短时间段。
@@ -2613,7 +2455,7 @@ export default function Home() {
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-xs font-semibold text-foreground">预览结果（未保存）</p>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span>检查修改点后再保存为新稿</span>
+                            <span>确认修改点后再保存为新稿</span>
                             <Button type="button" size="sm" variant="outline" onClick={() => setNlEditPreview(null)}>
                               关闭预览
                             </Button>
@@ -2708,7 +2550,7 @@ export default function Home() {
               ) : (
                   <div className="space-y-4">
                   <div className="flex min-h-[260px] flex-col items-center justify-center rounded-lg border border-dashed bg-background px-6 text-center">
-                    <Trophy className="size-8 text-muted-foreground" />
+                    <FileText className="size-8 text-muted-foreground" />
                     <p className="mt-3 text-sm font-medium">等待迁移方案</p>
                     <p className="mt-1 max-w-md text-sm leading-6 text-muted-foreground">
                       完成样例拆解并填写 Brief 后，系统会生成稳妥转化、强 Hook、内容种草等版本。
