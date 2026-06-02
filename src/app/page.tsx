@@ -37,26 +37,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  evaluateChampionRubric,
-  type ChampionRubricReport,
-} from "@/lib/champion-rubric";
 import { demoPresets } from "@/lib/demo-presets";
-import {
-  renderPlanMarkdown,
-  renderProjectMarkdown,
-} from "@/lib/markdown";
 import {
   buildMigrationMap,
   materialFitText,
   type MigrationMapRow,
 } from "@/lib/mapping";
 import { diffPlans } from "@/lib/plan-diff";
-import {
-  buildContestRequirementCoverage,
-  type ContestRequirementCoverageItem,
-  type ContestRequirementCoverageReport,
-} from "@/lib/requirement-coverage";
 import { buildStoryboardFrames, type StoryboardFrame } from "@/lib/storyboard";
 import {
   buildStructureFingerprint,
@@ -69,11 +56,9 @@ import {
 import { buildTimelineSegments } from "@/lib/timeline";
 import { insertBeatAfter, moveBeat, removeBeat } from "@/lib/plan-edit";
 import type {
-  AwardReadiness,
   MediaMeta,
   MaterialAdaptation,
   MigratedVideoPlan,
-  PlanEvaluation,
   PlanVersion,
   RetrievedEditingTechnique,
   VideoStructureAnalysis,
@@ -356,8 +341,8 @@ function InputCoveragePanel({
     <div className="rounded-lg border bg-background/80 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">输入方式覆盖</Badge>
-          <Badge variant="outline">{readyCount}/{items.length}</Badge>
+          <Badge variant="secondary">输入入口</Badge>
+          <Badge variant="outline">已填写 {readyCount}</Badge>
         </div>
         <span className="text-xs font-medium text-muted-foreground">
           视频 / 链接 / 文案 / 多样例 / 用户素材
@@ -378,87 +363,6 @@ function InputCoveragePanel({
               </Badge>
             </div>
             <p className="mt-1 truncate text-[11px] text-muted-foreground">{item.detail}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function InputMethodBoard({
-  sampleFile,
-  localUploadName,
-  sampleUrl,
-  sampleNotes,
-  additionalSampleNotes,
-  targetBrief,
-  userMaterials,
-  availableUploadCount,
-}: {
-  sampleFile: File | null;
-  localUploadName: string;
-  sampleUrl: string;
-  sampleNotes: string;
-  additionalSampleNotes: string;
-  targetBrief: string;
-  userMaterials: string;
-  availableUploadCount: number;
-}) {
-  const items = buildInputCoverageItems({
-    sampleFile,
-    localUploadName,
-    sampleUrl,
-    sampleNotes,
-    additionalSampleNotes,
-    targetBrief,
-    userMaterials,
-    availableUploadCount,
-  });
-  const sampleItems = items.filter((item) => item.group === "样例侧");
-  const targetItems = items.filter((item) => item.group === "目标侧");
-  const readyCount = items.filter((item) => item.ready).length;
-
-  return (
-    <section className="studio-input-board mx-auto px-4 sm:px-5">
-      <div className="studio-input-board-inner">
-        <div className="studio-input-board-copy">
-          <Badge variant="secondary">多输入闭环</Badge>
-          <h2>样例视频 / 链接 / 文案 / 多样例 / 用户素材都能进入迁移链路</h2>
-          <p>
-            左侧输入抽取脚本、节奏、包装和 BGM 卡点；右侧输入用于素材槽位匹配、缺口判断和补全策略生成。
-          </p>
-        </div>
-        <div className="studio-input-board-flow">
-          <InputGroupColumn title="样例理解输入" items={sampleItems} />
-          <div className="studio-input-arrow">
-            <ArrowRight className="size-5" />
-            <span>结构手法迁移</span>
-          </div>
-          <InputGroupColumn title="新内容输入" items={targetItems} />
-        </div>
-        <div className="studio-input-score">
-          <strong>{readyCount}/{items.length}</strong>
-          <span>输入覆盖</span>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function InputGroupColumn({ title, items }: { title: string; items: InputCoverageItem[] }) {
-  return (
-    <div className="studio-input-column">
-      <div className="studio-input-column-title">{title}</div>
-      <div className="studio-input-items">
-        {items.map((item) => (
-          <div className={`studio-input-item ${item.ready ? "is-ready" : ""}`} key={item.label}>
-            <div>
-              <span>{item.label}</span>
-              <p>{item.detail}</p>
-            </div>
-            <Badge variant={item.ready ? "success" : "outline"}>
-              {item.ready ? "已接入" : "可选"}
-            </Badge>
           </div>
         ))}
       </div>
@@ -684,7 +588,7 @@ function EditableVersionPanel({
             <Badge variant="outline">{version.versionName}</Badge>
           </div>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            直接改时间线字段，导出稿会自动更新；适合比赛答辩时现场“改一两处就能落地”。
+            直接改时间线字段，导出稿会自动更新；适合现场快速微调镜头、口播和包装。
           </p>
         </div>
         <div className="flex gap-2">
@@ -846,406 +750,81 @@ function EditableVersionPanel({
   );
 }
 
-function readinessText(readiness: PlanEvaluation["readiness"]) {
-  if (readiness === "ready") return "可直接演示";
-  if (readiness === "minor-edits") return "小修后演示";
-  return "需要补强";
-}
+function FunctionFlowPanel({
+  analysis,
+  plan,
+}: {
+  analysis: VideoStructureAnalysis | null;
+  plan: MigratedVideoPlan | null;
+}) {
+  const steps = [
+    {
+      title: "多输入",
+      description: "样例视频、链接、人工观察、多样例和用户素材都可进入同一条链路。",
+      ready: true,
+    },
+    {
+      title: "样例拆解",
+      description: analysis
+        ? `已抽取 ${analysis.beatMap.length} 个节拍，包含 Hook、节奏、字幕和包装线索。`
+        : "等待输入样例后提取 Hook、节奏、字幕、包装和转化收口。",
+      ready: Boolean(analysis),
+    },
+    {
+      title: "手法迁移",
+      description: plan
+        ? `已生成 ${plan.versions.length} 个版本，并保留可编辑时间线。`
+        : "把样例里的可迁移规则映射到新主题或商品。",
+      ready: Boolean(plan),
+    },
+    {
+      title: "素材补全",
+      description: plan?.materialAdaptation
+        ? `识别 ${plan.materialAdaptation.missingSlotCount} 个素材缺口，并给出补全策略。`
+        : "根据用户素材判断哪些镜头可用，哪些需要字幕、包装或重排补足。",
+      ready: Boolean(plan?.materialAdaptation),
+    },
+    {
+      title: "预览出片",
+      description: plan
+        ? "可查看竖屏分镜、编辑脚本字段，并导出 Markdown / JSON 或渲染视频。"
+        : "生成方案后可直接预览分镜、编辑脚本并导出。",
+      ready: Boolean(plan),
+    },
+  ];
 
-function EvaluationPanel({ evaluation }: { evaluation: PlanEvaluation }) {
   return (
     <div className="space-y-4 rounded-lg border bg-white p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="success">{readinessText(evaluation.readiness)}</Badge>
-            <Badge variant="outline">推荐：{evaluation.bestVersion}</Badge>
+          <div className="flex items-center gap-2">
+            <ClipboardList className="size-4 text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">功能流程</h3>
           </div>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {evaluation.judgePitch}
+            页面只展示创作链路本身：输入样例、拆解结构、迁移手法、补齐素材、预览结果。
           </p>
         </div>
-        <div className="min-w-[108px] rounded-lg border bg-background px-4 py-3 text-center">
-          <p className="text-xs text-muted-foreground">综合评分</p>
-          <p className="mt-1 text-3xl font-semibold text-primary">
-            {evaluation.overallScore}
-          </p>
-        </div>
+        <Badge variant={plan ? "success" : analysis ? "secondary" : "outline"}>
+          {plan ? "方案已生成" : analysis ? "样例已拆解" : "待开始"}
+        </Badge>
       </div>
 
       <div className="grid gap-3 md:grid-cols-5">
-        {evaluation.dimensions.map((dimension) => (
-          <div className="rounded-lg border bg-background p-3" key={dimension.key}>
+        {steps.map((step, index) => (
+          <div className="rounded-lg border bg-background p-3" key={step.title}>
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-medium text-foreground">{dimension.label}</p>
-              <span className="text-xs font-semibold text-primary">{dimension.score}</span>
+              <Badge variant={step.ready ? "success" : "outline"}>{index + 1}</Badge>
+              {step.ready ? (
+                <CheckCircle2 className="size-4 text-emerald-600" />
+              ) : (
+                <span className="size-4 rounded-full border" />
+              )}
             </div>
-            <div className="mt-2 h-1.5 rounded-full bg-secondary">
-              <div
-                className="h-1.5 rounded-full bg-primary"
-                style={{ width: `${dimension.score}%` }}
-              />
-            </div>
+            <p className="mt-3 text-sm font-semibold text-foreground">{step.title}</p>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              {dimension.suggestion}
+              {step.description}
             </p>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
-        <div>
-          <p className="flex items-center gap-2 text-xs font-semibold text-foreground">
-            <Trophy className="size-3.5 text-primary" />
-            亮点
-          </p>
-          <ul className="mt-2 space-y-1.5 text-xs leading-5 text-muted-foreground">
-            {evaluation.strengths.map((strength) => (
-              <li key={strength}>{strength}</li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <p className="flex items-center gap-2 text-xs font-semibold text-foreground">
-            <BarChart3 className="size-3.5 text-primary" />
-            优先修正
-          </p>
-          <ul className="mt-2 space-y-1.5 text-xs leading-5 text-muted-foreground">
-            {evaluation.priorityFixes.map((fix) => (
-              <li key={fix}>{fix}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      {evaluation.structureAlignment ? (
-        <div className="rounded-lg border bg-background p-3">
-          <p className="text-xs font-semibold text-foreground">结构对齐报告</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            覆盖 {evaluation.structureAlignment.matchedSampleBeatCount}/
-            {evaluation.structureAlignment.sampleBeatCount}（
-            {Math.round(evaluation.structureAlignment.coverageRatio * 100)}%），评分{" "}
-            {evaluation.structureAlignment.coverageScore}/100
-          </p>
-          {evaluation.structureAlignment.missingSampleBeats.length ? (
-            <div className="mt-2 space-y-1.5">
-              <p className="text-xs font-medium text-foreground">优先补齐的样例段落</p>
-              <ul className="space-y-1 text-xs leading-5 text-muted-foreground">
-                {evaluation.structureAlignment.missingSampleBeats.map((beat) => (
-                  <li key={`${beat.timeRange}-${beat.shotPurpose}`}>
-                    {beat.timeRange}：{beat.shotPurpose}（{beat.transferableRule}）
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {evaluation.structureAlignment.notes.length ? (
-            <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
-              {evaluation.structureAlignment.notes.map((note) => (
-                <li key={note}>{note}</li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function awardVerdictText(verdict: AwardReadiness["verdict"]) {
-  if (verdict === "prize-ready") return "大奖冲刺";
-  if (verdict === "submission-ready") return "可上交";
-  return "需继续打磨";
-}
-
-function awardVerdictVariant(verdict: AwardReadiness["verdict"]) {
-  if (verdict === "prize-ready") return "success";
-  if (verdict === "submission-ready") return "secondary";
-  return "warning";
-}
-
-function AwardReadinessPanel({
-  readiness,
-}: {
-  readiness: AwardReadiness;
-}) {
-  return (
-    <div className="space-y-4 rounded-lg border bg-white p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={awardVerdictVariant(readiness.verdict)}>
-              {awardVerdictText(readiness.verdict)}
-            </Badge>
-            <Badge variant="outline">大奖目标评分 {readiness.overallScore}/100</Badge>
-          </div>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {readiness.goalStatement}
-          </p>
-        </div>
-        <div className="min-w-[108px] rounded-lg border bg-background px-4 py-3 text-center">
-          <p className="text-xs text-muted-foreground">冲奖分</p>
-          <p className="mt-1 text-3xl font-semibold text-primary">
-            {readiness.overallScore}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-5">
-        {readiness.criteria.map((criterion) => (
-          <div className="rounded-lg border bg-background p-3" key={criterion.key}>
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-medium text-foreground">{criterion.label}</p>
-              <span className="text-xs font-semibold text-primary">{criterion.score}</span>
-            </div>
-            <div className="mt-2 h-1.5 rounded-full bg-secondary">
-              <div
-                className="h-1.5 rounded-full bg-primary"
-                style={{ width: `${criterion.score}%` }}
-              />
-            </div>
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              {criterion.evidence}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="rounded-lg border bg-background p-3">
-          <p className="text-xs font-semibold text-foreground">下一步冲奖动作</p>
-          <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
-            {readiness.nextActions.map((action) => (
-              <li key={action}>{action}</li>
-            ))}
-          </ul>
-        </div>
-        <div className="rounded-lg border bg-background p-3">
-          <p className="text-xs font-semibold text-foreground">答辩证明链</p>
-          <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
-            {readiness.demoProof.slice(0, 5).map((proof) => (
-              <li key={proof}>{proof}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function championVerdictText(verdict: ChampionRubricReport["verdict"]) {
-  if (verdict === "champion-ready") return "冠军答辩";
-  if (verdict === "finalist-ready") return "决赛可交";
-  return "证据待补";
-}
-
-function championVerdictVariant(verdict: ChampionRubricReport["verdict"]) {
-  if (verdict === "champion-ready") return "success";
-  if (verdict === "finalist-ready") return "secondary";
-  return "warning";
-}
-
-function ChampionRubricPanel({
-  report,
-}: {
-  report: ChampionRubricReport;
-}) {
-  const groups = useMemo(() => {
-    const names = Array.from(new Set(report.items.map((item) => item.group)));
-    return names.map((name) => {
-      const rows = report.items.filter((item) => item.group === name);
-      return {
-        name,
-        rows,
-        score: rows.reduce((sum, item) => sum + item.score, 0),
-        maxScore: rows.reduce((sum, item) => sum + item.maxScore, 0),
-      };
-    });
-  }, [report]);
-
-  return (
-    <div className="space-y-4 rounded-lg border bg-white p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="mb-2 flex items-center gap-2">
-            <Trophy className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">冠军验收台</h3>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={championVerdictVariant(report.verdict)}>
-              {championVerdictText(report.verdict)}
-            </Badge>
-            <Badge variant="outline">官方基础分 {report.baseScore}/100</Badge>
-            <Badge variant="outline">加分 {report.bonusScore}/10</Badge>
-          </div>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {report.pitch}
-          </p>
-        </div>
-        <div className="min-w-[118px] rounded-lg border bg-background px-4 py-3 text-center">
-          <p className="text-xs text-muted-foreground">含加分</p>
-          <p className="mt-1 text-3xl font-semibold text-primary">
-            {report.totalScoreWithBonus}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {groups.map((group) => (
-          <div className="rounded-lg border bg-background p-3" key={group.name}>
-            <div className="flex items-center justify-between gap-2">
-              <p className="line-clamp-2 text-xs font-semibold text-foreground">
-                {group.name}
-              </p>
-              <span className="shrink-0 text-xs font-semibold text-primary">
-                {group.score}/{group.maxScore}
-              </span>
-            </div>
-            <div className="mt-2 h-1.5 rounded-full bg-secondary">
-              <div
-                className="h-1.5 rounded-full bg-primary"
-                style={{ width: `${Math.round((group.score / group.maxScore) * 100)}%` }}
-              />
-            </div>
-            <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
-              {group.rows
-                .filter((item) => item.passed)
-                .slice(0, 2)
-                .map((item) => item.label)
-                .join(" / ")}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <div className="space-y-2">
-        {report.items.slice(0, 12).map((item) => (
-          <div
-            className="grid gap-2 rounded-md border bg-background p-3 md:grid-cols-[150px_72px_minmax(0,1fr)_170px]"
-            key={item.key}
-          >
-            <p className="text-xs font-semibold text-foreground">{item.label}</p>
-            <Badge variant={item.passed ? "success" : "warning"}>
-              {item.score}/{item.maxScore}
-            </Badge>
-            <p className="text-xs leading-5 text-muted-foreground">{item.evidence}</p>
-            <p className="text-xs leading-5 text-muted-foreground">{item.judgePanel}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function requirementStatusText(status: ContestRequirementCoverageItem["status"]) {
-  if (status === "ready") return "已完成";
-  if (status === "partial") return "部分完成";
-  return "待生成";
-}
-
-function requirementStatusVariant(status: ContestRequirementCoverageItem["status"]) {
-  if (status === "ready") return "success";
-  if (status === "partial") return "warning";
-  return "outline";
-}
-
-function RequirementCoveragePanel({
-  report,
-  compact = false,
-}: {
-  report: ContestRequirementCoverageReport;
-  compact?: boolean;
-}) {
-  const groups = useMemo(() => {
-    const names: ContestRequirementCoverageItem["priority"][] = ["P0", "P1", "加分"];
-    return names
-      .map((name) => {
-        const rows = report.items.filter((item) => item.priority === name);
-        return {
-          name,
-          rows,
-          readyCount: rows.filter((item) => item.status === "ready").length,
-        };
-      })
-      .filter((group) => group.rows.length);
-  }, [report]);
-
-  return (
-    <div className="space-y-4 rounded-lg border bg-white p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="mb-2 flex items-center gap-2">
-            <ClipboardList className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">全要求验收导航</h3>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={report.completedCount === report.totalCount ? "success" : "secondary"}>
-              {report.completedCount}/{report.totalCount} 项完成
-            </Badge>
-            <Badge variant="outline">P0 {report.p0CompletedCount}/8</Badge>
-            <Badge variant="outline">P1 {report.p1CompletedCount}/4</Badge>
-            <Badge variant="outline">加分 {report.bonusReadyCount}/1</Badge>
-          </div>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            按题目任务 1-13 逐项显示产品证据、评委入口和下一步动作，避免答辩时功能做了但找不到。
-          </p>
-        </div>
-        <div className="min-w-[118px] rounded-lg border bg-background px-4 py-3 text-center">
-          <p className="text-xs text-muted-foreground">覆盖率</p>
-          <p className="mt-1 text-3xl font-semibold text-primary">
-            {Math.round((report.completedCount / report.totalCount) * 100)}%
-          </p>
-        </div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-3">
-        {groups.map((group) => (
-          <div className="rounded-lg border bg-background p-3" key={group.name}>
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold text-foreground">{group.name}</p>
-              <span className="text-xs font-semibold text-primary">
-                {group.readyCount}/{group.rows.length}
-              </span>
-            </div>
-            <div className="mt-2 h-1.5 rounded-full bg-secondary">
-              <div
-                className="h-1.5 rounded-full bg-primary"
-                style={{ width: `${Math.round((group.readyCount / group.rows.length) * 100)}%` }}
-              />
-            </div>
-            <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
-              {group.rows.map((row) => row.taskId).join(" / ")}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <div className="space-y-2">
-        {(compact ? report.items.slice(0, 5) : report.items).map((item) => (
-          <div
-            className="grid gap-2 rounded-md border bg-background p-3 lg:grid-cols-[78px_minmax(140px,0.55fr)_92px_minmax(0,1fr)_minmax(150px,0.55fr)]"
-            key={item.taskId}
-          >
-            <div className="flex items-center gap-2">
-              <Badge variant="outline">{item.taskId}</Badge>
-              <span className="text-xs font-semibold text-muted-foreground">{item.priority}</span>
-            </div>
-            <p className="text-xs font-semibold text-foreground">{item.title}</p>
-            <Badge variant={requirementStatusVariant(item.status)}>
-              {requirementStatusText(item.status)}
-            </Badge>
-            <div>
-              <p className="text-xs leading-5 text-muted-foreground">{item.evidence}</p>
-              {!compact ? (
-                <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-                  要求：{item.requirement}
-                </p>
-              ) : null}
-            </div>
-            <div>
-              <p className="text-xs font-medium leading-5 text-foreground">{item.judgePanel}</p>
-              <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{item.nextAction}</p>
-            </div>
           </div>
         ))}
       </div>
@@ -1272,7 +851,7 @@ function MaterialAdaptationPanel({
             <Badge variant={adaptation.missingSlotCount ? "warning" : "success"}>
               缺口 {adaptation.missingSlotCount}
             </Badge>
-            <Badge variant="outline">素材充分度 {adaptation.sufficiencyScore}/100</Badge>
+            <Badge variant="outline">已识别素材 {adaptation.assets.length} 个</Badge>
           </div>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             {adaptation.providedMaterialsSummary}
@@ -1310,7 +889,7 @@ function MaterialAdaptationPanel({
                   ))}
                 </div>
                 <p className="mt-2 text-xs font-medium text-foreground">
-                  质量 {asset.qualityScore}/100
+                  用法：{asset.recommendedUse}
                 </p>
               </div>
             ))}
@@ -1345,7 +924,7 @@ function MaterialAdaptationPanel({
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {slot.recommendedAssets.map((asset) => (
                   <Badge variant="outline" key={`${slot.slotId}-${asset.assetId}`}>
-                    {asset.label} · {asset.fitScore}
+                    {asset.label}
                   </Badge>
                 ))}
               </div>
@@ -1430,7 +1009,7 @@ function TechniqueTransferPanel({
                   <Badge variant={fitBadgeVariant(scene.materialFit)}>
                     {materialFitText(scene.materialFit)}
                   </Badge>
-                  <Badge variant="outline">强度 {scene.beatIntensity}</Badge>
+                  <Badge variant="outline">节奏继承</Badge>
                 </div>
                 <p className="mt-2 text-xs font-medium text-foreground">
                   {scene.materialSlotName}
@@ -1476,7 +1055,6 @@ function EditingTechniquePanel({
               <p className="text-sm font-semibold text-foreground">{technique.title}</p>
               <div className="flex items-center gap-2">
                 <Badge variant="outline">{technique.category}</Badge>
-                <span className="text-xs font-semibold text-primary">{Math.round(technique.score)}</span>
               </div>
             </div>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
@@ -1533,7 +1111,7 @@ function MigrationMappingPanel({
             <Badge variant="outline">{version.versionName}</Badge>
           </div>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            把样例节拍、可迁移规则、新方案镜头和素材补全放在同一张链路图里，便于答辩时解释“学到了什么、迁移到哪里、缺口怎么处理”。
+            把样例节拍、可迁移规则、新方案镜头和素材补全放在同一张链路图里，清楚说明“学到了什么、迁移到哪里、缺口怎么处理”。
           </p>
         </div>
         <GitBranch className="size-8 shrink-0 text-primary" />
@@ -1784,7 +1362,7 @@ export default function Home() {
   const [availableUploads, setAvailableUploads] = useState<
     Array<{ name: string; sizeBytes: number; modifiedAt: string }>
   >([]);
-  const [simpleMode, setSimpleMode] = useState(false);
+  const simpleMode = true;
   const [showAllSampleBeats, setShowAllSampleBeats] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<VideoStructureAnalysis | null>(null);
@@ -1792,7 +1370,6 @@ export default function Home() {
   const [planHistory, setPlanHistory] = useState<PlanHistoryItem[]>([]);
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [loadingPlanHistory, setLoadingPlanHistory] = useState(false);
-  const [analysisMarkdown, setAnalysisMarkdown] = useState("");
   const [mediaMeta, setMediaMeta] = useState<MediaMeta | null>(null);
   const [refineInstruction, setRefineInstruction] = useState("");
   const [activeVersion, setActiveVersion] = useState(0);
@@ -1852,40 +1429,6 @@ export default function Home() {
       version: activePlanVersion,
     });
   }, [analysis, plan, activePlanVersion]);
-  const championRubric = useMemo(() => {
-    if (!analysis || !plan) return null;
-    return evaluateChampionRubric({
-      analysis,
-      plan,
-      techniqueTransfer: activeTechniqueRecipe || undefined,
-    });
-  }, [activeTechniqueRecipe, analysis, plan]);
-  const requirementCoverage = useMemo(
-    () =>
-      buildContestRequirementCoverage({
-        analysis,
-        plan,
-        techniqueTransfer: activeTechniqueRecipe,
-        championRubric,
-      }),
-    [activeTechniqueRecipe, analysis, championRubric, plan],
-  );
-  const previewMarkdown = useMemo(() => {
-    if (analysis && plan) {
-      return renderProjectMarkdown({
-        title: projectTitle,
-        analysis,
-        plan,
-        techniqueTransfer: activeTechniqueRecipe || undefined,
-        source: "项目要求",
-      });
-    }
-
-    return [analysisMarkdown, plan ? renderPlanMarkdown(plan) : ""]
-      .filter(Boolean)
-      .join("\n");
-  }, [activeTechniqueRecipe, analysis, analysisMarkdown, plan, projectTitle]);
-
   async function refreshPlanHistory(nextProjectId: string) {
     setLoadingPlanHistory(true);
     try {
@@ -1980,7 +1523,6 @@ export default function Home() {
 
     setProjectId(payload.projectId);
     setAnalysis(payload.analysis);
-    setAnalysisMarkdown(payload.markdown);
     setMediaMeta(payload.mediaMeta);
     await refreshPlanHistory(payload.projectId);
     setStatus({
@@ -2144,7 +1686,6 @@ export default function Home() {
     setPlan(null);
     setPlanHistory([]);
     setActivePlanId(null);
-    setAnalysisMarkdown("");
     setRefineInstruction("");
     setProjectId(null);
     setActiveVersion(0);
@@ -2180,7 +1721,7 @@ export default function Home() {
         projectId,
         targetBrief,
         userMaterials,
-        direction: "比赛 MVP：生成可编辑方案脚本，保留二期视频时间线扩展空间",
+        direction: "生成可编辑方案脚本，并保留视频时间线扩展空间",
       }),
     });
     const payload = (await response.json()) as PlanResponse;
@@ -2201,7 +1742,7 @@ export default function Home() {
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
-        ? "当前为离线演示模式：已用本地策略生成脚本（比赛现场也能跑通）。"
+        ? "当前为离线演示模式：已用本地策略生成脚本。"
         : "迁移脚本已生成，可直接编辑并导出。",
     });
   }
@@ -2265,32 +1806,9 @@ export default function Home() {
         </div>
 
         <div className="studio-actions">
-          <label className="studio-toggle">
-            <input
-              type="checkbox"
-              checked={simpleMode}
-              onChange={(event) => setSimpleMode(event.target.checked)}
-            />
-            简洁模式
-          </label>
-          <Button
-            disabled={!projectId}
-            onClick={() => projectId && downloadExport(projectId, "md", activePlanId)}
-            variant="outline"
-            title="导出 Markdown"
-          >
-            <Download />
-            Markdown
-          </Button>
-          <Button
-            disabled={!projectId}
-            onClick={() => projectId && downloadExport(projectId, "json", activePlanId)}
-            variant="outline"
-            title="导出 JSON"
-          >
-            <FileJson />
-            JSON
-          </Button>
+          <Badge variant={plan ? "success" : analysis ? "secondary" : "outline"}>
+            {plan ? "可预览" : analysis ? "已拆解" : "准备输入"}
+          </Badge>
         </div>
       </header>
 
@@ -2310,17 +1828,6 @@ export default function Home() {
           <span>{status.message}</span>
         </div>
       </section>
-
-      <InputMethodBoard
-        sampleFile={sampleFile}
-        localUploadName={localUploadName}
-        sampleUrl={sampleUrl}
-        sampleNotes={sampleNotes}
-        additionalSampleNotes={additionalSampleNotes}
-        targetBrief={targetBrief}
-        userMaterials={userMaterials}
-        availableUploadCount={availableUploads.length}
-      />
 
       <section
         className={`workspace-grid studio-workspace mx-auto grid gap-5 px-4 py-5 sm:px-5 ${
@@ -2814,10 +2321,19 @@ export default function Home() {
                     size="sm"
                     type="button"
                     variant="outline"
+                    onClick={() => downloadExport(projectId, "md", activePlanId)}
+                  >
+                    <Download />
+                    导出方案
+                  </Button>
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant="outline"
                     onClick={() => downloadExport(projectId, "json", activePlanId)}
                   >
                     <FileJson />
-                    导出 JSON
+                    导出数据
                   </Button>
                 </div>
                 <p className="text-xs leading-6 text-muted-foreground">
@@ -2987,20 +2503,14 @@ export default function Home() {
 
                   <EditingTechniquePanel techniques={plan.retrievedTechniques} />
 
-                  <RequirementCoveragePanel report={requirementCoverage} />
-
-                  {plan.awardReadiness ? (
-                    <AwardReadinessPanel readiness={plan.awardReadiness} />
-                  ) : null}
-
-                  {championRubric ? (
-                    <ChampionRubricPanel report={championRubric} />
-                  ) : null}
-
-                  {plan.evaluation ? <EvaluationPanel evaluation={plan.evaluation} /> : null}
+                  <FunctionFlowPanel analysis={analysis} plan={plan} />
 
                   {activeTechniqueRecipe ? (
                     <TechniqueTransferPanel recipe={activeTechniqueRecipe} />
+                  ) : null}
+
+                  {plan.materialAdaptation ? (
+                    <MaterialAdaptationPanel adaptation={plan.materialAdaptation} />
                   ) : null}
 
                   <StoryboardPreview
@@ -3008,11 +2518,7 @@ export default function Home() {
                     rows={activeMigrationRows}
                   />
 
-                  {!simpleMode && plan.materialAdaptation ? (
-                    <MaterialAdaptationPanel adaptation={plan.materialAdaptation} />
-                  ) : null}
-
-                  {!simpleMode ? <TimelineOverview rows={activeMigrationRows} /> : null}
+                  <TimelineOverview rows={activeMigrationRows} />
 
                   {!simpleMode && analysis ? (
                     <MigrationMappingPanel
@@ -3107,10 +2613,7 @@ export default function Home() {
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-xs font-semibold text-foreground">预览结果（未保存）</p>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span>
-                              评分：{plan?.evaluation?.overallScore ?? "--"} →{" "}
-                              {nlEditPreview.plan.evaluation?.overallScore ?? "--"}
-                            </span>
+                            <span>检查修改点后再保存为新稿</span>
                             <Button type="button" size="sm" variant="outline" onClick={() => setNlEditPreview(null)}>
                               关闭预览
                             </Button>
@@ -3203,7 +2706,7 @@ export default function Home() {
                   <VersionTimeline version={activePlanVersion} />
                 </div>
               ) : (
-                <div className="space-y-4">
+                  <div className="space-y-4">
                   <div className="flex min-h-[260px] flex-col items-center justify-center rounded-lg border border-dashed bg-background px-6 text-center">
                     <Trophy className="size-8 text-muted-foreground" />
                     <p className="mt-3 text-sm font-medium">等待迁移方案</p>
@@ -3211,30 +2714,11 @@ export default function Home() {
                       完成样例拆解并填写 Brief 后，系统会生成稳妥转化、强 Hook、内容种草等版本。
                     </p>
                   </div>
-                  <RequirementCoveragePanel report={requirementCoverage} compact />
+                  <FunctionFlowPanel analysis={analysis} plan={plan} />
                 </div>
               )}
             </CardContent>
           </Card>
-
-          {previewMarkdown && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="size-4 text-primary" />
-                  完整项目稿预览
-                </CardTitle>
-                <CardDescription>
-                  预览内容与导出稿保持一致，可直接进入 Obsidian 或剪辑协作流程。
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <pre className="max-h-[420px] overflow-auto rounded-lg border bg-slate-950 p-4 text-xs leading-5 text-slate-100">
-                  {previewMarkdown}
-                </pre>
-              </CardContent>
-            </Card>
-          )}
         </div>
       </section>
     </main>
