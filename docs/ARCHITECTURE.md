@@ -41,6 +41,7 @@
 
 - `StructureFingerprint` 是 `VideoStructureAnalysis` 的本地派生层，不调用模型，负责把样例节拍转成可展示的 Hook、节奏、字幕、证据、CTA 和包装指标。
 - `TechniqueTransferRecipe` 是结构迁移和渲染之间的证据层，不调用模型，负责把源样例节拍映射到新方案镜头，并保留字幕密度、转场倾向、包装标签、素材槽位和补全计划。
+- `AdaptiveTransferStoryboard` 是外部视频模型调用前的导演协议：从 `SampleAnalysis.beatMap`、目标 Brief、用户素材和 `scriptBeats` 推断目标时长与分段数，把源样片的镜头目的、视觉规律、字幕/包装和可迁移规则逐段写入生成 prompt。
 - `RenderTimeline` 是模型和渲染器之间的协议层，字段包含 `scenes`、`captionTokens`、`visualLayers`、`audioCues`、`materialFit` 和 `completionPlan`。
 - LLM 或本地 fallback 只能生成结构化 JSON，服务端用 Zod 校验后才交给 Remotion。
 - Remotion 只渲染项目白名单组件，例如动态字幕、素材卡、真实视频层、节奏进度、CTA 场景、漏光转场、运动模糊和颗粒层。
@@ -72,6 +73,7 @@
 - 多样例模式只汇总共性结构和可迁移手法，不把任一样例的内容当作模板逐帧复刻。
 - 背书、评价、参数和数据必须真实可追溯；系统会在风险提示中提醒不要虚构证据。
 - AIGC 图像/视频只能作为缺口槽位素材，必须标注来源和用途；不能直接替代样例拆解、结构定义和迁移配方。
+- 一键外部成片接口只按 `AdaptiveTransferStoryboard` 生成分段素材，再由 FFmpeg/Remotion 拼接或重组；不得把“根据主题生成完整短片”作为主链路，避免偏离“结构迁移”课题。
 - 用户上传素材默认只在本地处理；公开仓库不包含任何上传文件。
 - 模型不生成可执行代码。模型输出必须先通过 Zod Schema，渲染端只接受 `RenderTimeline`。
 - 临时渲染素材放在 `public/render-sources/` 或 `public/render-audio/`，这些目录已被 `.gitignore` 忽略。

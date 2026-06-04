@@ -248,7 +248,7 @@ export const generatePlanRequestSchema = z.object({
   projectId: z.string().min(1),
   targetBrief: z.string().min(4),
   userMaterials: z.string().default(""),
-  direction: z.string().default("比赛 MVP：优先输出可编辑方案脚本"),
+  direction: z.string().default("优先输出可编辑方案脚本、分镜和时间线草案"),
 });
 
 export const refinePlanRequestSchema = z.object({

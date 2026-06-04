@@ -519,7 +519,7 @@ export async function generateMigratedPlan(input: {
 样例结构分析：
 ${JSON.stringify(input.analysis, null, 2)}
 
-剪辑技巧库 RAG 命中（必须应用到脚本节奏、画面建议、包装和制作备注中）：
+剪辑手法匹配结果（必须应用到脚本节奏、画面建议、包装和制作备注中）：
 ${formatEditingTechniquesForPrompt(retrievedTechniques)}
 
 要求：

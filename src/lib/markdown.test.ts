@@ -57,8 +57,8 @@ describe("markdown rendering", () => {
     expect(markdown).toContain("口播/字幕");
     expect(markdown).toContain("可替换素材");
     expect(markdown).toContain("稳妥转化版");
-    expect(markdown).toContain("RAG 剪辑技巧命中");
-    expect(markdown).toContain("大奖目标看板");
+    expect(markdown).toContain("剪辑手法命中");
+    expect(markdown).toContain("质量诊断看板");
     expect(markdown).toContain("素材缺口与补全");
     expect(markdown).toContain("真实素材资产盘点");
     expect(markdown).toContain("质量诊断");
@@ -91,10 +91,10 @@ describe("markdown rendering", () => {
     expect(markdown).toContain("## 手法迁移配方");
     expect(markdown).toContain("## 样例-结果手法对比");
     expect(markdown).toContain("## 竖屏分镜预览");
-    expect(markdown).toContain("## 评分证据矩阵");
-    expect(markdown).toContain("## 官方评分表拆解");
+    expect(markdown).toContain("## 展示证据矩阵");
+    expect(markdown).toContain("## 创作能力清单");
     expect(markdown).toContain("基础闭环完成度");
-    expect(markdown).toContain("加分项");
+    expect(markdown).toContain("亮点分");
     expect(markdown).toContain("源样例时间段");
     expect(markdown).toContain("样例节拍");
     expect(markdown).toContain("补全动作");

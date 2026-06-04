@@ -21,6 +21,7 @@ export type IntegrationStatus = {
   };
   videoApi: {
     configured: boolean;
+    provider: "zhipu" | "generic";
     baseUrl: string;
     model: string;
     endpoint: string;
@@ -70,10 +71,20 @@ export function buildIntegrationStatus(env: Env = process.env): IntegrationStatu
   const visionModel = env.AI_MODEL_VISION || textModel;
   const videoModel = env.AI_MODEL_VIDEO || visionModel;
   const mode = videoInputMode(env);
-  const videoApiConfigured = hasValue(env.VIDEO_API_BASE_URL) && hasValue(env.VIDEO_API_KEY);
-  const videoApiModel = env.VIDEO_API_MODEL || "veo3.1-fast";
-  const videoEndpoint = env.VIDEO_API_ENDPOINT || "/v1/videos";
-  const queryEndpoint = env.VIDEO_API_QUERY_ENDPOINT || "/v1/videos/{id}";
+  const videoProvider =
+    env.VIDEO_API_PROVIDER === "zhipu" || (hasValue(env.ZHIPU_API_KEY) && !hasValue(env.VIDEO_API_KEY))
+      ? "zhipu"
+      : "generic";
+  const videoApiConfigured =
+    videoProvider === "zhipu"
+      ? hasValue(env.ZHIPU_API_KEY) || hasValue(env.VIDEO_API_KEY)
+      : hasValue(env.VIDEO_API_BASE_URL) && hasValue(env.VIDEO_API_KEY);
+  const videoApiModel =
+    env.VIDEO_API_MODEL || (videoProvider === "zhipu" ? env.ZHIPU_VIDEO_MODEL || "cogvideox-2" : "veo3.1-fast");
+  const videoEndpoint =
+    env.VIDEO_API_ENDPOINT || (videoProvider === "zhipu" ? "/videos/generations" : "/v1/videos");
+  const queryEndpoint =
+    env.VIDEO_API_QUERY_ENDPOINT || (videoProvider === "zhipu" ? "/async-result/{id}" : "/v1/videos/{id}");
   const durationSeconds = env.VIDEO_API_DURATION_SECONDS || "5";
   const segmentSeconds = env.VIDEO_API_SEGMENT_SECONDS || durationSeconds;
 
@@ -118,11 +129,14 @@ export function buildIntegrationStatus(env: Env = process.env): IntegrationStatu
       "外部视频生成",
       videoApiConfigured ? "ready" : "missing",
       videoApiConfigured
-        ? `使用 ${videoApiModel} 生成缺口素材或分段视频，再由本项目拼接。`
+        ? `使用 ${videoProvider === "zhipu" ? "智谱" : "外部视频 API"} ${videoApiModel} 生成缺口素材或分段视频，再由本项目拼接。`
         : "未配置视频生成 API 时仍可用 Remotion 本地出片。",
       [
+        "ZHIPU_API_KEY",
+        "ZHIPU_VIDEO_MODEL",
         "VIDEO_API_BASE_URL",
         "VIDEO_API_KEY",
+        "VIDEO_API_PROVIDER",
         "VIDEO_API_MODEL",
         "VIDEO_API_ENDPOINT",
         "VIDEO_API_QUERY_ENDPOINT",
@@ -143,7 +157,11 @@ export function buildIntegrationStatus(env: Env = process.env): IntegrationStatu
     },
     videoApi: {
       configured: videoApiConfigured,
-      baseUrl: sanitizedUrl(env.VIDEO_API_BASE_URL, "not configured"),
+      provider: videoProvider,
+      baseUrl: sanitizedUrl(
+        env.VIDEO_API_BASE_URL,
+        videoProvider === "zhipu" ? "https://open.bigmodel.cn/api/paas/v4" : "not configured",
+      ),
       model: videoApiModel,
       endpoint: videoEndpoint,
       queryEndpoint,

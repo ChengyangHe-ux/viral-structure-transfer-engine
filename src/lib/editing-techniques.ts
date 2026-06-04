@@ -266,37 +266,37 @@ export function attachEditingTechniquesToPlan({
       if (isFirst && resultFirst) {
         nextBeat.transitionAndRhythm = appendOnce(
           nextBeat.transitionAndRhythm,
-          "RAG：0-2秒先给最强结果/反差，再解释原因",
+          "剪法建议：0-2秒先给最强结果/反差，再解释原因",
         );
       }
       if ((isFirst || index === 1) && macroShot) {
         nextBeat.visualSuggestion = appendOnce(
           nextBeat.visualSuggestion,
-          "RAG：补0.4-0.8秒真实微距/手部/产品质感镜头",
+          "剪法建议：补0.4-0.8秒真实微距/手部/产品质感镜头",
         );
       }
       if (!isFirst && !isLast && sceneLadder) {
         nextBeat.visualSuggestion = appendOnce(
           nextBeat.visualSuggestion,
-          "RAG：按痛点/解决/享受场景轮换B-roll，避免同一场景停留",
+          "剪法建议：按痛点/解决/享受场景轮换B-roll，避免同一场景停留",
         );
       }
       if (matchCut) {
         nextBeat.transitionAndRhythm = appendOnce(
           nextBeat.transitionAndRhythm,
-          "RAG：用动作或形状匹配做自然转场",
+          "剪法建议：用动作或形状匹配做自然转场",
         );
       }
       if (captionBurst) {
         nextBeat.packagingStyle = appendOnce(
           nextBeat.packagingStyle,
-          "RAG：每屏8-14字，关键词跟重拍弹出",
+          "剪法建议：每屏8-14字，关键词跟重拍弹出",
         );
       }
       if (isLast && cleanCta) {
         nextBeat.visualSuggestion = appendOnce(
           nextBeat.visualSuggestion,
-          "RAG：固定产品主视觉+一句主张+一个行动入口收束",
+          "剪法建议：固定产品主视觉+一句主张+一个行动入口收束",
         );
       }
 
@@ -304,8 +304,8 @@ export function attachEditingTechniquesToPlan({
     }),
   }));
 
-  const ragNotes = techniques.map(
-    (technique) => `RAG剪辑技巧「${technique.title}」：${technique.application}`,
+  const techniqueNotes = techniques.map(
+    (technique) => `剪辑手法「${technique.title}」：${technique.application}`,
   );
 
   return {
@@ -313,8 +313,10 @@ export function attachEditingTechniquesToPlan({
     versions,
     retrievedTechniques: techniques,
     productionNotes: [
-      ...ragNotes,
-      ...plan.productionNotes.filter((note) => !note.startsWith("RAG剪辑技巧")),
+      ...techniqueNotes,
+      ...plan.productionNotes.filter(
+        (note) => !note.startsWith("RAG剪辑技巧") && !note.startsWith("剪辑手法"),
+      ),
     ],
   };
 }

@@ -39,6 +39,7 @@ describe("integration status", () => {
     expect(status.ai.structuredOutputs).toBe(true);
     expect(status.ai.directVideo).toBe(true);
     expect(status.videoApi.configured).toBe(true);
+    expect(status.videoApi.provider).toBe("generic");
     expect(status.videoApi.model).toBe("cogvideox-3");
     expect(status.videoApi.endpoint).toBe("/v1/videos/generations");
     expect(status.videoApi.queryEndpoint).toBe("/v1/async-result/{id}");
@@ -48,6 +49,25 @@ describe("integration status", () => {
     );
     expect(JSON.stringify(status)).not.toContain("sk-test-secret");
     expect(JSON.stringify(status)).not.toContain("video-secret");
+  });
+
+  it("reports Zhipu video generation when only ZHIPU_API_KEY is configured", () => {
+    const status = buildIntegrationStatus({
+      ZHIPU_API_KEY: "zhipu-secret",
+      ZHIPU_VIDEO_MODEL: "cogvideox-2",
+      VIDEO_API_DURATION_SECONDS: "5",
+    });
+
+    expect(status.videoApi.configured).toBe(true);
+    expect(status.videoApi.provider).toBe("zhipu");
+    expect(status.videoApi.baseUrl).toBe("https://open.bigmodel.cn/api/paas/v4");
+    expect(status.videoApi.model).toBe("cogvideox-2");
+    expect(status.videoApi.endpoint).toBe("/videos/generations");
+    expect(status.videoApi.queryEndpoint).toBe("/async-result/{id}");
+    expect(status.capabilities.find((item) => item.key === "video-generation")?.status).toBe(
+      "ready",
+    );
+    expect(JSON.stringify(status)).not.toContain("zhipu-secret");
   });
 
   it("marks direct video as partial when frame-only mode is selected", () => {

@@ -273,9 +273,9 @@ export function evaluateChampionRubric({
             ? 5
             : 0,
       evidence: plan
-        ? `质量诊断 ${plan.evaluation?.overallScore ?? "--"}/100，大奖看板 ${plan.awardReadiness?.overallScore ?? "--"}/100，完整生产字段 ${totalRichBeats}/${totalBeats}。`
+        ? `质量诊断 ${plan.evaluation?.overallScore ?? "--"}/100，展示完整度 ${plan.awardReadiness?.overallScore ?? "--"}/100，完整生产字段 ${totalRichBeats}/${totalBeats}。`
         : "尚未生成完整产品流程。",
-      judgePanel: "大奖目标看板 / 质量诊断 / 完整项目稿预览",
+      judgePanel: "质量诊断看板 / 完整项目稿预览",
     }),
   ];
 
@@ -326,21 +326,21 @@ export function evaluateChampionRubric({
     totalScoreWithBonus,
     pitch:
       verdict === "champion-ready"
-        ? "官方评分表核心项已具备可展示证据，且加分项形成差异化亮点；答辩时优先展示手法迁移配方、真实素材资产和最终有声成片。"
+        ? "核心能力已具备可展示证据，亮点能力形成差异化；答辩时优先展示手法迁移配方、真实素材资产和最终有声成片。"
         : verdict === "finalist-ready"
           ? "核心闭环已完整，建议继续补最终视频证据或真实素材适配证据。"
-          : "仍缺少关键评分项证据，需要先补齐样例拆解、结构迁移或结果展示。",
+          : "仍缺少关键能力证据，需要先补齐样例拆解、结构迁移或结果展示。",
     items: [
       ...items,
       ...bonusItems.map((bonus, index) =>
         item({
-          group: "加分项（最高10分）",
+          group: "亮点能力（10分）",
           key: `bonus-${index + 1}`,
           label: bonus.label,
           maxScore: 2,
           score: bonus.passed ? 2 : 0,
           evidence: bonus.evidence,
-          judgePanel: "冠军验收台 / README / ARCHITECTURE / 最终演示包",
+          judgePanel: "创作能力清单 / README / ARCHITECTURE / 最终演示包",
         }),
       ),
     ],

@@ -115,6 +115,13 @@ type VideoGenerateResponse = {
   localVideoUrl?: string | null;
   videoUrl?: string | null;
   segmentSeconds?: string;
+  adaptiveTransfer?: {
+    targetDurationSeconds: number;
+    segmentSeconds: number;
+    sourceBeatCount: number;
+    targetBeatCount: number;
+    strategy: string;
+  };
   segments?: Array<{
     order: number;
     role: string;
@@ -122,6 +129,11 @@ type VideoGenerateResponse = {
       filePath: string;
       bytes: number;
     } | null;
+  }>;
+  missingSegments?: Array<{
+    order: number;
+    role: string;
+    status?: string | null;
   }>;
   downloaded?: {
     filePath: string;
@@ -137,6 +149,23 @@ type StatusState =
   | { type: "success"; message: string }
   | { type: "warning"; message: string }
   | { type: "error"; message: string };
+
+type RunModeState = {
+  sample:
+    | {
+        mode: "local" | "frames" | "direct-video";
+        frameCount: number;
+        sampleCount: number;
+        note: string;
+      }
+    | null;
+  plan:
+    | {
+        mode: "local" | "model";
+        note: string;
+      }
+    | null;
+};
 
 const samplePlaceholder =
   "粘贴样例视频观察 / 口播转写 / 人工拆解。建议写成“时间段 + 发生了什么”。例如：0-2s 先抛结果对比；2-10s 连续 3 个使用场景；结尾引导收藏领取清单。";
@@ -691,6 +720,51 @@ function FunctionFlowPanel({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function RunModePanel({ runMode }: { runMode: RunModeState }) {
+  const items = [
+    {
+      title: "样例理解",
+      value: runMode.sample
+        ? runMode.sample.mode === "direct-video"
+          ? "整段视频 + 关键帧"
+          : runMode.sample.mode === "frames"
+            ? "关键帧 + 文本"
+            : "本地结构整理"
+        : "待运行",
+      detail: runMode.sample
+        ? `${runMode.sample.note}；样例数 ${runMode.sample.sampleCount}，关键帧 ${runMode.sample.frameCount}。`
+        : "拆解样例后会显示本次使用的是云端视觉能力还是本地策略。",
+      ready: Boolean(runMode.sample),
+    },
+    {
+      title: "方案生成",
+      value: runMode.plan
+        ? runMode.plan.mode === "model"
+          ? "云模型生成"
+          : "本地方案策略"
+        : "待运行",
+      detail: runMode.plan
+        ? runMode.plan.note
+        : "生成迁移方案后会显示脚本来自云模型还是本地兜底策略。",
+      ready: Boolean(runMode.plan),
+    },
+  ];
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {items.map((item) => (
+        <div className="rounded-lg border bg-background p-3" key={item.title}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-foreground">{item.title}</p>
+            <Badge variant={item.ready ? "secondary" : "outline"}>{item.value}</Badge>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">{item.detail}</p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1256,6 +1330,7 @@ export default function Home() {
     type: "idle",
     message: "先准备一个样例（链接/文件/观察文本），再把它的结构迁移到你的新主题。",
   });
+  const [runMode, setRunMode] = useState<RunModeState>({ sample: null, plan: null });
   const [renderingVideo, setRenderingVideo] = useState(false);
 
   const hasTechniqueHits = Boolean(plan?.retrievedTechniques.length);
@@ -1360,6 +1435,7 @@ export default function Home() {
     setNlEditFeedback(null);
     setNlEditPreview(null);
     setMediaMeta(null);
+    setRunMode({ sample: null, plan: null });
 
     const formData = new FormData();
     formData.append("projectTitle", projectTitle);
@@ -1387,7 +1463,23 @@ export default function Home() {
     setProjectId(payload.projectId);
     setAnalysis(payload.analysis);
     setMediaMeta(payload.mediaMeta);
-    await refreshPlanHistory(payload.projectId);
+    setRunMode({
+      sample: {
+        mode: payload.usedFallback
+          ? "local"
+          : payload.directVideoUsed
+            ? "direct-video"
+            : "frames",
+        frameCount: payload.visionFrameCount ?? 0,
+        sampleCount: payload.sourceSampleCount ?? 1,
+        note: payload.usedFallback
+          ? "已用本地结构规则整理 hook、节奏、字幕和包装线索"
+          : payload.directVideoUsed
+            ? "已调用兼容模型理解整段视频，并结合时间轴关键帧"
+            : "已调用兼容模型理解关键帧，并结合文本观察",
+      },
+      plan: null,
+    });
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
@@ -1396,6 +1488,7 @@ export default function Home() {
           ? `样例结构拆解完成：已结合整段视频与 ${payload.visionFrameCount ?? 0} 个时间轴关键帧；样例数 ${payload.sourceSampleCount ?? 1}。`
           : `样例结构拆解完成：已结合 ${payload.visionFrameCount ?? 0} 个时间轴关键帧；样例数 ${payload.sourceSampleCount ?? 1}。`,
     });
+    void refreshPlanHistory(payload.projectId);
   }
 
   async function handleSaveEditedPlan() {
@@ -1557,6 +1650,7 @@ export default function Home() {
     setNlEditInstruction("");
     setNlEditFeedback(null);
     setNlEditPreview(null);
+    setRunMode({ sample: null, plan: null });
     setStatus({
       type: "idle",
       message: `已载入演示预设：${preset.label}。`,
@@ -1601,11 +1695,20 @@ export default function Home() {
     setDraftVersion(null);
     setNlEditFeedback(null);
     setNlEditPreview(null);
-    await refreshPlanHistory(payload.projectId);
+    setRunMode((current) => ({
+      ...current,
+      plan: {
+        mode: payload.usedFallback ? "local" : "model",
+        note: payload.usedFallback
+          ? "模型不可用或超时，已用本地迁移策略生成可编辑脚本。"
+          : "已调用兼容文本模型，把样例结构迁移成多版本脚本。",
+      },
+    }));
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: "迁移脚本已生成，可直接编辑并导出。",
     });
+    void refreshPlanHistory(payload.projectId);
   }
 
   async function handleRefinePlan() {
@@ -1690,22 +1793,24 @@ export default function Home() {
 
       <section
         className={`workspace-grid studio-workspace mx-auto grid gap-5 px-4 py-5 sm:px-5 ${
-          simpleMode ? "lg:grid-cols-1" : "lg:grid-cols-[372px_minmax(0,1fr)]"
+          simpleMode
+            ? "lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]"
+            : "lg:grid-cols-[372px_minmax(0,1fr)]"
         }`}
       >
-        <div className="control-rail space-y-5">
+        <div className="control-rail space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Video className="size-4 text-primary" />
-                输入素材
+                1. 样例拆解
               </CardTitle>
-              <CardDescription>样例视频、链接或人工观察文本至少填写一项。</CardDescription>
+              <CardDescription>选预设或粘贴观察文本，先把样例拆成结构规则。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>演示预设</Label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {demoPresets.map((preset) => (
                     <Button
                       key={preset.label}
@@ -1720,109 +1825,117 @@ export default function Home() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="projectTitle">项目名称</Label>
-                <Input
-                  id="projectTitle"
-                  value={projectTitle}
-                  onChange={(event) => setProjectTitle(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="sampleTitle">样例标题</Label>
-                <Input
-                  id="sampleTitle"
-                  value={sampleTitle}
-                  onChange={(event) => setSampleTitle(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="localUploadName">从素材库选择样例</Label>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <select
-                      id="localUploadName"
-                      className="flex h-10 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      value={localUploadName}
-                      onFocus={() => {
-                        if (availableUploads.length === 0) void loadUploads();
-                      }}
-                      onChange={(event) => {
-                        setLocalUploadName(event.target.value);
-                        setSampleFile(null);
-                      }}
-                    >
-                      <option value="">（不使用本地导入）</option>
-                      {availableUploads.map((file) => (
-                        <option key={file.name} value={file.name}>
-                          {file.name} ({(file.sizeBytes / 1024 / 1024).toFixed(1)} MB)
-                        </option>
-                      ))}
-                    </select>
-                    <Button onClick={loadUploads} size="sm" type="button" variant="outline">
-                      刷新
-                    </Button>
-                  </div>
-                  {availableUploads.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      暂无可选视频。也可以直接上传样例文件。
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      选择后会直接用于样例拆解，无需重复上传。
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="sampleFile">样例视频文件</Label>
-                <Input
-                  id="sampleFile"
-                  type="file"
-                  accept="video/*"
-                  onChange={(event) => {
-                    setSampleFile(event.target.files?.[0] || null);
-                    setLocalUploadName("");
-                  }}
-                />
-                {sampleFile ? (
-                  <p className="text-xs text-muted-foreground">
-                    已选择：{sampleFile.name}，{(sampleFile.size / 1024 / 1024).toFixed(1)} MB
-                  </p>
-                ) : null}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="sampleUrl">样例链接</Label>
-                <Input
-                  id="sampleUrl"
-                  placeholder="https://..."
-                  value={sampleUrl}
-                  onChange={(event) => setSampleUrl(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="sampleNotes">样例观察/转写</Label>
                 <Textarea
                   id="sampleNotes"
                   placeholder={samplePlaceholder}
                   value={sampleNotes}
                   onChange={(event) => setSampleNotes(event.target.value)}
+                  rows={5}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="additionalSampleNotes">补充样例（可选）</Label>
-                <Textarea
-                  id="additionalSampleNotes"
-                  placeholder={`多样例模式：每条样例用 --- 分隔。可写：
+              <details className="rounded-lg border bg-background p-3 text-sm">
+                <summary className="cursor-pointer font-semibold text-foreground">
+                  高级输入：视频、链接、多样例和标题
+                </summary>
+                <div className="mt-3 space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="projectTitle">项目名称</Label>
+                    <Input
+                      id="projectTitle"
+                      value={projectTitle}
+                      onChange={(event) => setProjectTitle(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sampleTitle">样例标题</Label>
+                    <Input
+                      id="sampleTitle"
+                      value={sampleTitle}
+                      onChange={(event) => setSampleTitle(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="localUploadName">从素材库选择样例</Label>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <select
+                          id="localUploadName"
+                          className="flex h-10 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                          value={localUploadName}
+                          onFocus={() => {
+                            if (availableUploads.length === 0) void loadUploads();
+                          }}
+                          onChange={(event) => {
+                            setLocalUploadName(event.target.value);
+                            setSampleFile(null);
+                          }}
+                        >
+                          <option value="">（不使用本地导入）</option>
+                          {availableUploads.map((file) => (
+                            <option key={file.name} value={file.name}>
+                              {file.name} ({(file.sizeBytes / 1024 / 1024).toFixed(1)} MB)
+                            </option>
+                          ))}
+                        </select>
+                        <Button onClick={loadUploads} size="sm" type="button" variant="outline">
+                          刷新
+                        </Button>
+                      </div>
+                      {availableUploads.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          暂无可选视频。也可以直接上传样例文件。
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          选择后会直接用于样例拆解，无需重复上传。
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sampleFile">样例视频文件</Label>
+                    <Input
+                      id="sampleFile"
+                      type="file"
+                      accept="video/*"
+                      onChange={(event) => {
+                        setSampleFile(event.target.files?.[0] || null);
+                        setLocalUploadName("");
+                      }}
+                    />
+                    {sampleFile ? (
+                      <p className="text-xs text-muted-foreground">
+                        已选择：{sampleFile.name}，{(sampleFile.size / 1024 / 1024).toFixed(1)} MB
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sampleUrl">样例链接</Label>
+                    <Input
+                      id="sampleUrl"
+                      placeholder="https://..."
+                      value={sampleUrl}
+                      onChange={(event) => setSampleUrl(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="additionalSampleNotes">补充样例（可选）</Label>
+                    <Textarea
+                      id="additionalSampleNotes"
+                      placeholder={`多样例模式：每条样例用 --- 分隔。可写：
 标题：教育产品样例
 0-2s 先给痛点，2-8s 三段证据，结尾 CTA。`}
-                  value={additionalSampleNotes}
-                  onChange={(event) => setAdditionalSampleNotes(event.target.value)}
-                  rows={3}
-                />
-                <p className="text-xs leading-5 text-muted-foreground">
-                  可粘贴更多优质样例，系统会汇总共性结构；上传视频仍以主样例为准。
-                </p>
-              </div>
+                      value={additionalSampleNotes}
+                      onChange={(event) => setAdditionalSampleNotes(event.target.value)}
+                      rows={3}
+                    />
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      可粘贴更多优质样例，系统会汇总共性结构；上传视频仍以主样例为准。
+                    </p>
+                  </div>
+                </div>
+              </details>
               <Button className="w-full" onClick={handleAnalyze}>
                 {status.type === "loading" ? <Loader2 className="animate-spin" /> : <ClipboardList />}
                 拆解成结构卡片
@@ -1834,7 +1947,7 @@ export default function Home() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ClipboardList className="size-4 text-primary" />
-                迁移 Brief
+                2. 迁移 Brief
               </CardTitle>
               <CardDescription>描述新主题、商品、受众和想要强化的卖点。</CardDescription>
             </CardHeader>
@@ -1843,6 +1956,7 @@ export default function Home() {
                 placeholder={briefPlaceholder}
                 value={targetBrief}
                 onChange={(event) => setTargetBrief(event.target.value)}
+                className="min-h-[96px]"
               />
               <div className="space-y-2">
                 <Label htmlFor="userMaterials">用户素材</Label>
@@ -1851,16 +1965,8 @@ export default function Home() {
                   placeholder="描述已有素材，例如：产品图、操作录屏、使用场景、评价截图、CTA 入口；也可以说明缺少哪些素材。"
                   value={userMaterials}
                   onChange={(event) => setUserMaterials(event.target.value)}
+                  className="min-h-[96px]"
                 />
-              </div>
-              <div className="rounded-lg border bg-accent/20 p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">剪辑手法参考</Badge>
-                  <span className="text-xs font-semibold text-foreground">自动匹配</span>
-                </div>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  系统会根据 Brief、用户素材和样例节拍匹配剪辑技巧，例如前 3 秒 Hook、场景阶梯、卡点字幕、动作匹配转场和 CTA 收束。
-                </p>
               </div>
               <Button
                 className="w-full"
@@ -2121,7 +2227,7 @@ export default function Home() {
                       setRenderingVideo(true);
                       setStatus({
                         type: "loading",
-                        message: "正在按迁移分镜生成补充画面并自动拼接...",
+                        message: "正在按样例手法生成迁移成片...",
                       });
                       try {
                         const response = await fetch(`/api/projects/${projectId}/generate-video`, {
@@ -2137,19 +2243,25 @@ export default function Home() {
                         });
                         const data = (await response.json()) as VideoGenerateResponse;
                         if (!response.ok || !data.downloaded) {
-                          throw new Error(data.error || "智能补全生成失败");
+                          const missing = data.missingSegments?.length
+                            ? ` 未完成分段：${data.missingSegments
+                                .map((segment) => `${segment.order}-${segment.role}${segment.status ? `(${segment.status})` : ""}`)
+                                .join("、")}`
+                            : "";
+                          throw new Error(`${data.error || "手法迁移成片生成失败"}${missing}`);
                         }
                         if (data.localVideoUrl || data.videoUrl) {
                           window.open(data.localVideoUrl || data.videoUrl || "", "_blank");
                         }
+                        const duration = data.adaptiveTransfer?.targetDurationSeconds;
                         setStatus({
                           type: "success",
-                          message: `智能补全生成完成：已生成 ${data.segments?.length || 0} 段并自动拼接。`,
+                          message: `手法迁移成片完成：按样例结构生成 ${data.segments?.length || 0} 段${duration ? `，目标约 ${duration} 秒` : ""}并自动拼接。`,
                         });
-                      } catch {
+                      } catch (error) {
                         setStatus({
                           type: "error",
-                          message: "智能补全生成失败，请先确认方案完整。",
+                          message: error instanceof Error ? error.message : "手法迁移成片生成失败。",
                         });
                       } finally {
                         setRenderingVideo(false);
@@ -2157,7 +2269,7 @@ export default function Home() {
                     }}
                   >
                     {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
-                    智能补全生成
+                    按样例手法出片
                   </Button>
                   <Button
                     size="sm"
@@ -2228,6 +2340,7 @@ export default function Home() {
             <CardContent>
               {analysis ? (
                 <div className="space-y-5">
+                  <RunModePanel runMode={runMode} />
                   {mediaMeta ? <MediaMetaPanel mediaMeta={mediaMeta} /> : null}
                   <StructureFingerprintPanel analysis={analysis} />
                   <div className="grid gap-3 md:grid-cols-3">

@@ -26,7 +26,7 @@ describe("champion rubric", () => {
         "结果展示与可验证性（20分）",
         "进阶能力（20分）",
         "人机协同与整体完成度（15分）",
-        "加分项（最高10分）",
+        "亮点能力（10分）",
       ]),
     );
     expect(report.items.map((item) => item.label)).toContain("结构迁移生成能力");

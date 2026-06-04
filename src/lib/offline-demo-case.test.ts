@@ -11,7 +11,7 @@ describe("offline demo cases", () => {
     for (const item of cases) {
       expect(item.plan.retrievedTechniques.length).toBeGreaterThanOrEqual(4);
       expect(item.plan.awardReadiness?.overallScore).toBeGreaterThanOrEqual(90);
-      expect(item.markdown).toContain("大奖目标看板");
+      expect(item.markdown).toContain("质量诊断看板");
     }
   });
 });

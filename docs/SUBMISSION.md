@@ -12,6 +12,18 @@
 - 视频产物 case：`cases/ai-resume-demo-case.md`
 - 离线可复现实验案例（自动生成）：`cases/generated/README.md`
 
+## 题面交付对应关系
+
+| 题面要求 | 本项目交付 |
+| --- | --- |
+| 代码仓库 | GitHub 仓库 + `npm run submission:pack` 可打包源码 |
+| 演示视频 | `npm run demo:final` 生成最终演示包，或用 `npm run video:render` 生成可播放 MP4 |
+| 视频产物 case | `cases/ai-resume-demo-case.md`、`cases/generated/*.md`、最终演示包 `final-flow/case.md` |
+| 项目说明文档 | `README.md`、`docs/ARCHITECTURE.md`、`docs/API_INTEGRATION.md`、`docs/JUDGE_GUIDE.md` |
+| 整体 AI 架构 | `docs/ARCHITECTURE.md` 的“整体 AI 架构” |
+| 工具协议 | `docs/ARCHITECTURE.md` 的 LLM/FFmpeg/Remotion/JSON 协议，以及 `docs/API_INTEGRATION.md` 的外部模型接入协议 |
+| 安全边界 | `docs/ARCHITECTURE.md` 和本文“安全与合规”，明确不提交密钥、不复刻样例、不让模型黑盒替代结构迁移 |
+
 ## 运行方式
 
 ```bash

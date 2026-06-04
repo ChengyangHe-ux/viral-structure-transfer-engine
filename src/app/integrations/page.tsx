@@ -99,6 +99,7 @@ export default function IntegrationsPage() {
               <CardDescription>只用于素材缺口补全或分段生成，结构迁移仍由本项目控制。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm leading-6 text-muted-foreground">
+              <p>Provider：{status.videoApi.provider === "zhipu" ? "智谱" : "通用视频 API"}</p>
               <p>Base URL：{status.videoApi.baseUrl}</p>
               <p>Model：{status.videoApi.model}</p>
               <p>Submit endpoint：{status.videoApi.endpoint}</p>

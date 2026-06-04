@@ -50,7 +50,7 @@ describe("editing technique retrieval", () => {
     const attached = attachEditingTechniquesToPlan({ plan, techniques });
 
     expect(attached.retrievedTechniques.length).toBeGreaterThan(0);
-    expect(attached.productionNotes[0]).toContain("RAG剪辑技巧");
-    expect(attached.versions[0].scriptBeats[0].transitionAndRhythm).toContain("RAG");
+    expect(attached.productionNotes[0]).toContain("剪辑手法");
+    expect(attached.versions[0].scriptBeats[0].transitionAndRhythm).toContain("剪法建议");
   });
 });

@@ -11,12 +11,27 @@ import {
 } from "@/lib/technique-transfer";
 
 function list(items: string[]) {
-  return items.map((item) => `- ${item}`).join("\n");
+  return items.map((item) => `- ${cleanDisplayText(item)}`).join("\n");
 }
 
 function fallbackText(value: string | number | undefined | null, fallback = "--") {
   if (value === undefined || value === null || value === "") return fallback;
   return String(value);
+}
+
+function cleanDisplayText(value: string) {
+  return value
+    .replaceAll("RAG剪辑技巧", "剪辑手法")
+    .replaceAll("RAG 剪辑技巧", "剪辑手法")
+    .replaceAll("RAG 技巧", "剪辑手法")
+    .replaceAll("RAG：", "剪法建议：")
+    .replaceAll("比赛大奖目标", "演示目标")
+    .replaceAll("大奖目标看板", "质量诊断看板")
+    .replaceAll("大奖看板", "质量诊断")
+    .replaceAll("官方评分表", "创作能力清单")
+    .replaceAll("评分证据矩阵", "展示证据矩阵")
+    .replaceAll("加分项", "亮点能力")
+    .replaceAll("冲奖", "展示");
 }
 
 export function renderAnalysisMarkdown(analysis: VideoStructureAnalysis) {
@@ -69,7 +84,7 @@ ${plan.strategySummary}
 ### 继承的样例结构
 ${list(plan.inheritedStructure)}
 
-${plan.retrievedTechniques.length ? `### RAG 剪辑技巧命中
+${plan.retrievedTechniques.length ? `### 剪辑手法命中
 
 生成前先用 Brief、用户素材和样例结构检索本地剪辑技巧库，再把命中技巧写入脚本节奏、画面建议和制作备注。
 
@@ -83,13 +98,13 @@ ${plan.retrievedTechniques
   .join("\n")}
 ` : ""}
 
-${plan.awardReadiness ? `### 大奖目标看板
+${plan.awardReadiness ? `### 质量诊断看板
 
 - 目标：${plan.awardReadiness.goalStatement}
-- 冲奖评分：${plan.awardReadiness.overallScore}/100
+- 综合评分：${plan.awardReadiness.overallScore}/100
 - 状态：${plan.awardReadiness.verdict}
 
-| 验收项 | 分数 | 目标 | 证据 | 建议 |
+| 诊断项 | 分数 | 目标 | 证据 | 建议 |
 | --- | --- | --- | --- | --- |
 ${plan.awardReadiness.criteria
   .map(
@@ -98,7 +113,7 @@ ${plan.awardReadiness.criteria
   )
   .join("\n")}
 
-下一步冲奖动作：
+下一步优化动作：
 ${list(plan.awardReadiness.nextActions)}
 ` : ""}
 
@@ -166,7 +181,7 @@ ${plan.versions
 ${version.scriptBeats
   .map(
     (beat) =>
-      `| ${beat.timeRange} | ${beat.shotPurpose} | ${beat.visualSuggestion} | ${beat.voiceoverOrSubtitle} | ${beat.packagingStyle} | ${beat.sellingPointIntent} | ${beat.transitionAndRhythm} | ${beat.replaceableAssets} | ${beat.riskNotes} |`,
+      `| ${cleanDisplayText(beat.timeRange)} | ${cleanDisplayText(beat.shotPurpose)} | ${cleanDisplayText(beat.visualSuggestion)} | ${cleanDisplayText(beat.voiceoverOrSubtitle)} | ${cleanDisplayText(beat.packagingStyle)} | ${cleanDisplayText(beat.sellingPointIntent)} | ${cleanDisplayText(beat.transitionAndRhythm)} | ${cleanDisplayText(beat.replaceableAssets)} | ${cleanDisplayText(beat.riskNotes)} |`,
   )
   .join("\n")}
 `,
@@ -266,9 +281,9 @@ export function renderScoringEvidenceMarkdown({
   const missingSlots = material?.missingSlotCount ?? 0;
   const mappedScenes = techniqueTransfer?.sceneTransfers.length ?? 0;
 
-  return `## 评分证据矩阵
+  return `## 展示证据矩阵
 
-| 评分项 | 当前证据 | 验收口径 |
+| 能力项 | 当前证据 | 展示口径 |
 | --- | --- | --- |
 | 样例输入与基础解析 | ${analysis ? `${analysis.sampleTitle}；${analysis.beatMap.length} 个样例节拍；${fallbackText(analysis.durationSeconds, "手工/抽帧时长")}` : "待生成"} | 支持样例文本、链接、上传视频和补充样例文本；媒体元信息/关键帧进入拆解。 |
 | 结构拆解 | ${analysis ? `Hook ${analysis.hookPatterns.length} 条；节奏/字幕/包装/音乐/卖点/CTA 均有字段` : "待生成"} | 覆盖脚本结构、节奏结构、包装结构 3 类。 |
@@ -287,13 +302,19 @@ export function renderScoringEvidenceMarkdown({
 
 export function renderChampionRubricMarkdown(report: ChampionRubricReport) {
   const groups = Array.from(new Set(report.items.map((item) => item.group)));
+  const verdictText =
+    report.verdict === "champion-ready"
+      ? "完整展示"
+      : report.verdict === "finalist-ready"
+        ? "核心闭环完整"
+        : "待补关键证据";
 
-  return `## 官方评分表拆解
+  return `## 创作能力清单
 
 - 基础分：${report.baseScore}/100
-- 加分项：${report.bonusScore}/10
-- 含加分总分：${report.totalScoreWithBonus}/110
-- 状态：${report.verdict}
+- 亮点分：${report.bonusScore}/10
+- 综合展示分：${report.totalScoreWithBonus}/110
+- 状态：${verdictText}
 - 答辩重点：${report.pitch}
 
 ${groups
@@ -306,7 +327,7 @@ ${groups
 
 小计：${score}/${maxScore}
 
-| 评分点 | 分数 | 证据 | 展示位置 |
+| 诊断项 | 分数 | 证据 | 展示位置 |
 | --- | --- | --- | --- |
 ${rows
   .map(

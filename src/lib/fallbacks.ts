@@ -216,7 +216,7 @@ export function createFallbackPlan({
     versions: [
       {
         versionName: "稳妥转化版",
-        positioning: "强调可信证据和低门槛行动，适合商品介绍、服务转化和比赛演示主版本",
+        positioning: "强调可信证据和低门槛行动，适合商品介绍、服务转化和主推展示版本",
         bestFor: "需要清楚解释卖点、降低用户决策成本的场景",
         scriptBeats: baseBeats,
         coverTitle: "别急着下判断，关键差在这一步",

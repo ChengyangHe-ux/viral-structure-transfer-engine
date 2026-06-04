@@ -60,12 +60,14 @@ export function evaluateAwardReadiness({
     ]),
   );
 
-  const ragNotes = plan.productionNotes.filter((note) => note.startsWith("RAG剪辑技巧"));
+  const techniqueNotes = plan.productionNotes.filter(
+    (note) => note.startsWith("剪辑手法") || note.startsWith("RAG剪辑技巧"),
+  );
   const allText = JSON.stringify(plan);
-  const ragScore = clampScore(
+  const techniqueScore = clampScore(
     48 +
       Math.min(plan.retrievedTechniques.length, 5) * 8 +
-      Math.min(ragNotes.length, 5) * 4 +
+      Math.min(techniqueNotes.length, 5) * 4 +
       (includesAny(allText, ["B-roll", "微距", "卡点", "匹配转场", "CTA"]) ? 12 : 0),
   );
 
@@ -83,7 +85,7 @@ export function evaluateAwardReadiness({
       getDimensionScore(plan, "editability") || 72,
       plan.versions.length >= 3 ? 92 : 70,
       beatCount >= 12 ? 88 : 72,
-      includesAny(allText, ["可替换素材", "风险", "补全", "RAG"]) ? 88 : 68,
+      includesAny(allText, ["可替换素材", "风险", "补全", "剪法建议", "剪辑手法"]) ? 88 : 68,
     ]),
   );
 
@@ -111,14 +113,14 @@ export function evaluateAwardReadiness({
           : "补齐未覆盖的样例节拍，并保持三版本差异足够明确。",
     },
     {
-      key: "rag-explainability",
-      label: "RAG 剪辑方法可解释",
-      score: ragScore,
+      key: "technique-explainability",
+      label: "剪辑方法可解释",
+      score: techniqueScore,
       target: "命中 ≥4 条剪辑技巧，并能说明它们如何进入镜头、转场、字幕和 CTA。",
-      evidence: `命中技巧 ${plan.retrievedTechniques.length} 条；RAG 制作备注 ${ragNotes.length} 条。`,
-      passed: ragScore >= 86,
+      evidence: `命中技巧 ${plan.retrievedTechniques.length} 条；制作备注 ${techniqueNotes.length} 条。`,
+      passed: techniqueScore >= 86,
       suggestion:
-        ragScore >= 86
+        techniqueScore >= 86
           ? "答辩时强调系统不是直接生成文案，而是先检索“怎么剪”。"
           : "增加与 Brief 更贴合的技巧命中，例如场景阶梯、微距产品镜头或卡点字幕。",
     },
@@ -150,8 +152,8 @@ export function evaluateAwardReadiness({
       key: "submission-evidence",
       label: "上交证据完整",
       score: evidenceScore,
-      target: "导出稿能自证目标、方法、评分、缺口、风险和下一步。",
-      evidence: `质量评分 ${plan.evaluation?.overallScore ?? "未计算"}/100；制作备注 ${plan.productionNotes.length} 条；样例节拍 ${analysis?.beatMap.length ?? "未提供"} 段。`,
+      target: "导出稿能自证目标、方法、质量分、缺口、风险和下一步。",
+      evidence: `质量分 ${plan.evaluation?.overallScore ?? "未计算"}/100；制作备注 ${plan.productionNotes.length} 条；样例节拍 ${analysis?.beatMap.length ?? "未提供"} 段。`,
       passed: evidenceScore >= 84,
       suggestion:
         evidenceScore >= 84
@@ -178,18 +180,18 @@ export function evaluateAwardReadiness({
 
   return awardReadinessSchema.parse({
     goalStatement:
-      "比赛大奖目标：现场可证明样例拆解、RAG剪辑技巧、结构迁移、素材补全、可编辑时间线和一键出片形成完整创作闭环。",
+      "演示目标：现场可证明样例拆解、剪辑手法匹配、结构迁移、素材补全、可编辑时间线和一键出片形成完整创作闭环。",
     overallScore,
     verdict,
     criteria,
     nextActions:
       nextActions.length > 0
         ? nextActions
-        : ["保持当前主链路，录屏时重点展示 RAG 技巧命中、结构映射和一键出片。"],
+        : ["保持当前主链路，录屏时重点展示剪辑手法命中、结构映射和一键出片。"],
     demoProof: [
       "展示样例拆解：Hook、节奏、字幕、包装、卖点推进。",
-      "展示 RAG 技巧命中：说明每条技巧如何进入脚本和转场。",
-      "展示质量诊断与大奖目标评分：证明系统能自评、可补强。",
+      "展示剪辑手法命中：说明每条技巧如何进入脚本和转场。",
+      "展示质量诊断：证明系统能自评、可补强。",
       "展示自然语言微调或可编辑时间线：证明现场可控。",
       "展示导出或一键出片：证明上交链路闭合。",
     ],

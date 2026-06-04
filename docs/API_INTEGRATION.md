@@ -25,6 +25,14 @@ VIDEO_API_ENDPOINT="/v1/videos/generations"
 VIDEO_API_QUERY_ENDPOINT="/v1/async-result/{id}"
 VIDEO_API_DURATION_SECONDS="5"
 VIDEO_API_SEGMENT_SECONDS="5"
+
+# 智谱视频生成也可以只填下面这组；系统会自动使用智谱默认 endpoint。
+ZHIPU_API_KEY="..."
+ZHIPU_VIDEO_MODEL="cogvideox-2"
+ZHIPU_VIDEO_SIZE="1080x1920"
+ZHIPU_VIDEO_FPS="30"
+ZHIPU_VIDEO_QUALITY="quality"
+ZHIPU_VIDEO_WITH_AUDIO="false"
 ```
 
 ## 推荐接法
@@ -51,13 +59,24 @@ VIDEO_API_SEGMENT_SECONDS="5"
 
 视频生成 API 只用于“素材缺口补全”和“分段素材生成”。项目仍然用样例结构迁移出的分镜、字幕、包装和时间线控制成片，不把整条片子交给模型黑盒生成。
 
+如果使用智谱/Z.ai 视频生成，最少只需要配置：
+
+```bash
+ZHIPU_API_KEY="..."
+ZHIPU_VIDEO_MODEL="cogvideox-2"
+```
+
+主页面的“按样例手法出片”不会把所有任务压成固定三段模板。系统会读取 `SampleAnalysis.beatMap`、目标 Brief、用户素材和当前方案 `scriptBeats`，先判断目标时长，再把样片的镜头目的、节奏、字幕/包装规则迁移成若干段可生成分镜。若用户明确写了“15 秒”，会按 15 秒生成；否则优先参考样片时长或方案时间线。系统会自动提交到 `https://open.bigmodel.cn/api/paas/v4/videos/generations`，再轮询 `/async-result/{id}`。如需强制使用智谱但沿用 `VIDEO_API_KEY`，可设置 `VIDEO_API_PROVIDER="zhipu"`。
+
 当前通用接口会：
 
-1. 根据迁移分镜生成每段 prompt。
+1. 根据样片结构、目标 Brief 和素材状态生成自适应手法迁移分镜 prompt。
 2. 调用 `VIDEO_API_ENDPOINT` 提交任务。
 3. 用 `VIDEO_API_QUERY_ENDPOINT` 轮询结果。
 4. 下载每段视频到 `renders/api-videos`。
 5. 用 FFmpeg 拼接成可预览视频。
+
+智谱当前单次生成时长主要按 5 秒或 10 秒片段提交，所以平台会把完整成片拆成多个可控片段，再由结构协议统一拼接。这里的分段是视频模型能力约束，不是产品逻辑上的固定模板。
 
 ## 诊断入口
 

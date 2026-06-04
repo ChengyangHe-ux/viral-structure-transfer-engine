@@ -6,11 +6,16 @@ import { promisify } from "node:util";
 import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
-import { migratedVideoPlanSchema } from "@/lib/schemas";
+import {
+  buildAdaptiveTransferStoryboard,
+  type AdaptiveTransferStoryboardShot,
+} from "@/lib/adaptive-video-storyboard";
+import { migratedVideoPlanSchema, videoStructureAnalysisSchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
 
 const execFileAsync = promisify(execFile);
+const ZHIPU_VIDEO_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
 
 function getFfmpegPath() {
   const platformArch =
@@ -42,26 +47,6 @@ type VideoGenerateRequest = {
   audioMode?: "natural-sfx" | "model-voiceover";
 };
 
-type PlanBeatForPrompt = {
-  timeRange: string;
-  shotPurpose: string;
-  visualSuggestion: string;
-  voiceoverOrSubtitle: string;
-  packagingStyle: string;
-  transitionAndRhythm: string;
-  sellingPointIntent: string;
-  replaceableAssets: string;
-};
-
-type DirectorStoryboardShot = {
-  order: number;
-  role: string;
-  visual: string;
-  rhythm: string;
-  audio: string;
-  editPoint: string;
-};
-
 type GeneratedSegment = {
   order: number;
   role: string;
@@ -71,58 +56,20 @@ type GeneratedSegment = {
     filePath: string;
     bytes: number;
   } | null;
-  request: {
-    model: string;
-    prompt: string;
-    seconds: string;
-    size: string;
-  };
+  provider: "zhipu" | "generic";
+  request: Record<string, unknown>;
   submit: unknown;
   final: unknown;
 };
 
-function cleanTemplateResidue(value: string) {
-  return value
-    .split("样例观察仅作结构参考")[0]
-    .replace(/男性主角|侧脸|喝啤酒|啤酒|酒馆|吧台|酒吧|人群|品牌标签|红印章|蓝字体|瓶身|瓶盖/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function shotRole(beat: PlanBeatForPrompt, index: number, total: number) {
-  const text = `${beat.shotPurpose} ${beat.sellingPointIntent}`.toLowerCase();
-  if (index === 0 || /hook|开头|吸引|反差|悬念|痛点/.test(text)) return "开头吸引";
-  if (index === total - 1 || /cta|结尾|转化|引导|收束|行动/.test(text)) return "结尾收束";
-  if (/对比|证明|效果|前后|结果/.test(text)) return "效果证明";
-  if (/场景|体验|使用|过程|演示/.test(text)) return "体验场景";
-  return "卖点可视化";
-}
-
-function buildDirectorStoryboard(
-  beats: PlanBeatForPrompt[],
-  targetBrief: string,
-): DirectorStoryboardShot[] {
-  const targetTopic = targetBrief.replace(/\s+/g, " ").slice(0, 120);
-  return beats.map((beat, index) => {
-    const role = shotRole(beat, index, beats.length);
-    const visual = cleanTemplateResidue(beat.visualSuggestion);
-    const fallbackVisual =
-      role === "开头吸引"
-        ? `围绕「${targetTopic}」拍一个能立刻看懂产品质感或使用结果的近景 Hook，不复制样例画面。`
-        : role === "结尾收束"
-          ? `围绕「${targetTopic}」做产品 hero shot 或使用后的结果定格，形成自然 CTA。`
-          : `围绕「${targetTopic}」把该段卖点动作化，用产品状态变化、使用过程或环境反馈表达。`;
-
-    return {
-      order: index + 1,
-      role,
-      visual: visual || fallbackVisual,
-      rhythm: cleanTemplateResidue(beat.transitionAndRhythm) || "跟随样例节奏完成一次明确转场。",
-      audio: beat.voiceoverOrSubtitle,
-      editPoint: beat.packagingStyle,
-    };
-  });
-}
+type VideoProviderConfig = {
+  provider: "zhipu" | "generic";
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  submitEndpoint: string;
+  queryEndpoint: string;
+};
 
 function buildPrompt({
   projectTitle,
@@ -176,32 +123,89 @@ function buildSegmentPrompt({
   versionName: string;
   strategySummary: string;
   targetBrief: string;
-  shot: DirectorStoryboardShot;
+  shot: AdaptiveTransferStoryboardShot;
   totalShots: number;
 }) {
   return [
-    "竖屏 9:16，真实商业短视频素材片段，用于后期按分镜拼接。",
+    "竖屏 9:16，真实商业短视频素材片段，用于后期拼成手法迁移成片。",
     `项目：${projectTitle}`,
     `方案版本：${versionName}`,
     `目标 Brief：${targetBrief}`,
     `迁移结构：${strategySummary}`,
     `当前分镜：${shot.order}/${totalShots} - ${shot.role}`,
+    `源样片时间段：${shot.sourceTimeRange || "按当前脚本推断"}`,
+    `目标成片时间段：${shot.targetTimeRange}`,
+    `迁移手法：${shot.transferredTechnique}`,
     `必拍画面：${shot.visual}`,
     `剪辑节奏：${shot.rhythm}`,
     `后期包装参考：${shot.editPoint}`,
     "生成方式：只生成这一段分镜对应的画面，不要把整条视频结构都塞进本片段。",
-    "连续性：保持同一个产品主体、同一商业摄影风格、同一色彩和光线体系，方便后续无缝拼接。",
+    "连续性：保持同一个新主题主体和统一商业摄影风格；如果样片手法需要场景切换，可以按源样片节奏切场景，但不要跳出目标 Brief。",
     "转场预留：片段开头和结尾保留自然运动或定格余量，方便剪辑时衔接上一段和下一段。",
     "画面禁止：不要出现中文、英文、字幕、标题、卖点卡片、任何可读文字、Logo、水印、二维码、UI、品牌名、乱码字形或伪文字。",
     "包装要求：如果出现产品包装，只能是无字纯色或抽象图案包装，不要出现任何文字标签。",
     "音频要求：不要生成任何人声、讲解或口播；只保留自然音效，例如冷气、冰块、液体、包装轻响、环境氛围声。",
-    "人物限制：不要出现任何人物、脸、嘴巴、牙齿、吃东西动作或主播出镜；用产品、冰块、冷气、包装、环境变化表达。",
+    "人物要求：除非目标 Brief 明确需要真人出镜，否则优先用产品、手部动作、环境变化、界面录屏或非可识别人物表达。",
     "质感要求：真实商业短视频质感，主体清晰，光线干净，适合社媒种草，不要卡通、不要玩具感、不要夸张变形。",
   ].join("\n");
 }
 
 function endpoint(baseUrl: string, pathName: string) {
   return `${baseUrl.replace(/\/+$/, "")}/${pathName.replace(/^\/+/, "")}`;
+}
+
+function videoProviderConfig(): VideoProviderConfig | null {
+  const zhipuApiKey = process.env.ZHIPU_API_KEY;
+  const genericApiKey = process.env.VIDEO_API_KEY;
+  const provider =
+    process.env.VIDEO_API_PROVIDER === "zhipu" || (zhipuApiKey && !genericApiKey)
+      ? "zhipu"
+      : "generic";
+
+  if (provider === "zhipu") {
+    const apiKey = zhipuApiKey || genericApiKey;
+    if (!apiKey) return null;
+    return {
+      provider,
+      apiKey,
+      baseUrl: process.env.VIDEO_API_BASE_URL || ZHIPU_VIDEO_BASE_URL,
+      model: process.env.VIDEO_API_MODEL || process.env.ZHIPU_VIDEO_MODEL || "cogvideox-2",
+      submitEndpoint: process.env.VIDEO_API_ENDPOINT || "/videos/generations",
+      queryEndpoint: process.env.VIDEO_API_QUERY_ENDPOINT || "/async-result/{id}",
+    };
+  }
+
+  if (!process.env.VIDEO_API_BASE_URL || !genericApiKey) return null;
+  return {
+    provider,
+    apiKey: genericApiKey,
+    baseUrl: process.env.VIDEO_API_BASE_URL,
+    model: process.env.VIDEO_API_MODEL || "veo3.1-fast",
+    submitEndpoint: process.env.VIDEO_API_ENDPOINT || "/v1/videos",
+    queryEndpoint: process.env.VIDEO_API_QUERY_ENDPOINT || "/v1/videos/{id}",
+  };
+}
+
+function buildSubmitPayload(config: VideoProviderConfig, prompt: string, seconds: string) {
+  if (config.provider === "zhipu") {
+    const duration = Number(seconds) === 10 ? 10 : 5;
+    return {
+      model: config.model,
+      prompt: prompt.slice(0, 512),
+      quality: process.env.ZHIPU_VIDEO_QUALITY || "quality",
+      with_audio: process.env.ZHIPU_VIDEO_WITH_AUDIO === "true",
+      size: process.env.ZHIPU_VIDEO_SIZE || "1080x1920",
+      fps: Number(process.env.ZHIPU_VIDEO_FPS) === 60 ? 60 : 30,
+      duration,
+    };
+  }
+
+  return {
+    model: config.model,
+    prompt,
+    seconds,
+    size: process.env.VIDEO_API_SIZE || "720x1280",
+  };
 }
 
 async function downloadVideo(url: string, fileName: string) {
@@ -262,18 +266,13 @@ function findVideoUrl(payload: unknown): string | null {
   );
 }
 
-async function queryVideo(taskId: string) {
-  const baseUrl = process.env.VIDEO_API_BASE_URL;
-  const apiKey = process.env.VIDEO_API_KEY;
-  if (!baseUrl || !apiKey) throw new Error("VIDEO_API_BASE_URL or VIDEO_API_KEY is not configured.");
-  const queryPath =
-    process.env.VIDEO_API_QUERY_ENDPOINT?.replace("{id}", encodeURIComponent(taskId)) ||
-    `/v1/videos/${encodeURIComponent(taskId)}`;
+async function queryVideo(config: VideoProviderConfig, taskId: string) {
+  const queryPath = config.queryEndpoint.replace("{id}", encodeURIComponent(taskId));
 
-  const response = await fetch(endpoint(baseUrl, queryPath), {
+  const response = await fetch(endpoint(config.baseUrl, queryPath), {
     headers: {
-      authorization: `Bearer ${apiKey}`,
-      "x-api-key": apiKey,
+      authorization: `Bearer ${config.apiKey}`,
+      "x-api-key": config.apiKey,
     },
   });
   const text = await response.text();
@@ -285,31 +284,24 @@ async function queryVideo(taskId: string) {
 }
 
 async function submitVideoGeneration({
-  baseUrl,
-  apiKey,
+  config,
   prompt,
   seconds,
   fileName,
 }: {
-  baseUrl: string;
-  apiKey: string;
+  config: VideoProviderConfig;
   prompt: string;
   seconds: string;
   fileName: string;
 }) {
-  const payload = {
-    model: process.env.VIDEO_API_MODEL || "veo3.1-fast",
-    prompt,
-    seconds,
-    size: "720x1280",
-  };
+  const payload = buildSubmitPayload(config, prompt, seconds);
 
-  const submitResponse = await fetch(endpoint(baseUrl, process.env.VIDEO_API_ENDPOINT || "/v1/videos"), {
+  const submitResponse = await fetch(endpoint(config.baseUrl, config.submitEndpoint), {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`,
-      "x-api-key": apiKey,
+      authorization: `Bearer ${config.apiKey}`,
+      "x-api-key": config.apiKey,
     },
     body: JSON.stringify(payload),
   });
@@ -339,15 +331,22 @@ async function submitVideoGeneration({
   if (taskId && !videoUrl) {
     for (let attempt = 0; attempt < 18; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 2000 : 10000));
-      finalPayload = await queryVideo(taskId);
+      finalPayload = await queryVideo(config, taskId);
       videoUrl = findVideoUrl(finalPayload);
       const status =
         finalPayload && typeof finalPayload === "object"
-          ? String((finalPayload as { status?: string }).status || "").toLowerCase()
+          ? String(
+              (finalPayload as { status?: string; task_status?: string }).status ||
+                (finalPayload as { status?: string; task_status?: string }).task_status ||
+                "",
+            ).toLowerCase()
           : "";
       if (
         videoUrl ||
-        (status && !["queued", "running", "processing", "pending", "in_progress"].includes(status))
+        (status &&
+          !["queued", "running", "processing", "pending", "in_progress", "submitted"].includes(
+            status,
+          ))
       ) {
         break;
       }
@@ -360,6 +359,7 @@ async function submitVideoGeneration({
     taskId,
     videoUrl,
     downloaded,
+    provider: config.provider,
     request: payload,
     submit: submitBody,
     final: finalPayload,
@@ -421,6 +421,7 @@ export async function POST(
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
+        sampleAnalysis: true,
         generatedPlans: {
           orderBy: { createdAt: "desc" },
         },
@@ -434,26 +435,36 @@ export async function POST(
     if (!planRecord) return NextResponse.json({ error: "Plan not found" }, { status: 404 });
 
     const plan = migratedVideoPlanSchema.parse(planRecord.data);
+    const analysis = project.sampleAnalysis
+      ? videoStructureAnalysisSchema.parse(project.sampleAnalysis.data)
+      : null;
     const version = plan.versions[versionIndex] ?? plan.versions[0];
     const beat = version?.scriptBeats[beatIndex];
     if (!version || (mode === "hook" && !beat)) {
       return NextResponse.json({ error: "Version or beat not found" }, { status: 404 });
     }
 
-    const baseUrl = process.env.VIDEO_API_BASE_URL;
-    const apiKey = process.env.VIDEO_API_KEY;
-    if (!baseUrl || !apiKey) {
+    const videoConfig = videoProviderConfig();
+    if (!videoConfig) {
       return NextResponse.json(
-        { error: "VIDEO_API_BASE_URL or VIDEO_API_KEY is not configured" },
+        { error: "VIDEO_API_* or ZHIPU_API_KEY is not configured" },
         { status: 400 },
       );
     }
 
     if (mode === "full-video") {
-      const directorStoryboard = buildDirectorStoryboard(version.scriptBeats, plan.targetBrief);
-      const segmentSeconds =
+      const requestedSegmentSeconds =
         process.env.VIDEO_API_SEGMENT_SECONDS || process.env.VIDEO_API_DURATION_SECONDS || "5";
-      const outputBaseName = `${project.id}-${Date.now()}-${versionIndex}-segmented-full`;
+      const adaptiveTransfer = buildAdaptiveTransferStoryboard({
+        analysis,
+        beats: version.scriptBeats,
+        targetBrief: plan.targetBrief,
+        userMaterials: project.userMaterials,
+        segmentSeconds: Number(requestedSegmentSeconds),
+      });
+      const directorStoryboard = adaptiveTransfer.shots;
+      const segmentSeconds = String(adaptiveTransfer.segmentSeconds);
+      const outputBaseName = `${project.id}-${Date.now()}-${versionIndex}-adaptive-transfer`;
       const progressFilePath = path.join(
         process.cwd(),
         "renders",
@@ -472,8 +483,7 @@ export async function POST(
           totalShots: directorStoryboard.length,
         });
         const generated = await submitVideoGeneration({
-          baseUrl,
-          apiKey,
+          config: videoConfig,
           prompt: segmentPrompt,
           seconds: segmentSeconds,
           fileName: `${outputBaseName}-segment-${String(shot.order).padStart(2, "0")}.mp4`,
@@ -491,6 +501,7 @@ export async function POST(
           audioMode: "natural-sfx",
           versionIndex,
           beatIndex,
+          adaptiveTransfer,
           directorStoryboard,
           segmentSeconds,
           completedSegments: segments.length,
@@ -503,6 +514,19 @@ export async function POST(
         .map((segment) => segment.downloaded?.filePath)
         .filter((filePath): filePath is string => Boolean(filePath));
       if (segmentPaths.length !== directorStoryboard.length) {
+        const missingSegments = segments
+          .filter((segment) => !segment.downloaded)
+          .map((segment) => ({
+            order: segment.order,
+            role: segment.role,
+            taskId: segment.taskId,
+            status:
+              segment.final && typeof segment.final === "object"
+                ? (segment.final as { task_status?: string; status?: string }).task_status ||
+                  (segment.final as { task_status?: string; status?: string }).status ||
+                  null
+                : null,
+          }));
         const debugFilePath = await writeVideoGenerationDebug(`${outputBaseName}.json`, {
           projectId: project.id,
           planId: planRecord.id,
@@ -510,24 +534,28 @@ export async function POST(
           audioMode: "natural-sfx",
           versionIndex,
           beatIndex,
+          adaptiveTransfer,
           directorStoryboard,
           segmentSeconds,
           segments,
-          error: "Some segments did not return downloadable video URLs.",
+          missingSegments,
+          error: "Some adaptive transfer video segments did not return downloadable video URLs.",
         });
 
         return NextResponse.json(
           {
-            error: "Some segments did not return downloadable video URLs.",
+            error: "手法迁移成片有分段还未返回可下载视频，请稍后重试或改用单段生成。",
             projectId: project.id,
             planId: planRecord.id,
             mode,
             audioMode: "natural-sfx",
             versionIndex,
             beatIndex,
+            adaptiveTransfer,
             directorStoryboard,
             segmentSeconds,
             segments,
+            missingSegments,
             debugFilePath,
           },
           { status: 502 },
@@ -545,6 +573,7 @@ export async function POST(
           audioMode: "natural-sfx",
           versionIndex,
           beatIndex,
+          adaptiveTransfer,
           directorStoryboard,
           segmentSeconds,
           segments,
@@ -561,6 +590,7 @@ export async function POST(
             audioMode: "natural-sfx",
             versionIndex,
             beatIndex,
+            adaptiveTransfer,
             directorStoryboard,
             segmentSeconds,
             segments,
@@ -581,6 +611,7 @@ export async function POST(
         audioMode: "natural-sfx",
         versionIndex,
         beatIndex,
+        adaptiveTransfer,
         directorStoryboard,
         segmentSeconds,
         segments,
@@ -596,6 +627,7 @@ export async function POST(
         audioMode: "natural-sfx",
         versionIndex,
         beatIndex,
+        adaptiveTransfer,
         directorStoryboard,
         segmentSeconds,
         segments,
@@ -619,8 +651,7 @@ export async function POST(
     });
     const outputBaseName = `${project.id}-${Date.now()}-${versionIndex}-${beatIndex}`;
     const generated = await submitVideoGeneration({
-      baseUrl,
-      apiKey,
+      config: videoConfig,
       prompt,
       seconds: requestedSeconds,
       fileName: `${outputBaseName}.mp4`,

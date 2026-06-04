@@ -206,17 +206,6 @@ button:not(:disabled):active {
   min-width: 0;
 }
 
-@media (min-width: 1024px) {
-  .control-rail {
-    position: sticky;
-    top: 6.25rem;
-    max-height: calc(100vh - 7.25rem);
-    overflow-y: auto;
-    padding-right: 0.35rem;
-    scrollbar-gutter: stable;
-  }
-}
-
 @media (max-width: 640px) {
   .timeline-row {
     grid-template-columns: 1fr;
@@ -725,7 +714,6 @@ button:not(:disabled):active {
   }
 
   .control-rail {
-    max-height: none;
     overflow: visible;
   }
 }
