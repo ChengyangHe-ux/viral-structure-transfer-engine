@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildAssSubtitle, subtitleForShot } from "@/lib/video-packaging";
+import {
+  buildAssSubtitle,
+  buildVideoPolishFilter,
+  polishStepsForPreset,
+  subtitleForShot,
+} from "@/lib/video-packaging";
 import type { AdaptiveTransferStoryboardShot } from "@/lib/adaptive-video-storyboard";
 
 function shot(overrides: Partial<AdaptiveTransferStoryboardShot> = {}): AdaptiveTransferStoryboardShot {
@@ -93,5 +98,36 @@ describe("video packaging subtitles", () => {
     expect(ass).toContain("Dialogue: 0,0:00:05.00,0:00:10.00");
     expect(ass).toContain("3秒看懂这个工具的真正价值");
     expect(ass).not.toContain("字幕手法参考");
+  });
+
+  it("keeps legacy premium finishing filters for polished exports", () => {
+    const filter = buildVideoPolishFilter({
+      subtitlePath: "/tmp/subtitles.ass",
+      preset: "premium",
+      durationSeconds: 15,
+    });
+
+    expect(filter).toContain("eq=contrast");
+    expect(filter).toContain("unsharp");
+    expect(filter).toContain("vignette");
+    expect(filter).toContain("ass=");
+    expect(polishStepsForPreset("premium")).toContain("统一竖屏调色");
+  });
+
+  it("builds cinematic finishing filters without letterboxing", () => {
+    const filter = buildVideoPolishFilter({
+      subtitlePath: "/tmp/subtitles.ass",
+      preset: "cinematic",
+      durationSeconds: 15,
+    });
+
+    expect(filter).toContain("eq=contrast");
+    expect(filter).toContain("unsharp");
+    expect(filter).toContain("noise=alls=2");
+    expect(filter).toContain("vignette");
+    expect(filter).toContain("ass=");
+    expect(filter).not.toContain("drawbox");
+    expect(filter).not.toContain("crop=iw");
+    expect(polishStepsForPreset("cinematic")).toContain("轻胶片颗粒，不加黑边");
   });
 });

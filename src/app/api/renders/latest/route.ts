@@ -73,18 +73,33 @@ export async function GET() {
       const durationSeconds =
         numberField(renderStrategy, "targetDurationSeconds") ||
         numberField(adaptiveTransfer, "targetDurationSeconds");
-      const hasPackagedFile = path.basename(filePath).includes("-packaged");
+      const fileName = path.basename(filePath);
+      const explicitPackagingMode = stringField(packaging, "mode");
+      const hasCinematicFile = fileName.includes("-cinematic");
+      const hasPackagedFile = fileName.includes("-packaged") || hasCinematicFile;
       const packagingMode =
-        stringField(packaging, "mode") === "clean" || (!hasPackagedFile && packaging?.subtitles === false)
+        explicitPackagingMode === "cinematic" || explicitPackagingMode === "premium" || hasCinematicFile
+          ? "cinematic"
+          : explicitPackagingMode === "clean" || (!hasPackagedFile && packaging?.subtitles === false)
           ? "clean"
           : "smart";
+      const packagingLabel =
+        packagingMode === "cinematic"
+          ? "大片精剪"
+          : packagingMode === "smart"
+            ? "智能包装"
+            : "干净成片";
 
       return NextResponse.json({
         video: {
           title: "最近成片",
           note: [
             durationSeconds ? `已完成拼接，目标约 ${durationSeconds} 秒` : "已完成拼接",
-            packagingMode === "smart" ? "已加智能包装" : "干净成片",
+            packagingMode === "cinematic"
+              ? "已加大片精剪"
+              : packagingMode === "smart"
+                ? "已加智能包装"
+                : "干净成片",
             "可直接播放验证。",
           ]
             .filter(Boolean)
@@ -97,7 +112,7 @@ export async function GET() {
           durationSeconds,
           packaging: {
             mode: packagingMode,
-            label: packagingMode === "smart" ? "智能包装" : "干净成片",
+            label: packagingLabel,
             subtitles: packaging?.subtitles === true || hasPackagedFile,
             audio: packaging?.audio === true || hasPackagedFile,
           },

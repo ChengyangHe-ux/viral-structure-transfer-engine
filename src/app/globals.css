@@ -330,6 +330,10 @@ button:not(:disabled):active {
   padding: 0.75rem 0 0;
 }
 
+.studio-statusbar.is-compact {
+  grid-template-columns: 1fr;
+}
+
 .studio-steps,
 .studio-metrics,
 .studio-status-message {
@@ -609,6 +613,20 @@ button:not(:disabled):active {
   padding: 1.25rem 0;
 }
 
+.studio-preview-stage {
+  position: sticky;
+  top: 5.25rem;
+  z-index: 10;
+}
+
+.studio-compact-card > div:first-child {
+  padding: 1rem 1rem 0.75rem;
+}
+
+.studio-compact-card > div:last-child {
+  padding: 0 1rem 1rem;
+}
+
 .studio-source-switch {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -819,7 +837,7 @@ button:not(:disabled):active {
 
 .studio-output-panel {
   display: grid;
-  grid-template-columns: minmax(16rem, 0.58fr) minmax(0, 1fr);
+  grid-template-columns: minmax(17rem, 0.62fr) minmax(0, 1fr);
   gap: 1rem;
   overflow: hidden;
   border: 1px solid rgba(14, 116, 144, 0.22);
@@ -839,7 +857,7 @@ button:not(:disabled):active {
 .studio-output-empty {
   width: 100%;
   aspect-ratio: 9 / 16;
-  max-height: 25rem;
+  max-height: 28rem;
   overflow: hidden;
   border: 1px solid rgba(15, 23, 42, 0.16);
   border-radius: 0.65rem;
@@ -962,7 +980,7 @@ button:not(:disabled):active {
 
 .studio-package-toggle {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.25rem;
   margin-top: 0.85rem;
   border: 1px solid rgba(15, 23, 42, 0.12);
@@ -1487,6 +1505,10 @@ button:not(:disabled):active {
 
   .studio-workbench-scroll {
     padding: 0.75rem;
+  }
+
+  .studio-preview-stage {
+    position: static;
   }
 
   .control-rail {

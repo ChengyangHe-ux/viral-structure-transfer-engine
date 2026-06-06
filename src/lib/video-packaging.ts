@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import type { AdaptiveTransferStoryboardShot } from "@/lib/adaptive-video-storyboard";
 
 const execFileAsync = promisify(execFile);
+export type VideoPackagingPreset = "smart" | "premium" | "cinematic";
 
 function getFfmpegPath() {
   const platformArch =
@@ -265,22 +266,83 @@ export function buildAssSubtitle({
   ].join("\n");
 }
 
+export function buildVideoPolishFilter({
+  subtitlePath,
+  preset = "smart",
+  durationSeconds,
+}: {
+  subtitlePath: string;
+  preset?: VideoPackagingPreset;
+  durationSeconds: number;
+}) {
+  const subtitleFilter = `ass=${escapeFilterPath(subtitlePath)}`;
+  if (preset === "smart") return subtitleFilter;
+
+  const fadeOutStart = Math.max(0, durationSeconds - 0.22);
+  if (preset === "cinematic") {
+    return [
+      "eq=contrast=1.075:saturation=1.05:brightness=0.01:gamma=1.015",
+      "unsharp=5:5:0.62:3:3:0.2",
+      "vignette=PI/8",
+      "noise=alls=2:allf=t+u",
+      "fade=t=in:st=0:d=0.16",
+      `fade=t=out:st=${fadeOutStart.toFixed(2)}:d=0.22`,
+      subtitleFilter,
+    ].join(",");
+  }
+
+  return [
+    "eq=contrast=1.055:saturation=1.08:brightness=0.012",
+    "unsharp=5:5:0.55:3:3:0.18",
+    "vignette=PI/7",
+    "fade=t=in:st=0:d=0.12",
+    `fade=t=out:st=${fadeOutStart.toFixed(2)}:d=0.22`,
+    subtitleFilter,
+  ].join(",");
+}
+
+export function polishStepsForPreset(preset: VideoPackagingPreset) {
+  if (preset === "cinematic") {
+    return [
+      "电影级竖屏调色",
+      "高光保护与主体清晰度增强",
+      "轻胶片颗粒，不加黑边",
+      "少字强字幕与角色标签",
+      "低频氛围声与淡入淡出",
+    ];
+  }
+  if (preset === "premium") {
+    return [
+      "统一竖屏调色",
+      "轻锐化提升主体清晰度",
+      "边缘暗角增强中心注意力",
+      "段落字幕与角色标签",
+      "轻量音频节奏与淡入淡出",
+    ];
+  }
+  return ["段落字幕与角色标签", "轻量音频节奏与淡入淡出"];
+}
+
 export async function packageVideoWithSubtitlesAndAudio({
   inputPath,
   outputBaseName,
   outputDir,
   storyboard,
   segmentSeconds,
+  preset = "smart",
 }: {
   inputPath: string;
   outputBaseName: string;
   outputDir: string;
   storyboard: AdaptiveTransferStoryboardShot[];
   segmentSeconds: number;
+  preset?: VideoPackagingPreset;
 }) {
   await mkdir(outputDir, { recursive: true });
   const subtitlePath = path.join(outputDir, `${outputBaseName}-subtitles.ass`);
-  const outputPath = path.join(outputDir, `${outputBaseName}-packaged.mp4`);
+  const suffix =
+    preset === "cinematic" ? "cinematic" : preset === "premium" ? "premium" : "packaged";
+  const outputPath = path.join(outputDir, `${outputBaseName}-${suffix}.mp4`);
   const inputStat = await stat(inputPath);
   const durationSeconds = Math.max(
     segmentSeconds,
@@ -301,7 +363,7 @@ export async function packageVideoWithSubtitlesAndAudio({
     "-i",
     `sine=frequency=132:sample_rate=44100:duration=${durationSeconds}`,
     "-vf",
-    `ass=${escapeFilterPath(subtitlePath)}`,
+    buildVideoPolishFilter({ subtitlePath, preset, durationSeconds }),
     "-filter:a",
     `volume=0.035,afade=t=in:st=0:d=0.4,afade=t=out:st=${Math.max(0, durationSeconds - 0.6)}:d=0.6`,
     "-shortest",
@@ -325,6 +387,8 @@ export async function packageVideoWithSubtitlesAndAudio({
   return {
     filePath: outputPath,
     subtitlePath,
+    preset,
+    polishSteps: polishStepsForPreset(preset),
     bytes: outputStat.size,
     sourceBytes: inputStat.size,
   };

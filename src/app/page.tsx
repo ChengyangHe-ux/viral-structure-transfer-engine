@@ -21,7 +21,6 @@ import {
   Plus,
   RefreshCw,
   Trash2,
-  Upload,
   Video,
   X,
 } from "lucide-react";
@@ -44,19 +43,18 @@ import {
   type MigrationMapRow,
 } from "@/lib/mapping";
 import { diffPlans } from "@/lib/plan-diff";
-import {
-  buildContestRequirementCoverage,
-  type ContestRequirementCoverageReport,
-} from "@/lib/requirement-coverage";
 import { buildStoryboardFrames, type StoryboardFrame } from "@/lib/storyboard";
 import {
   buildStructureFingerprint,
   type StructureFocus,
 } from "@/lib/structure-fingerprint";
 import {
-  buildTechniqueTransferRecipe,
-  type TechniqueTransferRecipe,
-} from "@/lib/technique-transfer";
+  buildDirectorTransferPlan,
+  type EditDecision,
+  type MaterialRequirement,
+  type TechniqueProfile,
+  type TransferSlot,
+} from "@/lib/director-technique";
 import { buildTimelineSegments } from "@/lib/timeline";
 import { insertBeatAfter, moveBeat, removeBeat } from "@/lib/plan-edit";
 import type {
@@ -114,10 +112,27 @@ type PlanLoadResponse = {
   error?: string;
 };
 
-type FullVideoPackagingMode = "smart" | "clean";
+type FullVideoPackagingMode = "cinematic" | "smart" | "clean";
+type GeneratedVideoPackagingMode = FullVideoPackagingMode | "premium";
+
+type CinematicEditPlan = {
+  label?: string;
+  summary?: string;
+  globalStyle?: string;
+  negativeRules?: string[];
+  decisions?: Array<{
+    order: number;
+    role: string;
+    cameraTreatment: string;
+    motionPlan: string;
+    transitionPlan: string;
+    soundDesign: string;
+    materialInstruction: string;
+  }>;
+};
 
 type GeneratedVideoPackaging = {
-  mode?: FullVideoPackagingMode;
+  mode?: GeneratedVideoPackagingMode;
   label?: string;
   subtitles: boolean;
   audio: boolean;
@@ -126,7 +141,7 @@ type GeneratedVideoPackaging = {
 type VideoGenerateResponse = {
   mode?: "hook" | "full-video";
   audioMode?: "natural-sfx" | "model-voiceover";
-  packagingMode?: FullVideoPackagingMode;
+  packagingMode?: GeneratedVideoPackagingMode;
   generationStatus?: "completed" | "processing" | "blocked" | "failed";
   retryable?: boolean;
   outputBaseName?: string;
@@ -167,10 +182,12 @@ type VideoGenerateResponse = {
     reusedMaterialSegmentCount: number;
     aigcSegmentCount: number;
     materialSummary?: string;
+    cinematicEditPlan?: CinematicEditPlan | null;
+    editDecisionList?: EditDecision[];
     decisions?: Array<{
       order: number;
       role: string;
-      source: "aigc-video" | "user-video" | "user-image";
+      source: EditDecision["source"];
       slotId?: string;
       materialLabel?: string | null;
       provider?: string;
@@ -178,6 +195,11 @@ type VideoGenerateResponse = {
       editSummary?: string | null;
     }>;
   };
+  techniqueProfile?: TechniqueProfile | null;
+  transferSlots?: TransferSlot[];
+  materialRequirementMatrix?: MaterialRequirement[];
+  cinematicEditPlan?: CinematicEditPlan | null;
+  editDecisionList?: EditDecision[];
   downloaded?: {
     filePath: string;
     bytes: number;
@@ -211,7 +233,17 @@ type GeneratedVideoState = {
   progressText?: string;
   packaging?: GeneratedVideoPackaging;
   renderStrategy?: VideoGenerateResponse["renderStrategy"];
+  techniqueProfile?: TechniqueProfile | null;
+  transferSlots?: TransferSlot[];
+  materialRequirementMatrix?: MaterialRequirement[];
+  cinematicEditPlan?: CinematicEditPlan | null;
+  editDecisionList?: EditDecision[];
 };
+
+type RenderStrategyDecision = NonNullable<
+  NonNullable<VideoGenerateResponse["renderStrategy"]>["decisions"]
+>[number];
+type PreviewDecision = EditDecision | RenderStrategyDecision;
 
 type StatusState =
   | { type: "idle"; message: string }
@@ -272,6 +304,9 @@ function videoPackagingLabel(packaging?: GeneratedVideoPackaging) {
   if (packaging.mode === "clean" || (!packaging.subtitles && !packaging.audio)) {
     return "干净成片";
   }
+  if (packaging.mode === "cinematic" || packaging.mode === "premium") {
+    return "大片精剪";
+  }
   return "智能包装";
 }
 
@@ -286,6 +321,26 @@ function renderSourceVariant(source?: string) {
   if (source === "aigc-video") return "info" as const;
   if (source === "user-video" || source === "user-image") return "success" as const;
   return "outline" as const;
+}
+
+function isEditDecision(decision: PreviewDecision): decision is EditDecision {
+  return "outputTimeRange" in decision;
+}
+
+function previewDecisionTitle(decision: PreviewDecision) {
+  if (isEditDecision(decision)) {
+    return `${decision.outputTimeRange} · ${decision.role}`;
+  }
+  return decision.materialLabel || `第 ${decision.order} 段`;
+}
+
+function previewDecisionDescription(decision: PreviewDecision) {
+  if (isEditDecision(decision)) {
+    return decision.materialLabel
+      ? `${decision.materialLabel}｜${decision.crop}｜${decision.gapResolution}`
+      : decision.gapResolution || decision.transferReason;
+  }
+  return decision.editSummary || decision.reason || compactLine(decision.role, 52);
 }
 
 function renderStrategyTitle(strategy?: GeneratedVideoState["renderStrategy"]) {
@@ -1145,91 +1200,112 @@ function MaterialAdaptationPanel({
   );
 }
 
-function TechniqueTransferPanel({
-  recipe,
+function DirectorTransferPanel({
+  techniqueProfile,
+  transferSlots,
+  materialRequirementMatrix,
+  editDecisionList,
 }: {
-  recipe: TechniqueTransferRecipe;
+  techniqueProfile?: TechniqueProfile | null;
+  transferSlots?: TransferSlot[];
+  materialRequirementMatrix?: MaterialRequirement[];
+  editDecisionList?: EditDecision[];
 }) {
+  const slots = transferSlots ?? [];
+  const requirements = materialRequirementMatrix ?? [];
+  const decisions = editDecisionList ?? [];
+  if (!techniqueProfile && !slots.length && !decisions.length) return null;
+
   return (
     <div className="space-y-4 rounded-lg border bg-white p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">手法迁移配方</Badge>
-            <Badge variant="outline">{recipe.sceneTransfers.length} 个映射镜头</Badge>
-            <Badge variant="outline">{recipe.sourceProfile.transitionStyle}</Badge>
+            <Badge variant="secondary">导演手法</Badge>
+            <Badge variant="outline">{slots.length || decisions.length} 个片段</Badge>
+            {techniqueProfile ? <Badge variant="outline">{formatSeconds(techniqueProfile.durationSeconds)}</Badge> : null}
           </div>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {recipe.summary}
+            {techniqueProfile?.summary || "根据样片结构和当前方案推断手法槽位。"}
           </p>
         </div>
         <GitBranch className="size-8 shrink-0 text-primary" />
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
-        {[
-          ["Hook窗口", `${recipe.sourceProfile.hookWindowSeconds}s`],
-          ["镜头密度", `${recipe.sourceProfile.shotDensityPer10s}/10s`],
-          ["字幕密度", recipe.sourceProfile.captionDensity],
-          ["运动手法", recipe.sourceProfile.motionStyle],
-        ].map(([label, value]) => (
-          <div className="rounded-md border bg-background p-3" key={label}>
-            <p className="text-[11px] text-muted-foreground">{label}</p>
-            <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="space-y-3">
-        {recipe.sceneTransfers.map((scene) => (
-          <div className="rounded-lg border bg-background p-3" key={scene.index}>
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_32px_minmax(0,1.1fr)_minmax(160px,0.55fr)] lg:items-stretch">
-              <div className="rounded-md border bg-white p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">{scene.sampleTimeRange}</Badge>
-                  <span className="text-xs font-semibold text-foreground">
-                    {scene.sourcePurpose}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  {scene.transferableRule}
-                </p>
+      {techniqueProfile?.personaRequirements.length ? (
+        <div className="grid gap-3 md:grid-cols-3">
+          {techniqueProfile.personaRequirements.slice(0, 3).map((persona) => (
+            <div className="rounded-md border bg-background p-3" key={`${persona.mode}-${persona.label}`}>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">{persona.label}</Badge>
+                <Badge variant={persona.presence === "avoid" ? "warning" : "secondary"}>
+                  {persona.presence === "avoid" ? "不强制出镜" : "可迁移"}
+                </Badge>
               </div>
-              <div className="hidden items-center justify-center text-primary lg:flex">
-                <ArrowRight className="size-5" />
-              </div>
-              <div className="rounded-md border bg-white p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">{scene.outputTimeRange}</Badge>
-                  <span className="text-xs font-semibold text-foreground">
-                    {scene.outputPurpose}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm leading-6 text-foreground">
-                  {scene.outputLine}
-                </p>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  {scene.mappedTechnique}
-                </p>
-              </div>
-              <div className="rounded-md border bg-white p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={fitBadgeVariant(scene.materialFit)}>
-                    {materialFitText(scene.materialFit)}
-                  </Badge>
-                  <Badge variant="outline">节奏继承</Badge>
-                </div>
-                <p className="mt-2 text-xs font-medium text-foreground">
-                  {scene.materialSlotName}
-                </p>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  {scene.captionPlacement}/{scene.captionDensity} · {scene.transitionStyle}
-                </p>
-              </div>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {compactLine(persona.transferInstruction, 96)}
+              </p>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : null}
+
+      {slots.length ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          {slots.slice(0, 4).map((slot) => {
+            const requirement = requirements.find((item) => item.slotId === slot.slotId);
+            return (
+              <div className="rounded-lg border bg-background p-3" key={slot.slotId}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Badge variant="outline">{slot.sampleTimeRange} → {slot.targetTimeRange}</Badge>
+                  <Badge
+                    variant={
+                      requirement?.fit === "matched"
+                        ? "success"
+                        : requirement?.fit === "partial"
+                          ? "warning"
+                          : "outline"
+                    }
+                  >
+                    {requirement
+                      ? requirement.fit === "unknown"
+                        ? "待判断"
+                        : fitText(requirement.fit)
+                      : "待匹配"}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm font-semibold text-foreground">{slot.role}</p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {compactLine(slot.transferableTechnique, 120)}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {slot.personaRequirement.label} · {slot.shotLanguage.framing} · {slot.shotLanguage.cameraMotion}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {decisions.length ? (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-foreground">剪辑决策</p>
+          {decisions.slice(0, 6).map((decision) => (
+            <div className="rounded-md border bg-background p-3" key={`${decision.order}-${decision.slotId}`}>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">{decision.outputTimeRange}</Badge>
+                <Badge variant={renderSourceVariant(decision.source)}>
+                  {renderSourceLabel(decision.source)}
+                </Badge>
+                {decision.materialLabel ? <Badge variant="outline">{decision.materialLabel}</Badge> : null}
+              </div>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {compactLine(`${decision.crop}；${decision.motion}；${decision.transferReason}`, 150)}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1273,81 +1349,6 @@ function EditingTechniquePanel({
             </p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
               预期：{technique.expectedImpact}
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function coverageStatusText(status: ContestRequirementCoverageReport["items"][number]["status"]) {
-  if (status === "ready") return "已完成";
-  if (status === "partial") return "部分";
-  return "待补";
-}
-
-function coverageBadgeVariant(status: ContestRequirementCoverageReport["items"][number]["status"]) {
-  if (status === "ready") return "success";
-  if (status === "partial") return "warning";
-  return "outline";
-}
-
-function RequirementCoveragePanel({
-  report,
-}: {
-  report: ContestRequirementCoverageReport;
-}) {
-  const p0Total = report.items.filter((item) => item.priority === "P0").length;
-  const p1Total = report.items.filter((item) => item.priority === "P1").length;
-  const bonusTotal = report.items.filter((item) => item.priority === "加分").length;
-
-  return (
-    <div className="space-y-4 rounded-lg border bg-white p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">工作台状态</Badge>
-            <Badge variant={report.p0CompletedCount === p0Total ? "success" : "warning"}>
-              基础流程 {report.p0CompletedCount}/{p0Total}
-            </Badge>
-            <Badge variant={report.p1CompletedCount === p1Total ? "success" : "warning"}>
-              创作能力 {report.p1CompletedCount}/{p1Total}
-            </Badge>
-            <Badge variant={report.bonusReadyCount === bonusTotal ? "success" : "outline"}>
-              智能增强 {report.bonusReadyCount}/{bonusTotal}
-            </Badge>
-          </div>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            自动检查当前创作链路是否完整，帮你快速确认从样例分析、素材诊断到预览导出的关键能力。
-          </p>
-        </div>
-        <Badge variant={report.completedCount === report.totalCount ? "success" : "warning"}>
-          {report.completedCount}/{report.totalCount}
-        </Badge>
-      </div>
-
-      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-        {report.items.map((item) => (
-          <div className="rounded-md border bg-background p-3" key={item.taskId}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">
-                  {item.priority === "P0" ? "基础" : item.priority === "P1" ? "进阶" : "增强"}
-                </Badge>
-              </div>
-              <Badge variant={coverageBadgeVariant(item.status)}>
-                {coverageStatusText(item.status)}
-              </Badge>
-            </div>
-            <p className="mt-2 text-sm font-semibold leading-5 text-foreground">
-              {item.title}
-            </p>
-            <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
-              {item.evidence}
-            </p>
-            <p className="mt-2 text-[11px] font-medium leading-4 text-foreground">
-              模块：{item.judgePanel}
             </p>
           </div>
         ))}
@@ -1918,10 +1919,12 @@ function OutputPreviewPanel({
   onHighRender,
   onHighAudio,
   onTechnique,
+  onOpenWorkbench,
   onExportMd,
   onExportJson,
   onPackagingModeChange,
   onToggleMore,
+  canOpenWorkbench,
 }: {
   generatedVideo: GeneratedVideoState | null;
   renderingVideo: boolean;
@@ -1933,10 +1936,12 @@ function OutputPreviewPanel({
   onHighRender: () => void;
   onHighAudio: () => void;
   onTechnique: () => void;
+  onOpenWorkbench: () => void;
   onExportMd: () => void;
   onExportJson: () => void;
   onPackagingModeChange: (mode: FullVideoPackagingMode) => void;
   onToggleMore: () => void;
+  canOpenWorkbench: boolean;
 }) {
   const isProcessing = generatedVideo?.status === "processing";
   const statusBadgeVariant = generatedVideo?.url ? "success" : isProcessing ? "warning" : "outline";
@@ -1944,7 +1949,8 @@ function OutputPreviewPanel({
   const primaryActionLabel = isProcessing || generatedVideo?.retryable ? "继续生成" : "生成成片";
   const packagingLabel = videoPackagingLabel(generatedVideo?.packaging);
   const strategy = generatedVideo?.renderStrategy;
-  const decisions = strategy?.decisions?.slice(0, 3) ?? [];
+  const decisions: PreviewDecision[] =
+    generatedVideo?.editDecisionList?.slice(0, 3) ?? strategy?.decisions?.slice(0, 3) ?? [];
 
   return (
     <div className="studio-output-panel">
@@ -1986,7 +1992,7 @@ function OutputPreviewPanel({
 
         <div className="studio-remix-strip">
           <div className="studio-remix-head">
-            <span>{renderStrategyTitle(strategy)}</span>
+            <span>{generatedVideo?.editDecisionList?.length ? "手法剪辑表" : renderStrategyTitle(strategy)}</span>
             {strategy ? (
               <small>
                 素材 {strategy.reusedMaterialSegmentCount} / AI {strategy.aigcSegmentCount}
@@ -2003,12 +2009,8 @@ function OutputPreviewPanel({
                     {renderSourceLabel(decision.source)}
                   </Badge>
                   <div>
-                    <p>
-                      {decision.materialLabel || `第 ${decision.order} 段`}
-                    </p>
-                    <span>
-                      {decision.editSummary || decision.reason || compactLine(decision.role, 52)}
-                    </span>
+                    <p>{previewDecisionTitle(decision)}</p>
+                    <span>{previewDecisionDescription(decision)}</span>
                   </div>
                 </div>
               ))}
@@ -2018,6 +2020,7 @@ function OutputPreviewPanel({
 
         <div className="studio-package-toggle" aria-label="成片包装方式">
           {[
+            { mode: "cinematic" as const, label: "大片精剪", caption: "导演剪辑 + 调色" },
             { mode: "smart" as const, label: "智能包装", caption: "字幕 + 轻音频" },
             { mode: "clean" as const, label: "干净成片", caption: "无烧录字幕" },
           ].map((option) => (
@@ -2056,11 +2059,21 @@ function OutputPreviewPanel({
               </a>
             </Button>
           ) : null}
-          <Button onClick={onExportMd} size="sm" type="button" variant="outline">
+          <Button disabled={disabled} onClick={onExportMd} size="sm" type="button" variant="outline">
             <Download />
             导出方案
           </Button>
-          <Button onClick={onToggleMore} size="sm" type="button" variant="outline">
+          <Button
+            disabled={!canOpenWorkbench}
+            onClick={onOpenWorkbench}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <ArrowDown />
+            制作台
+          </Button>
+          <Button disabled={disabled} onClick={onToggleMore} size="sm" type="button" variant="outline">
             {showMore ? <ArrowUp /> : <ArrowDown />}
             {showMore ? "收起" : "更多"}
           </Button>
@@ -2108,54 +2121,12 @@ function OutputPreviewPanel({
               {renderingVideo ? <Loader2 className="animate-spin" /> : <GitBranch />}
               本地说明片
             </Button>
-            <Button onClick={onExportJson} size="sm" type="button" variant="outline">
+            <Button disabled={disabled} onClick={onExportJson} size="sm" type="button" variant="outline">
               <FileJson />
               导出数据
             </Button>
           </div>
         ) : null}
-      </div>
-    </div>
-  );
-}
-
-function RecentRenderPanel({ generatedVideo }: { generatedVideo: GeneratedVideoState }) {
-  if (!generatedVideo.url) return null;
-  const packagingLabel = videoPackagingLabel(generatedVideo.packaging);
-
-  return (
-    <div className="studio-output-panel">
-      <div className="studio-output-preview">
-        <video
-          className="studio-output-video"
-          controls
-          playsInline
-          preload="metadata"
-          src={generatedVideo.url}
-        />
-      </div>
-      <div className="studio-output-copy">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">最近成片</Badge>
-          <Badge variant="success">可播放</Badge>
-          {packagingLabel ? <Badge variant="info">{packagingLabel}</Badge> : null}
-        </div>
-        <h3>{generatedVideo.title}</h3>
-        <p>{generatedVideo.note}</p>
-        {generatedVideo.createdAt ? (
-          <span className="studio-output-time">生成时间：{generatedVideo.createdAt}</span>
-        ) : null}
-        {generatedVideo.progressText ? (
-          <span className="studio-output-time">{generatedVideo.progressText}</span>
-        ) : null}
-        <div className="studio-output-actions">
-          <Button asChild size="sm" type="button">
-            <a href={generatedVideo.url} target="_blank" rel="noreferrer">
-              <Download />
-              打开成片
-            </a>
-          </Button>
-        </div>
       </div>
     </div>
   );
@@ -2248,7 +2219,7 @@ export default function Home() {
   const [renderingVideo, setRenderingVideo] = useState(false);
   const [generatedVideo, setGeneratedVideo] = useState<GeneratedVideoState | null>(null);
   const [fullVideoPackagingMode, setFullVideoPackagingMode] =
-    useState<FullVideoPackagingMode>("smart");
+    useState<FullVideoPackagingMode>("cinematic");
 
   useEffect(() => {
     let cancelled = false;
@@ -2325,14 +2296,23 @@ export default function Home() {
     if (!analysis || !plan || !activePlanVersion) return [];
     return buildMigrationMap({ analysis, plan, version: activePlanVersion });
   }, [analysis, plan, activePlanVersion]);
-  const activeTechniqueRecipe = useMemo(() => {
+  const activeDirectorTransfer = useMemo(() => {
     if (!analysis || !plan || !activePlanVersion) return null;
-    return buildTechniqueTransferRecipe({
+    return buildDirectorTransferPlan({
       analysis,
       plan,
       version: activePlanVersion,
     });
   }, [analysis, plan, activePlanVersion]);
+  const visibleTechniqueProfile =
+    generatedVideo?.techniqueProfile ?? activeDirectorTransfer?.techniqueProfile ?? null;
+  const visibleTransferSlots =
+    generatedVideo?.transferSlots ?? activeDirectorTransfer?.transferSlots ?? [];
+  const visibleMaterialRequirementMatrix =
+    generatedVideo?.materialRequirementMatrix ??
+    activeDirectorTransfer?.materialRequirementMatrix ??
+    [];
+  const visibleEditDecisionList = generatedVideo?.editDecisionList ?? [];
   useEffect(() => {
     if (!showProductionDetails) return;
 
@@ -2350,15 +2330,6 @@ export default function Home() {
     };
   }, [showProductionDetails]);
 
-  const requirementCoverage = useMemo(
-    () =>
-      buildContestRequirementCoverage({
-        analysis,
-        plan,
-        techniqueTransfer: activeTechniqueRecipe,
-      }),
-    [analysis, plan, activeTechniqueRecipe],
-  );
   async function refreshPlanHistory(nextProjectId: string) {
     setLoadingPlanHistory(true);
     try {
@@ -2825,7 +2796,9 @@ export default function Home() {
         ? "正在继续生成剩余分段..."
         : fullVideoPackagingMode === "smart"
           ? "正在生成成片：复用真实素材，缺口用视频模型补齐，并加入智能包装..."
-          : "正在生成干净成片：复用真实素材，缺口用视频模型补齐...",
+          : fullVideoPackagingMode === "clean"
+            ? "正在生成干净成片：复用真实素材，缺口用视频模型补齐..."
+            : "正在生成大片精剪：按样片镜头语言剪素材，缺口用视频模型补齐...",
     });
     try {
       const response = await fetch(`/api/projects/${projectId}/generate-video`, {
@@ -2860,6 +2833,11 @@ export default function Home() {
           outputBaseName: data.outputBaseName ?? resumeOutputBaseName,
           progressText,
           renderStrategy: data.renderStrategy,
+          techniqueProfile: data.techniqueProfile,
+          transferSlots: data.transferSlots,
+          materialRequirementMatrix: data.materialRequirementMatrix,
+          cinematicEditPlan: data.cinematicEditPlan ?? data.renderStrategy?.cinematicEditPlan ?? null,
+          editDecisionList: data.editDecisionList,
         });
         setStatus({
           type: "warning",
@@ -2890,14 +2868,20 @@ export default function Home() {
         : packagingLabel
           ? `，${packagingLabel}已完成`
           : "";
+      const resultTitle =
+        data.packaging?.mode === "cinematic"
+          ? "大片精剪成片"
+          : reused
+            ? "素材混合成片"
+            : "AI生成成片";
       setGeneratedVideo({
-        title: reused ? "素材混合成片" : "AI生成成片",
+        title: resultTitle,
         url: outputUrl,
         note: reused
-          ? `已按手法槽位剪入真实素材 ${reused} 段，AI 补齐 ${aigc} 段并自动拼接${
+          ? `已按样片导演手法剪入真实素材 ${reused} 段，AI 补齐 ${aigc} 段并自动拼接${
               duration ? `，目标约 ${duration} 秒` : ""
             }${packagingNote}。`
-          : `由生成视频模型按当前目标内容生成 ${aigc} 段并自动拼接${
+          : `由生成视频模型按当前目标内容和样片导演手法生成 ${aigc} 段并自动拼接${
               duration ? `，目标约 ${duration} 秒` : ""
             }${packagingNote}。`,
         createdAt: new Date().toLocaleTimeString(),
@@ -2907,6 +2891,11 @@ export default function Home() {
         progressText: data.totalSegments ? `完成 ${data.totalSegments}/${data.totalSegments} 段` : undefined,
         packaging: data.packaging,
         renderStrategy: data.renderStrategy,
+        techniqueProfile: data.techniqueProfile,
+        transferSlots: data.transferSlots,
+        materialRequirementMatrix: data.materialRequirementMatrix,
+        cinematicEditPlan: data.cinematicEditPlan ?? data.renderStrategy?.cinematicEditPlan ?? null,
+        editDecisionList: data.editDecisionList,
       });
       setStatus({
         type: "success",
@@ -2946,17 +2935,7 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="studio-statusbar">
-        <div className="studio-steps">
-          <span className={`studio-step ${analysis ? "is-done" : "is-active"}`}>样例洞察</span>
-          <ArrowRight className="hidden size-4 md:block" />
-          <span className={`studio-step ${analysis ? "is-done" : ""}`}>结构蓝图</span>
-          <ArrowRight className="hidden size-4 md:block" />
-          <span className={`studio-step ${plan?.materialAdaptation ? "is-done" : ""}`}>素材体检</span>
-          <ArrowRight className="hidden size-4 md:block" />
-          <span className={`studio-step ${plan ? "is-active" : ""}`}>成片方案</span>
-        </div>
-
+      <section className="studio-statusbar is-compact">
         <div className={`studio-status-message is-${status.type}`}>
           <span className="[&_svg]:size-4">{statusIcon(status.type)}</span>
           <span>{status.message}</span>
@@ -3286,16 +3265,41 @@ export default function Home() {
         </div>
 
         <div className="result-rail space-y-4">
-          <Card className={!analysis ? "studio-sample-card" : undefined}>
+          <section className="studio-preview-stage" aria-label="成片预览">
+            <OutputPreviewPanel
+              generatedVideo={generatedVideo}
+              renderingVideo={renderingVideo}
+              showMore={showRenderOptions}
+              disabled={!plan || renderingVideo || status.type === "loading"}
+              fullVideoPackagingMode={fullVideoPackagingMode}
+              onQuickPreview={() => void handleRenderPreset("draft")}
+              onFullVideo={() => void handleGenerateFullVideo()}
+              onHighRender={() => void handleRenderPreset("high")}
+              onHighAudio={() => void handleRenderPreset("high-quality")}
+              onTechnique={() => void handleRenderPreset("technique")}
+              onOpenWorkbench={() => setShowProductionDetails(true)}
+              onExportMd={() => {
+                if (projectId) downloadExport(projectId, "md", activePlanId);
+              }}
+              onExportJson={() => {
+                if (projectId) downloadExport(projectId, "json", activePlanId);
+              }}
+              onPackagingModeChange={setFullVideoPackagingMode}
+              onToggleMore={() => setShowRenderOptions(!showRenderOptions)}
+              canOpenWorkbench={Boolean(plan && activePlanVersion)}
+            />
+          </section>
+
+          {analysis ? (
+          <Card className="studio-compact-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Database className="size-4 text-primary" />
-                样例洞察
+                样片手法
               </CardTitle>
-              <CardDescription>镜头 / 节奏 / 包装</CardDescription>
+              <CardDescription>镜头、节奏和包装已提炼</CardDescription>
             </CardHeader>
             <CardContent>
-              {analysis ? (
                 <div className="space-y-4">
                   {plan ? (
                     <SampleCompactRecap
@@ -3350,55 +3354,21 @@ export default function Home() {
                     ) : null}
                   </div>
                 </div>
-              ) : (
-                  <div className="studio-empty-panel min-h-[260px]">
-                  <div className="studio-empty-icon">
-                    <Upload className="size-6" />
-                  </div>
-                  <p className="mt-3 text-sm font-semibold">等待样例</p>
-                  <div className="studio-empty-chips">
-                    <Badge variant="outline">时长</Badge>
-                    <Badge variant="outline">镜头</Badge>
-                    <Badge variant="outline">字幕</Badge>
-                    <Badge variant="outline">节奏</Badge>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
+          ) : null}
 
-          <Card className={!plan ? "studio-plan-card" : undefined}>
+          {plan && activePlanVersion ? (
+          <Card className="studio-compact-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="size-4 text-primary" />
-                新片方案
+                剪辑方案
               </CardTitle>
-              <CardDescription>脚本 / 分镜 / 时间线</CardDescription>
+              <CardDescription>版本、素材和时间线</CardDescription>
             </CardHeader>
             <CardContent>
-              {plan && activePlanVersion ? (
                 <div className="space-y-4">
-                  <OutputPreviewPanel
-                    generatedVideo={generatedVideo}
-                    renderingVideo={renderingVideo}
-                    showMore={showRenderOptions}
-                    disabled={renderingVideo || status.type === "loading"}
-                    fullVideoPackagingMode={fullVideoPackagingMode}
-                    onQuickPreview={() => void handleRenderPreset("draft")}
-                    onFullVideo={() => void handleGenerateFullVideo()}
-                    onHighRender={() => void handleRenderPreset("high")}
-                    onHighAudio={() => void handleRenderPreset("high-quality")}
-                    onTechnique={() => void handleRenderPreset("technique")}
-                    onExportMd={() => {
-                      if (projectId) downloadExport(projectId, "md", activePlanId);
-                    }}
-                    onExportJson={() => {
-                      if (projectId) downloadExport(projectId, "json", activePlanId);
-                    }}
-                    onPackagingModeChange={setFullVideoPackagingMode}
-                    onToggleMore={() => setShowRenderOptions(!showRenderOptions)}
-                  />
-
                   <VersionChoiceCards
                     plan={plan}
                     activeVersion={activeVersion}
@@ -3600,10 +3570,12 @@ export default function Home() {
 
                       <EditingTechniquePanel techniques={plan.retrievedTechniques} />
                       <FunctionFlowPanel analysis={analysis} plan={plan} />
-                      <RequirementCoveragePanel report={requirementCoverage} />
-                      {activeTechniqueRecipe ? (
-                        <TechniqueTransferPanel recipe={activeTechniqueRecipe} />
-                      ) : null}
+                      <DirectorTransferPanel
+                        techniqueProfile={visibleTechniqueProfile}
+                        transferSlots={visibleTransferSlots}
+                        materialRequirementMatrix={visibleMaterialRequirementMatrix}
+                        editDecisionList={visibleEditDecisionList}
+                      />
                       {plan.materialAdaptation ? (
                         <MaterialAdaptationPanel adaptation={plan.materialAdaptation} />
                       ) : null}
@@ -3625,28 +3597,9 @@ export default function Home() {
                     </div>
                   ) : null}
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {generatedVideo?.url ? (
-                    <RecentRenderPanel generatedVideo={generatedVideo} />
-                  ) : (
-                    <div className="studio-empty-panel min-h-[260px]">
-                      <div className="studio-empty-icon">
-                        <FileText className="size-6" />
-                      </div>
-                      <p className="mt-3 text-sm font-semibold">等待方案</p>
-                      <div className="studio-empty-chips">
-                        <Badge variant="outline">多版本</Badge>
-                        <Badge variant="outline">分镜</Badge>
-                        <Badge variant="outline">素材缺口</Badge>
-                        <Badge variant="outline">导出</Badge>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
             </CardContent>
           </Card>
+          ) : null}
         </div>
       </section>
     </main>

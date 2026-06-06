@@ -11,6 +11,25 @@ import {
   type AdaptiveTransferStoryboardShot,
 } from "@/lib/adaptive-video-storyboard";
 import {
+  buildCinematicEditPlan,
+  buildCinematicConcatPlan,
+  buildCinematicMaterialRenderPlan,
+  cinematicPromptBlock,
+  compactCinematicDecision,
+  type CinematicEditPlan,
+  type CinematicConcatPlan,
+  type CinematicMaterialRenderPlan,
+  type CinematicShotDecision,
+} from "@/lib/cinematic-editing";
+import {
+  buildDirectorTransferPlan,
+  editDecisionSchema,
+  slotSummaryForPrompt,
+  type EditDecision,
+  type MaterialRequirement,
+  type TransferSlot,
+} from "@/lib/director-technique";
+import {
   migratedVideoPlanSchema,
   videoStructureAnalysisSchema,
   type MigratedVideoPlan,
@@ -56,12 +75,12 @@ type VideoGenerateRequest = {
   beatIndex?: number;
   mode?: "hook" | "full-video";
   audioMode?: "natural-sfx" | "model-voiceover";
-  packagingMode?: "smart" | "clean";
+  packagingMode?: "cinematic" | "premium" | "smart" | "clean";
   targetDurationSeconds?: number;
   resumeOutputBaseName?: string | null;
 };
 
-type PackagingMode = NonNullable<VideoGenerateRequest["packagingMode"]>;
+type PackagingMode = "cinematic" | "smart" | "clean";
 
 type GeneratedSegment = {
   order: number;
@@ -75,6 +94,7 @@ type GeneratedSegment = {
   provider: SegmentProvider;
   source: "aigc-video" | "user-video" | "user-image";
   slotId?: string;
+  transferSlotId?: string;
   materialLabel?: string;
   reason?: string;
   editSummary?: string;
@@ -96,6 +116,11 @@ type VideoGenerationProgress = {
   segmentSeconds?: string;
   materialSummary?: string;
   materialCandidates?: unknown;
+  techniqueProfile?: unknown;
+  transferSlots?: unknown;
+  materialRequirementMatrix?: unknown;
+  cinematicEditPlan?: unknown;
+  editDecisionList?: unknown;
   completedSegments: number;
   totalSegments: number;
   outputBaseName?: string;
@@ -126,6 +151,10 @@ type MaterialEditOperation = {
   crop: string;
   motion: string;
   summary: string;
+  cinematicTreatment?: string;
+  transitionPlan?: string;
+  soundDesign?: string;
+  renderPlan?: CinematicMaterialRenderPlan;
 };
 
 function apiVideoOutDir() {
@@ -257,6 +286,8 @@ function buildSegmentPrompt({
   targetBrief,
   shot,
   totalShots,
+  techniqueBlock,
+  cinematicDecision,
 }: {
   projectTitle: string;
   versionName: string;
@@ -264,6 +295,8 @@ function buildSegmentPrompt({
   targetBrief: string;
   shot: AdaptiveTransferStoryboardShot;
   totalShots: number;
+  techniqueBlock?: string;
+  cinematicDecision?: CinematicShotDecision | null;
 }) {
   return [
     "竖屏 9:16，真实商业短视频素材片段，用于后期拼成手法迁移成片。",
@@ -276,6 +309,8 @@ function buildSegmentPrompt({
     `源样片时间段：${shot.sourceTimeRange || "按当前脚本推断"}`,
     `目标成片时间段：${shot.targetTimeRange}`,
     `迁移手法：${shot.transferredTechnique}`,
+    techniqueBlock || "",
+    cinematicPromptBlock(cinematicDecision),
     `必拍画面：${shot.visual}`,
     `剪辑节奏：${shot.rhythm}`,
     `后期包装参考：${shot.editPoint}`,
@@ -475,14 +510,19 @@ function trimOffsetForMaterialVideo({
   order,
   durationSeconds,
   slotId,
+  trimBias,
 }: {
   material: SavedUserMaterial;
   order: number;
   durationSeconds: number;
   slotId: string;
+  trimBias?: CinematicMaterialRenderPlan["trimBias"];
 }) {
   const maxOffset = Math.max(0, (material.durationSeconds ?? 0) - durationSeconds);
   if (maxOffset <= 0) return 0;
+  if (trimBias === "start") return 0;
+  if (trimBias === "middle") return maxOffset / 2;
+  if (trimBias === "end") return maxOffset;
   if (slotId === "hook") return 0;
   if (slotId === "cta" || slotId === "proof") return maxOffset;
   return Math.min(maxOffset, Math.max(0, (order - 1) * durationSeconds * 0.72));
@@ -493,36 +533,264 @@ function materialEditOperation({
   order,
   durationSeconds,
   slotId,
+  cinematicDecision,
 }: {
   candidate: MaterialSegmentCandidate;
   order: number;
   durationSeconds: number;
   slotId: string;
+  cinematicDecision?: CinematicShotDecision | null;
 }): MaterialEditOperation {
+  const cinematicSummary = compactCinematicDecision(cinematicDecision);
+  const cinematicSuffix = cinematicSummary ? ` 大片精剪：${cinematicSummary}` : "";
+  const renderPlan = cinematicDecision
+    ? buildCinematicMaterialRenderPlan({
+        decision: cinematicDecision,
+        slotId,
+      })
+    : null;
+  const cinematicCrop = cinematicDecision
+    ? "9:16 电影安全区裁切，主体留在中上部，不加黑边"
+    : "9:16 居中裁切";
+
   if (candidate.material.kind === "video") {
     const offset = trimOffsetForMaterialVideo({
       material: candidate.material,
       order,
       durationSeconds,
       slotId,
+      trimBias: renderPlan?.trimBias,
     });
     const offsetText = offset > 0 ? `从 ${offset.toFixed(1)}s 起截取` : "从开头截取";
     return {
       trimStartSeconds: Number(offset.toFixed(2)),
       durationSeconds,
-      crop: "9:16 居中裁切",
-      motion: "保留原视频运动",
-      summary: `${slotNameForId(slotId)}：${offsetText} ${durationSeconds}s，裁成 9:16 后接入时间线。`,
+      crop: cinematicCrop,
+      motion: cinematicDecision?.motionPlan ?? "保留原视频运动",
+      transitionPlan: cinematicDecision?.transitionPlan,
+      soundDesign: cinematicDecision?.soundDesign,
+      cinematicTreatment: cinematicSummary ?? undefined,
+      renderPlan: renderPlan ?? undefined,
+      summary: `${slotNameForId(slotId)}：${offsetText} ${durationSeconds}s，裁成 9:16 后接入时间线。${renderPlan ? `执行：${renderPlan.executionSummary}` : ""}${cinematicSuffix}`,
     };
   }
 
-  const motion = slotId === "cta" || order % 2 === 0 ? "轻微拉远" : "轻微推进";
+  const motion =
+    cinematicDecision?.motionPlan ??
+    (slotId === "cta" || order % 2 === 0 ? "轻微拉远" : "轻微推进");
   return {
     durationSeconds,
-    crop: "9:16 居中裁切",
+    crop: cinematicCrop,
     motion,
-    summary: `${slotNameForId(slotId)}：图片做${motion}和 9:16 裁切，生成 ${durationSeconds}s 可剪片段。`,
+    transitionPlan: cinematicDecision?.transitionPlan,
+    soundDesign: cinematicDecision?.soundDesign,
+    cinematicTreatment: cinematicSummary ?? undefined,
+    renderPlan: renderPlan ?? undefined,
+    summary: `${slotNameForId(slotId)}：图片做${motion}和 9:16 裁切，生成 ${durationSeconds}s 可剪片段。${renderPlan ? `执行：${renderPlan.executionSummary}` : ""}${cinematicSuffix}`,
   };
+}
+
+function pickTransferSlotForShot({
+  transferSlots,
+  shotIndex,
+  totalShots,
+}: {
+  transferSlots: TransferSlot[];
+  shotIndex: number;
+  totalShots: number;
+}) {
+  if (!transferSlots.length) return null;
+  if (shotIndex <= 0) return transferSlots[0]!;
+  if (shotIndex >= totalShots - 1) return transferSlots[transferSlots.length - 1]!;
+  const slotIndex = Math.min(
+    transferSlots.length - 1,
+    Math.floor((shotIndex / Math.max(1, totalShots)) * transferSlots.length),
+  );
+  return transferSlots[slotIndex] ?? transferSlots.at(-1) ?? null;
+}
+
+function materialRequirementForSlot({
+  materialRequirementMatrix,
+  transferSlot,
+}: {
+  materialRequirementMatrix: MaterialRequirement[];
+  transferSlot: TransferSlot | null;
+}) {
+  if (!transferSlot) return null;
+  return (
+    materialRequirementMatrix.find((item) => item.slotId === transferSlot.slotId) ??
+    materialRequirementMatrix.find((item) => item.materialSlotId === transferSlot.materialSlotId) ??
+    null
+  );
+}
+
+function slotIdForTransferOrShot({
+  shot,
+  shotIndex,
+  totalShots,
+  transferSlot,
+}: {
+  shot: AdaptiveTransferStoryboardShot;
+  shotIndex: number;
+  totalShots: number;
+  transferSlot: TransferSlot | null;
+}) {
+  return transferSlot?.materialSlotId ?? slotIdForShot(shot, shotIndex, totalShots);
+}
+
+function editOperationFromSegment(segment?: GeneratedSegment | null) {
+  const request = segment?.request;
+  if (!request || typeof request !== "object") return null;
+  const editOperation = (request as { editOperation?: unknown }).editOperation;
+  if (!editOperation || typeof editOperation !== "object") return null;
+  return editOperation as Partial<MaterialEditOperation>;
+}
+
+function promptPreviewFromSegment(segment?: GeneratedSegment | null) {
+  const request = segment?.request;
+  if (!request || typeof request !== "object") return null;
+  const promptPreview = (request as { promptPreview?: unknown }).promptPreview;
+  return typeof promptPreview === "string" ? promptPreview : null;
+}
+
+function sourceForDecision(segment?: GeneratedSegment | null): EditDecision["source"] {
+  if (!segment) return "unknown";
+  if (segment.source === "user-video") return "user-video";
+  if (segment.source === "user-image") return "user-image";
+  if (segment.source === "aigc-video") return "aigc-video";
+  return "unknown";
+}
+
+function buildEditDecision({
+  shot,
+  transferSlot,
+  materialRequirement,
+  segment,
+  cinematicDecision,
+}: {
+  shot: AdaptiveTransferStoryboardShot;
+  transferSlot: TransferSlot | null;
+  materialRequirement: MaterialRequirement | null;
+  segment?: GeneratedSegment | null;
+  cinematicDecision?: CinematicShotDecision | null;
+}) {
+  const editOperation = editOperationFromSegment(segment);
+  const sourceInSeconds =
+    typeof editOperation?.trimStartSeconds === "number" ? editOperation.trimStartSeconds : null;
+  const sourceDuration =
+    typeof editOperation?.durationSeconds === "number" ? editOperation.durationSeconds : shot.durationSeconds;
+  const sourceOutSeconds =
+    sourceInSeconds === null ? null : Number((sourceInSeconds + sourceDuration).toFixed(2));
+  const source = sourceForDecision(segment);
+  const transferReason = transferSlot
+    ? `迁移样例 ${transferSlot.sampleTimeRange} 的「${transferSlot.sourcePurpose}」：${transferSlot.transferableTechnique}`
+    : `迁移样例 ${shot.sourceTimeRange || "对应片段"} 的「${shot.role}」：${shot.transferredTechnique}`;
+  const slotId = transferSlot?.slotId ?? `shot-${shot.order}`;
+  const gapResolution =
+    segment?.reason ||
+    materialRequirement?.completionPlan ||
+    transferSlot?.missingFallback ||
+    "根据当前素材状态选择真实素材、AIGC 补镜或包装补足。";
+  const cinematicTreatment = compactCinematicDecision(cinematicDecision);
+  const motionPlan =
+    editOperation?.motion ??
+    cinematicDecision?.motionPlan ??
+    transferSlot?.shotLanguage.cameraMotion ??
+    "按样例节奏生成自然运动";
+  const transitionPlan =
+    editOperation?.transitionPlan ??
+    cinematicDecision?.transitionPlan ??
+    transferSlot?.transition ??
+    shot.rhythm;
+  const captionPlan = cinematicDecision
+    ? `${cinematicDecision.captionTreatment}；${transferSlot?.captionRole ?? shot.audio}`
+    : transferSlot?.captionRole ?? shot.audio;
+  const audioPlan = cinematicDecision
+    ? `${cinematicDecision.soundDesign}；成片阶段统一压低人声干扰，只保留自然氛围和节奏音效。`
+    : source === "aigc-video"
+      ? "生成片段不带人声，成片阶段按需要叠加轻音效或字幕。"
+      : "保留视觉节奏，成片阶段统一处理字幕和轻音效。";
+  const resolvedGap = cinematicTreatment
+    ? `${gapResolution} 大片精剪执行：${cinematicDecision?.materialInstruction ?? cinematicTreatment}`
+    : gapResolution;
+
+  return editDecisionSchema.parse({
+    order: shot.order,
+    slotId,
+    sampleTimeRange: transferSlot?.sampleTimeRange ?? (shot.sourceTimeRange || "按当前方案推断"),
+    outputTimeRange: transferSlot?.targetTimeRange ?? shot.targetTimeRange,
+    role: transferSlot?.role ?? shot.role,
+    source,
+    materialLabel: segment?.materialLabel ?? null,
+    sourceInSeconds,
+    sourceOutSeconds,
+    crop: editOperation?.crop ?? "9:16 竖屏安全区裁切",
+    motion: motionPlan,
+    speed: segment?.source === "user-video" ? "原速优先，必要时按节奏微调" : "按分段时长生成",
+    transition: transitionPlan,
+    captionPlan,
+    audioPlan,
+    aigcPrompt: source === "aigc-video" || source === "unknown" ? promptPreviewFromSegment(segment) : null,
+    transferReason,
+    gapResolution: resolvedGap,
+  });
+}
+
+function buildEditDecisionList({
+  directorStoryboard,
+  transferSlots,
+  materialRequirementMatrix,
+  segments,
+  cinematicEditPlan,
+}: {
+  directorStoryboard: AdaptiveTransferStoryboardShot[];
+  transferSlots: TransferSlot[];
+  materialRequirementMatrix: MaterialRequirement[];
+  segments: GeneratedSegment[];
+  cinematicEditPlan?: CinematicEditPlan | null;
+}) {
+  return directorStoryboard.map((shot, shotIndex) => {
+    const transferSlot = pickTransferSlotForShot({
+      transferSlots,
+      shotIndex,
+      totalShots: directorStoryboard.length,
+    });
+    const materialRequirement = materialRequirementForSlot({
+      materialRequirementMatrix,
+      transferSlot,
+    });
+    const segment = segments.find((item) => item.order === shot.order) ?? null;
+    const cinematicDecision =
+      cinematicEditPlan?.decisions.find((decision) => decision.order === shot.order) ??
+      cinematicEditPlan?.decisions[shotIndex] ??
+      null;
+    return buildEditDecision({
+      shot,
+      transferSlot,
+      materialRequirement,
+      segment,
+      cinematicDecision,
+    });
+  });
+}
+
+function segmentPromptTechniqueBlock({
+  transferSlot,
+  materialRequirement,
+}: {
+  transferSlot?: TransferSlot | null;
+  materialRequirement?: MaterialRequirement | null;
+}) {
+  if (!transferSlot) return "";
+  return [
+    "导演手法槽位：",
+    slotSummaryForPrompt(transferSlot),
+    materialRequirement
+      ? `素材要求：${materialRequirement.requiredKinds.join("/")}；人物/主体：${materialRequirement.personRequirement}；缺口处理：${materialRequirement.completionPlan}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function endpoint(baseUrl: string, pathName: string) {
@@ -569,13 +837,17 @@ function compactZhipuPrompt(prompt: string) {
   const picked = [
     lines.find((line) => line.startsWith("唯一目标内容")),
     lines.find((line) => line.startsWith("当前分镜")),
+    lines.find((line) => line.startsWith("大片精剪要求")),
+    lines.find((line) => line.startsWith("镜头处理")),
+    lines.find((line) => line.startsWith("运动设计")),
+    lines.find((line) => line.startsWith("生成补镜")),
     lines.find((line) => line.startsWith("必拍画面")),
     lines.find((line) => line.startsWith("迁移手法")),
     "只生成目标内容对应的真实竖屏画面；样片只提供节奏和结构，不复制样片人物、商品、场景。",
-    "不要生成字幕、Logo、水印、二维码、UI 或任何可读文字。",
+    "不要生成黑边、字幕、Logo、水印、二维码、UI 或任何可读文字。",
   ].filter((line): line is string => Boolean(line));
 
-  return (picked.length ? picked.join("\n") : prompt).slice(0, 700);
+  return (picked.length ? picked.join("\n") : prompt).slice(0, 900);
 }
 
 function videoPollAttempts() {
@@ -784,11 +1056,52 @@ function escapeConcatPath(filePath: string) {
   return filePath.replace(/'/g, "'\\''");
 }
 
-async function concatSegments(segmentPaths: string[], outputBaseName: string) {
+async function concatSegments(
+  segmentPaths: string[],
+  outputBaseName: string,
+  {
+    cinematic,
+    segmentSeconds,
+  }: {
+    cinematic?: boolean;
+    segmentSeconds?: number;
+  } = {},
+) {
   const outDir = apiVideoOutDir();
   await mkdir(outDir, { recursive: true });
   const listPath = path.join(outDir, `${outputBaseName}-concat.txt`);
   const outputPath = path.join(outDir, `${outputBaseName}.mp4`);
+
+  let cinematicConcatPlan: CinematicConcatPlan | null = null;
+  if (cinematic && segmentPaths.length > 1) {
+    cinematicConcatPlan = buildCinematicConcatPlan({
+      inputCount: segmentPaths.length,
+      segmentSeconds: segmentSeconds ?? 5,
+    });
+    await execFileAsync(getFfmpegPath(), [
+      "-y",
+      ...segmentPaths.flatMap((segmentPath) => ["-i", segmentPath]),
+      "-filter_complex",
+      cinematicConcatPlan.filterComplex,
+      "-map",
+      cinematicConcatPlan.outputLabel,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "19",
+      "-pix_fmt",
+      "yuv420p",
+      "-an",
+      "-movflags",
+      "+faststart",
+      outputPath,
+    ]);
+    const outputStat = await stat(outputPath);
+    return { filePath: outputPath, listPath: null, bytes: outputStat.size, cinematicConcatPlan };
+  }
+
   await writeFile(
     listPath,
     segmentPaths.map((segmentPath) => `file '${escapeConcatPath(segmentPath)}'`).join("\n"),
@@ -812,7 +1125,7 @@ async function concatSegments(segmentPaths: string[], outputBaseName: string) {
     outputPath,
   ]);
   const outputStat = await stat(outputPath);
-  return { filePath: outputPath, listPath, bytes: outputStat.size };
+  return { filePath: outputPath, listPath, bytes: outputStat.size, cinematicConcatPlan };
 }
 
 async function readProgressFile(filePath: string) {
@@ -897,12 +1210,14 @@ async function writeMaterialVideoSegment({
   order,
   durationSeconds,
   slotId,
+  editOperation,
 }: {
   material: SavedUserMaterial;
   outputBaseName: string;
   order: number;
   durationSeconds: number;
   slotId: string;
+  editOperation?: MaterialEditOperation;
 }) {
   const outDir = apiVideoOutDir();
   await mkdir(outDir, { recursive: true });
@@ -915,7 +1230,18 @@ async function writeMaterialVideoSegment({
     order,
     durationSeconds,
     slotId,
+    trimBias: editOperation?.renderPlan?.trimBias,
   });
+  const cropFilter =
+    editOperation?.renderPlan?.cropFilter ??
+    "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1";
+  const videoFilter = [
+    cropFilter,
+    "fps=30",
+    ...(editOperation?.renderPlan?.segmentPolishFilters ?? []),
+    "format=yuv420p",
+    "setpts=PTS-STARTPTS",
+  ].join(",");
 
   await execFileAsync(getFfmpegPath(), [
     "-y",
@@ -928,7 +1254,7 @@ async function writeMaterialVideoSegment({
     "-t",
     String(durationSeconds),
     "-vf",
-    "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,format=yuv420p,setpts=PTS-STARTPTS",
+    videoFilter,
     "-an",
     "-c:v",
     "libx264",
@@ -950,12 +1276,14 @@ async function writeMaterialImageSegment({
   order,
   durationSeconds,
   slotId,
+  editOperation,
 }: {
   material: SavedUserMaterial;
   outputBaseName: string;
   order: number;
   durationSeconds: number;
   slotId: string;
+  editOperation?: MaterialEditOperation;
 }) {
   const outDir = apiVideoOutDir();
   await mkdir(outDir, { recursive: true });
@@ -966,9 +1294,19 @@ async function writeMaterialImageSegment({
 
   const frameCount = Math.max(1, Math.round(durationSeconds * 30));
   const zoomDirection =
-    slotId === "cta" || order % 2 === 0
+    editOperation?.renderPlan?.imageZoomExpression ??
+    (slotId === "cta" || order % 2 === 0
       ? "max(1.08-0.0012*on,1.0)"
-      : "min(1+0.0012*on,1.08)";
+      : "min(1+0.0012*on,1.08)");
+  const cropFilter =
+    editOperation?.renderPlan?.cropFilter ??
+    "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1";
+  const imageFilter = [
+    cropFilter,
+    `zoompan=z='${zoomDirection}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frameCount}:s=1080x1920:fps=30`,
+    ...(editOperation?.renderPlan?.segmentPolishFilters ?? []),
+    "format=yuv420p",
+  ].join(",");
 
   await execFileAsync(getFfmpegPath(), [
     "-y",
@@ -977,7 +1315,7 @@ async function writeMaterialImageSegment({
     "-i",
     material.filePath,
     "-vf",
-    `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,zoompan=z='${zoomDirection}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frameCount}:s=1080x1920:fps=30,format=yuv420p`,
+    imageFilter,
     "-an",
     "-frames:v",
     String(frameCount),
@@ -1001,12 +1339,14 @@ async function writeUserMaterialSegment({
   order,
   durationSeconds,
   slotId,
+  editOperation,
 }: {
   candidate: MaterialSegmentCandidate;
   outputBaseName: string;
   order: number;
   durationSeconds: number;
   slotId: string;
+  editOperation?: MaterialEditOperation;
 }) {
   return candidate.material.kind === "video"
     ? writeMaterialVideoSegment({
@@ -1015,6 +1355,7 @@ async function writeUserMaterialSegment({
         order,
         durationSeconds,
         slotId,
+        editOperation,
       })
     : writeMaterialImageSegment({
         material: candidate.material,
@@ -1022,6 +1363,7 @@ async function writeUserMaterialSegment({
         order,
         durationSeconds,
         slotId,
+        editOperation,
       });
 }
 
@@ -1051,8 +1393,14 @@ export async function POST(
     const beatIndex = body.beatIndex ?? 0;
     const mode = body.mode ?? "hook";
     const audioMode = body.audioMode ?? "natural-sfx";
-    const packagingMode: PackagingMode = body.packagingMode === "clean" ? "clean" : "smart";
-    const packagingLabel = packagingMode === "smart" ? "智能包装" : "干净成片";
+    const packagingMode: PackagingMode =
+      body.packagingMode === "clean"
+        ? "clean"
+        : body.packagingMode === "smart"
+          ? "smart"
+          : "cinematic";
+    const packagingLabel =
+      packagingMode === "cinematic" ? "大片精剪" : packagingMode === "smart" ? "智能包装" : "干净成片";
     const targetDurationSeconds =
       typeof body.targetDurationSeconds === "undefined"
         ? null
@@ -1104,6 +1452,21 @@ export async function POST(
         segmentSeconds: Number(requestedSegmentSeconds),
       });
       const directorStoryboard = adaptiveTransfer.shots;
+      const directorTransfer = analysis
+        ? buildDirectorTransferPlan({ analysis, plan, version })
+        : {
+            techniqueProfile: null,
+            transferSlots: [] as TransferSlot[],
+            materialRequirementMatrix: [] as MaterialRequirement[],
+          };
+      const { techniqueProfile, transferSlots, materialRequirementMatrix } = directorTransfer;
+      const cinematicEditPlan =
+        packagingMode === "cinematic"
+          ? buildCinematicEditPlan({
+              storyboard: directorStoryboard,
+              transferSlots,
+            })
+          : null;
       const segmentSeconds = String(adaptiveTransfer.segmentSeconds);
       const explicitResumeOutputBaseName = safeOutputBaseName(body.resumeOutputBaseName);
       const resumedProgress =
@@ -1133,10 +1496,21 @@ export async function POST(
         const shotIndex = directorStoryboard.findIndex((shot) => shot.order === segment.order);
         const shot = directorStoryboard[shotIndex];
         if (!shot) continue;
-        const nextSlotId = slotIdForShot(shot, shotIndex, directorStoryboard.length);
+        const transferSlot = pickTransferSlotForShot({
+          transferSlots,
+          shotIndex,
+          totalShots: directorStoryboard.length,
+        });
+        const nextSlotId = slotIdForTransferOrShot({
+          shot,
+          shotIndex,
+          totalShots: directorStoryboard.length,
+          transferSlot,
+        });
         segment.slotId = nextSlotId;
+        segment.transferSlotId = transferSlot?.slotId;
         if (segment.source !== "aigc-video" && segment.materialLabel) {
-          segment.reason = `${slotNameForId(nextSlotId)}复用真实素材「${segment.materialLabel}」，按样例节奏裁切进时间线。`;
+          segment.reason = `${slotNameForId(nextSlotId)}复用真实素材「${segment.materialLabel}」，迁移 ${transferSlot?.sampleTimeRange ?? shot.sourceTimeRange} 的${transferSlot?.role ?? shot.role}手法。`;
           if (!segment.editSummary) {
             segment.editSummary = `${slotNameForId(nextSlotId)}：沿用已生成的真实素材剪辑片段。`;
           }
@@ -1153,6 +1527,14 @@ export async function POST(
           )
           .filter((filePath): filePath is string => Boolean(filePath)),
       );
+      const buildCurrentEditDecisionList = () =>
+        buildEditDecisionList({
+          directorStoryboard,
+          transferSlots,
+          materialRequirementMatrix,
+          segments,
+          cinematicEditPlan,
+        });
       const writeProgress = () =>
         writeVideoGenerationDebug(`${outputBaseName}.progress.json`, {
           projectId: project.id,
@@ -1167,6 +1549,11 @@ export async function POST(
           segmentSeconds,
           materialSummary,
           materialCandidates,
+          techniqueProfile,
+          transferSlots,
+          materialRequirementMatrix,
+          cinematicEditPlan,
+          editDecisionList: buildCurrentEditDecisionList(),
           completedSegments: segments.filter((segment) => Boolean(segment.downloaded)).length,
           totalSegments: directorStoryboard.length,
           outputBaseName,
@@ -1184,16 +1571,35 @@ export async function POST(
         reusedMaterialSegmentCount: segments.filter((segment) => segment.source !== "aigc-video").length,
         aigcSegmentCount: segments.filter((segment) => segment.source === "aigc-video").length,
         materialSummary,
-        decisions: segments.map((segment) => ({
-          order: segment.order,
-          role: segment.role,
-          source: segment.source,
-          slotId: segment.slotId,
-          materialLabel: segment.materialLabel ?? null,
-          provider: segment.provider,
-          reason: segment.reason,
-          editSummary: segment.editSummary ?? null,
+        pipeline: [
+          "样例手法拆解为动态导演槽位",
+          "按人物/主体要求和镜头语言匹配图片/视频素材",
+          "真实素材竖屏裁切，缺口调用生成视频模型补齐",
+          "分段统一拼接为目标时长成片",
+          packagingMode === "cinematic"
+            ? "大片精剪：电影级调色、镜头运动、少字字幕、声音设计，无黑边"
+            : packagingMode === "smart"
+              ? "智能包装：字幕、轻音频"
+              : "干净输出：不烧录字幕音频",
+        ],
+        cinematicEditPlan,
+        editDecisionList: buildCurrentEditDecisionList(),
+        decisions: buildCurrentEditDecisionList().map((decision) => ({
+          order: decision.order,
+          role: decision.role,
+          source: decision.source,
+          slotId: decision.slotId,
+          materialLabel: decision.materialLabel ?? null,
+          reason: decision.transferReason,
+          editSummary: decision.gapResolution,
         })),
+      });
+      const buildDirectorPayload = () => ({
+        techniqueProfile,
+        transferSlots,
+        materialRequirementMatrix,
+        cinematicEditPlan,
+        editDecisionList: buildCurrentEditDecisionList(),
       });
 
       for (const [shotIndex, shot] of directorStoryboard.entries()) {
@@ -1202,7 +1608,25 @@ export async function POST(
         );
         if (existingSegment) continue;
 
-        const slotId = slotIdForShot(shot, shotIndex, directorStoryboard.length);
+        const transferSlot = pickTransferSlotForShot({
+          transferSlots,
+          shotIndex,
+          totalShots: directorStoryboard.length,
+        });
+        const materialRequirement = materialRequirementForSlot({
+          materialRequirementMatrix,
+          transferSlot,
+        });
+        const slotId = slotIdForTransferOrShot({
+          shot,
+          shotIndex,
+          totalShots: directorStoryboard.length,
+          transferSlot,
+        });
+        const cinematicDecision =
+          cinematicEditPlan?.decisions.find((decision) => decision.order === shot.order) ??
+          cinematicEditPlan?.decisions[shotIndex] ??
+          null;
         const materialCandidate = pickMaterialCandidate({
           candidates: materialCandidates,
           slotId,
@@ -1218,6 +1642,7 @@ export async function POST(
               order: shot.order,
               durationSeconds: adaptiveTransfer.segmentSeconds,
               slotId,
+              cinematicDecision,
             });
             const downloaded = await writeUserMaterialSegment({
               candidate: materialCandidate,
@@ -1225,6 +1650,7 @@ export async function POST(
               order: shot.order,
               durationSeconds: adaptiveTransfer.segmentSeconds,
               slotId,
+              editOperation,
             });
             usedMaterialPaths.add(materialCandidate.material.filePath);
             const exactSlotMatch = materialCandidate.slotIds.includes(slotId);
@@ -1237,15 +1663,19 @@ export async function POST(
               provider: materialCandidate.material.kind === "video" ? "user-video" : "user-image",
               source: materialCandidate.material.kind === "video" ? "user-video" : "user-image",
               slotId,
+              transferSlotId: transferSlot?.slotId,
               materialLabel: materialCandidate.material.label,
               reason: exactSlotMatch
-                ? `${slotNameForId(slotId)}已匹配用户上传的${materialCandidate.material.kind === "video" ? "视频" : "图片"}素材，按样例节奏裁切进时间线。`
-                : `${slotNameForId(slotId)}缺少完全匹配素材，已复用相近${materialCandidate.material.kind === "video" ? "视频" : "图片"}素材并用包装补足表达。`,
+                ? `${slotNameForId(slotId)}已匹配用户上传的${materialCandidate.material.kind === "video" ? "视频" : "图片"}素材，迁移 ${transferSlot?.sampleTimeRange ?? shot.sourceTimeRange} 的${transferSlot?.role ?? shot.role}手法。`
+                : `${slotNameForId(slotId)}缺少完全匹配素材，已复用相近${materialCandidate.material.kind === "video" ? "视频" : "图片"}素材，并按「${materialRequirement?.completionPlan ?? transferSlot?.missingFallback ?? "包装补足"}」兜底。`,
               editSummary: editOperation.summary,
               request: {
                 sourcePath: materialCandidate.material.filePath,
                 durationSeconds: adaptiveTransfer.segmentSeconds,
                 slotIds: materialCandidate.slotIds,
+                transferSlot,
+                materialRequirement,
+                cinematicDecision,
                 visualIndex: materialCandidate.visualIndex,
                 visualTotal: materialCandidate.visualTotal,
                 editOperation,
@@ -1275,7 +1705,7 @@ export async function POST(
             planId: planRecord.id,
             mode,
             audioMode,
-          packagingMode,
+            packagingMode,
             versionIndex,
             beatIndex,
             adaptiveTransfer,
@@ -1283,6 +1713,7 @@ export async function POST(
             segmentSeconds,
             materialSummary,
             segments,
+            ...buildDirectorPayload(),
             renderStrategy: buildCurrentRenderStrategy(),
             missingSegments,
             outputBaseName,
@@ -1298,7 +1729,7 @@ export async function POST(
               planId: planRecord.id,
               mode,
               audioMode,
-          packagingMode,
+              packagingMode,
               versionIndex,
               beatIndex,
               adaptiveTransfer,
@@ -1306,6 +1737,7 @@ export async function POST(
               segmentSeconds,
               materialSummary,
               segments,
+              ...buildDirectorPayload(),
               renderStrategy: buildCurrentRenderStrategy(),
               missingSegments,
               outputBaseName,
@@ -1323,6 +1755,8 @@ export async function POST(
           targetBrief: plan.targetBrief,
           shot,
           totalShots: directorStoryboard.length,
+          techniqueBlock: segmentPromptTechniqueBlock({ transferSlot, materialRequirement }),
+          cinematicDecision,
         });
         let generated: Awaited<ReturnType<typeof submitVideoGeneration>>;
         try {
@@ -1343,13 +1777,17 @@ export async function POST(
             provider: videoConfig.provider,
             source: "aigc-video",
             slotId,
+            transferSlotId: transferSlot?.slotId,
             reason: materialCandidate
               ? "真实素材处理失败，生成视频模型暂未完成补齐，已保存进度等待续跑。"
-              : "该槽位需要生成视频模型补齐，本次调用暂未完成，已保存进度等待续跑。",
+              : `${slotNameForId(slotId)}需要生成视频模型补齐；${materialRequirement?.completionPlan ?? transferSlot?.missingFallback ?? "已保存进度等待续跑。"}`,
             request: {
               provider: videoConfig.provider,
               seconds: segmentSeconds,
               promptPreview: segmentPrompt.slice(0, 1000),
+              transferSlot,
+              materialRequirement,
+              cinematicDecision,
             },
             submit: null,
             final: {
@@ -1364,7 +1802,7 @@ export async function POST(
             planId: planRecord.id,
             mode,
             audioMode,
-          packagingMode,
+            packagingMode,
             versionIndex,
             beatIndex,
             adaptiveTransfer,
@@ -1372,6 +1810,7 @@ export async function POST(
             segmentSeconds,
             materialSummary,
             segments,
+            ...buildDirectorPayload(),
             renderStrategy: buildCurrentRenderStrategy(),
             missingSegments,
             outputBaseName,
@@ -1388,13 +1827,14 @@ export async function POST(
               planId: planRecord.id,
               mode,
               audioMode,
-          packagingMode,
+              packagingMode,
               versionIndex,
               beatIndex,
               adaptiveTransfer,
               directorStoryboard,
               segmentSeconds,
               segments,
+              ...buildDirectorPayload(),
               renderStrategy: buildCurrentRenderStrategy(),
               missingSegments,
               completedSegments: segments.filter((segment) => Boolean(segment.downloaded)).length,
@@ -1412,10 +1852,18 @@ export async function POST(
           role: shot.role,
           source: "aigc-video",
           slotId,
+          transferSlotId: transferSlot?.slotId,
           reason: materialCandidate
             ? "真实素材处理失败，改用生成视频模型补齐该槽位。"
-            : "该槽位没有可直接复用的真实素材，调用生成视频模型补齐。",
+            : `${slotNameForId(slotId)}没有可直接复用的真实素材，调用生成视频模型补齐，并遵守 ${transferSlot?.personaRequirement.identityPolicy ?? "不复制样例内容"}。`,
           ...generated,
+          request: {
+            ...generated.request,
+            promptPreview: segmentPrompt.slice(0, 1000),
+            transferSlot,
+            materialRequirement,
+            cinematicDecision,
+          },
         });
         await writeProgress();
       }
@@ -1439,6 +1887,7 @@ export async function POST(
           directorStoryboard,
           segmentSeconds,
           segments,
+          ...buildDirectorPayload(),
           renderStrategy,
           missingSegments,
           outputBaseName,
@@ -1455,13 +1904,14 @@ export async function POST(
             planId: planRecord.id,
             mode,
             audioMode,
-          packagingMode,
+            packagingMode,
             versionIndex,
             beatIndex,
             adaptiveTransfer,
             directorStoryboard,
             segmentSeconds,
             segments,
+            ...buildDirectorPayload(),
             renderStrategy,
             missingSegments,
             completedSegments: segmentPaths.length,
@@ -1476,7 +1926,10 @@ export async function POST(
 
       let stitched: Awaited<ReturnType<typeof concatSegments>>;
       try {
-        stitched = await concatSegments(segmentPaths, outputBaseName);
+        stitched = await concatSegments(segmentPaths, outputBaseName, {
+          cinematic: packagingMode === "cinematic",
+          segmentSeconds: adaptiveTransfer.segmentSeconds,
+        });
       } catch (error) {
         const debugFilePath = await writeVideoGenerationDebug(`${outputBaseName}.json`, {
           projectId: project.id,
@@ -1490,6 +1943,7 @@ export async function POST(
           directorStoryboard,
           segmentSeconds,
           segments,
+          ...buildDirectorPayload(),
           renderStrategy,
           progressFilePath,
           error: error instanceof Error ? error.message : "ffmpeg concat failed",
@@ -1504,13 +1958,14 @@ export async function POST(
             planId: planRecord.id,
             mode,
             audioMode,
-          packagingMode,
+            packagingMode,
             versionIndex,
             beatIndex,
             adaptiveTransfer,
             directorStoryboard,
             segmentSeconds,
             segments,
+            ...buildDirectorPayload(),
             renderStrategy,
             outputBaseName,
             progressFilePath,
@@ -1520,7 +1975,7 @@ export async function POST(
         );
       }
       let packaged: Awaited<ReturnType<typeof packageVideoWithSubtitlesAndAudio>> | null = null;
-      if (packagingMode === "smart") {
+      if (packagingMode === "cinematic" || packagingMode === "smart") {
         try {
           packaged = await packageVideoWithSubtitlesAndAudio({
             inputPath: stitched.filePath,
@@ -1528,6 +1983,7 @@ export async function POST(
             outputDir: apiVideoOutDir(),
             storyboard: directorStoryboard,
             segmentSeconds: adaptiveTransfer.segmentSeconds,
+            preset: packagingMode === "cinematic" ? "cinematic" : "smart",
           });
         } catch (error) {
           await writeVideoGenerationDebug(`${outputBaseName}.packaging-fallback.json`, {
@@ -1546,6 +2002,7 @@ export async function POST(
             subtitles: true,
             audio: true,
             subtitlePath: packaged.subtitlePath,
+            polishSteps: packaged.polishSteps,
           }
         : packagingMode === "clean"
           ? {
@@ -1571,13 +2028,14 @@ export async function POST(
         planId: planRecord.id,
         mode,
         audioMode,
-          packagingMode,
+        packagingMode,
         versionIndex,
         beatIndex,
         adaptiveTransfer,
         directorStoryboard,
         segmentSeconds,
         segments,
+        ...buildDirectorPayload(),
         renderStrategy,
         stitched,
         packaged,
@@ -1595,13 +2053,14 @@ export async function POST(
         planId: planRecord.id,
         mode,
         audioMode,
-          packagingMode,
+        packagingMode,
         versionIndex,
         beatIndex,
         adaptiveTransfer,
         directorStoryboard,
         segmentSeconds,
         segments,
+        ...buildDirectorPayload(),
         renderStrategy,
         stitched,
         packaged,
