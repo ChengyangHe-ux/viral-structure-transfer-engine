@@ -1,7 +1,9 @@
 import type { PlanBeat, VideoStructureAnalysis } from "@/lib/schemas";
+import { describeUserMaterialsForPrompt } from "@/lib/user-materials";
 
 export type AdaptiveTransferStoryboardShot = {
   order: number;
+  slotId: TransferSlotId;
   role: string;
   visual: string;
   rhythm: string;
@@ -12,6 +14,8 @@ export type AdaptiveTransferStoryboardShot = {
   transferredTechnique: string;
   durationSeconds: number;
 };
+
+export type TransferSlotId = "hook" | "hero" | "usage" | "comparison" | "proof" | "cta";
 
 export type AdaptiveTransferStoryboard = {
   shots: AdaptiveTransferStoryboardShot[];
@@ -47,20 +51,6 @@ function compactJoin(values: string[], maxLength: number) {
   return compact(values.filter(Boolean).join("；"), maxLength);
 }
 
-function parseTimeRangeEnd(timeRange: string) {
-  const values = timeRange.match(/\d+(?:\.\d+)?/g)?.map(Number).filter(Number.isFinite);
-  if (!values?.length) return null;
-  return values.length >= 2 ? values[values.length - 1] : values[0];
-}
-
-function inferDurationFromBeats(beats: Array<{ timeRange: string }>) {
-  const ends = beats
-    .map((beat) => parseTimeRangeEnd(beat.timeRange))
-    .filter((value): value is number => value !== null);
-  if (!ends.length) return null;
-  return Math.max(...ends);
-}
-
 function findExplicitDurationSeconds(text: string) {
   const patterns = [
     /(?:视频|成片|短片|广告|片子|总长|时长|做成|生成|剪成|要)\s*(\d{1,3})\s*(?:秒|s|sec|seconds)/i,
@@ -89,29 +79,23 @@ function normalizeTargetDuration(seconds: number, segmentSeconds: number) {
 }
 
 function pickTargetDuration({
+  targetDurationSeconds,
   targetBrief,
   userMaterials,
-  analysis,
-  beats,
   segmentSeconds,
 }: {
+  targetDurationSeconds?: number | null;
   targetBrief: string;
   userMaterials?: string | null;
-  analysis?: VideoStructureAnalysis | null;
-  beats: PlanBeat[];
   segmentSeconds: number;
 }) {
+  if (targetDurationSeconds && Number.isFinite(targetDurationSeconds)) {
+    return normalizeTargetDuration(targetDurationSeconds, segmentSeconds);
+  }
+
   const explicit =
     findExplicitDurationSeconds(targetBrief) || findExplicitDurationSeconds(userMaterials || "");
   if (explicit) return normalizeTargetDuration(explicit, segmentSeconds);
-
-  const sampleDuration = analysis?.durationSeconds;
-  if (sampleDuration && Number.isFinite(sampleDuration)) {
-    return normalizeTargetDuration(sampleDuration, segmentSeconds);
-  }
-
-  const planDuration = inferDurationFromBeats(beats);
-  if (planDuration) return normalizeTargetDuration(planDuration, segmentSeconds);
 
   return normalizeTargetDuration(15, segmentSeconds);
 }
@@ -165,30 +149,95 @@ function sourceTechniqueLine(group: SourceBeat[]) {
   );
 }
 
+const slotOrder: TransferSlotId[] = ["hook", "hero", "usage", "comparison", "proof", "cta"];
+
+const slotLabels: Record<TransferSlotId, { name: string; task: string }> = {
+  hook: {
+    name: "开头吸引镜头",
+    task: "优先放最强结果、反差、微距或能让用户停下来的画面。",
+  },
+  hero: {
+    name: "主体识别镜头",
+    task: "让新主题的商品、人物、服务或核心对象清楚出现。",
+  },
+  usage: {
+    name: "使用过程镜头",
+    task: "展示操作、制作、使用过程或关键动作，证明内容不是空讲。",
+  },
+  comparison: {
+    name: "对比结果镜头",
+    task: "呈现前后变化、成品状态、效果差异或收益转折。",
+  },
+  proof: {
+    name: "证据强化镜头",
+    task: "放大细节、参数、评价、反馈或可信证明，承接中后段卖点。",
+  },
+  cta: {
+    name: "结尾收束镜头",
+    task: "复用主体或结果画面定格，给出收藏、购买、领取或下一步动作。",
+  },
+};
+
+function slotForShot({
+  sourceGroup,
+  targetBeat,
+  index,
+  total,
+}: {
+  sourceGroup: SourceBeat[];
+  targetBeat?: PlanBeat;
+  index: number;
+  total: number;
+}): TransferSlotId {
+  const text = compactJoin(
+    [
+      ...sourceGroup.map((beat) => `${beat.shotPurpose} ${beat.transferableRule}`),
+      targetBeat?.shotPurpose,
+      targetBeat?.visualSuggestion,
+      targetBeat?.replaceableAssets,
+    ].filter((value): value is string => Boolean(value)),
+    320,
+  );
+
+  if (index === 0) return "hook";
+  if (index === total - 1) {
+    if (total > 3 && /CTA|行动|入口|购买|领取|收藏|店铺|咨询/i.test(text)) return "cta";
+    return "proof";
+  }
+  if (/使用|过程|操作|步骤|流程|演示|制作|饮用|倒入|冲泡|录屏/i.test(text)) {
+    return "usage";
+  }
+  if (/对比|结果|变化|before|after|提升|成品|效果/i.test(text)) return "comparison";
+  if (/证据|证明|背书|评价|反馈|参数|数据|可信/i.test(text)) return "proof";
+  if (/主体|识别|商品|产品|工具|主视觉|特写|包装/i.test(text)) return "hero";
+  return slotOrder[Math.min(index, slotOrder.length - 1)] ?? "usage";
+}
+
 export function buildAdaptiveTransferStoryboard({
   analysis,
   beats,
   targetBrief,
   userMaterials,
+  targetDurationSeconds: rawTargetDurationSeconds,
   segmentSeconds: rawSegmentSeconds,
 }: {
   analysis?: VideoStructureAnalysis | null;
   beats: PlanBeat[];
   targetBrief: string;
   userMaterials?: string | null;
+  targetDurationSeconds?: number | null;
   segmentSeconds?: number;
 }): AdaptiveTransferStoryboard {
   const segmentSeconds = normalizeSegmentSeconds(rawSegmentSeconds);
   const targetDurationSeconds = pickTargetDuration({
+    targetDurationSeconds: rawTargetDurationSeconds,
     targetBrief,
     userMaterials,
-    analysis,
-    beats,
     segmentSeconds,
   });
   const shotCount = Math.max(2, Math.round(targetDurationSeconds / segmentSeconds));
   const sourceBeats = sourceBeatsFromAnalysis(analysis, beats);
-  const materialCue = compact(userMaterials || "", 160);
+  const materialCue = compact(describeUserMaterialsForPrompt(userMaterials), 160);
   const sampleStyle = analysis
     ? compactJoin(
         [
@@ -214,6 +263,13 @@ export function buildAdaptiveTransferStoryboard({
     const targetBeat = pickItem(beats, index, shotCount) ?? beats[Math.min(index, beats.length - 1)];
     const targetTimeRange = timeRangeFor(index, segmentSeconds);
     const sourceTechnique = sourceTechniqueLine(sourceGroup);
+    const slotId = slotForShot({
+      sourceGroup,
+      targetBeat,
+      index,
+      total: shotCount,
+    });
+    const slotLabel = slotLabels[slotId];
     const targetVisual = compactJoin(
       [
         targetBeat?.visualSuggestion,
@@ -227,18 +283,23 @@ export function buildAdaptiveTransferStoryboard({
 
     return {
       order: index + 1,
+      slotId,
       role: roleFromSource(sourceGroup, index, shotCount),
       sourceTimeRange: compactJoin(sourceGroup.map((beat) => beat.timeRange), 32),
       targetTimeRange,
       durationSeconds: segmentSeconds,
       transferredTechnique: sourceTechnique,
       visual: [
+        `目标内容唯一锚点：${compact(targetBrief, 120)}。画面主体、环境和动作都必须服务这个目标内容。`,
         `第${index + 1}段${segmentSeconds}秒，围绕「${compact(targetBrief, 90)}」。`,
+        `结构槽位：${slotLabel.name}。素材剪辑任务：${slotLabel.task}`,
         `只迁移样片手法：${sourceTechnique || "按当前脚本推进镜头任务"}。`,
         visualObservation ? `样片画面规律：${visualObservation}。` : "",
         `迁移到新主题的画面：${targetVisual || "用真实素材表现当前主题的关键动作、结果或状态变化"}。`,
-        materialCue ? `优先参考用户素材：${materialCue}。` : "",
-        "不要复刻样片的具体人物、品牌、场景和台词，只保留叙事顺序、镜头目的、节奏和包装方法。",
+        materialCue
+          ? `优先参考用户素材：${materialCue}。`
+          : "用户没有提供可用素材：请用 AIGC 生成目标内容对应的新画面，不要生成样片原商品、原场景或无关产品。",
+        "禁止复刻样片的具体人物、品牌、商品、场景和台词，只保留叙事顺序、镜头目的、节奏和包装方法。",
       ]
         .filter(Boolean)
         .join(" "),

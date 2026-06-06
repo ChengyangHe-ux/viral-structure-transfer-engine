@@ -137,6 +137,11 @@ export const materialAssetSchema = z.object({
   id: z.string().min(1),
   kind: z.enum(["image", "video", "text", "link"]),
   label: z.string().min(1),
+  sourcePath: z.string().min(1).optional(),
+  originalName: z.string().min(1).optional(),
+  sizeBytes: z.number().int().nonnegative().optional(),
+  durationSeconds: z.number().positive().optional(),
+  previewFrames: z.array(z.string().min(1)).default([]),
   detectedSignals: z.array(z.string().min(1)).default([]),
   suggestedSlots: z.array(z.string().min(1)).default([]),
   qualityScore: z.number().int().min(0).max(100),
@@ -213,7 +218,7 @@ export const awardReadinessSchema = z.object({
 
 export const migratedVideoPlanSchema = z.object({
   projectTitle: z.string().min(1),
-  targetBrief: z.string().min(4),
+  targetBrief: z.string().min(2),
   strategySummary: z.string().min(8),
   inheritedStructure: z.array(z.string().min(1)),
   versions: z.array(planVersionSchema).min(1),
@@ -246,7 +251,7 @@ export const analyzeSampleRequestSchema = z.object({
 
 export const generatePlanRequestSchema = z.object({
   projectId: z.string().min(1),
-  targetBrief: z.string().min(4),
+  targetBrief: z.string().min(2),
   userMaterials: z.string().default(""),
   direction: z.string().default("优先输出可编辑方案脚本、分镜和时间线草案"),
 });

@@ -24,7 +24,15 @@ function normalizeText(value: unknown) {
   return trimmed ? trimmed : null;
 }
 
-function parseAdditionalSampleNotes(value: string | undefined) {
+type ParsedAdditionalSample = {
+  sampleTitle: string;
+  sampleNotes: string;
+  sampleUrl?: string;
+  mediaPath?: string | null;
+  mediaMeta?: MediaMeta;
+};
+
+function parseAdditionalSampleNotes(value: string | undefined): ParsedAdditionalSample[] {
   const clean = value?.trim();
   if (!clean) return [];
 
@@ -47,12 +55,39 @@ function parseAdditionalSampleNotes(value: string | undefined) {
     });
 }
 
+async function inspectVideoInput(mediaPath: string) {
+  const inspected = await inspectMedia(mediaPath);
+  const { frameIds, timestamps } = await extractPreviewFrameSet(
+    mediaPath,
+    inspected.durationSeconds,
+  );
+  return {
+    mediaPath,
+    mediaMeta: mediaMetaSchema.parse({
+      ...inspected,
+      previewFrames: frameIds,
+      frameTimestamps: timestamps,
+      sourceKind: "upload",
+    }),
+  };
+}
+
+async function saveAndInspectUploadedVideo(file: File) {
+  return inspectVideoInput(await saveUploadedVideo(file));
+}
+
 async function parseRequest(request: NextRequest) {
   const contentType = request.headers.get("content-type") || "";
 
   if (contentType.includes("multipart/form-data")) {
     const formData = await request.formData();
-    const file = formData.get("sampleFile");
+    const legacyFile = formData.get("sampleFile");
+    const uploadedFiles = formData
+      .getAll("sampleFiles")
+      .filter((entry): entry is File => entry instanceof File && entry.size > 0);
+    if (legacyFile instanceof File && legacyFile.size > 0 && uploadedFiles.length === 0) {
+      uploadedFiles.push(legacyFile);
+    }
     const parsed = analyzeSampleRequestSchema.parse({
       projectTitle: formData.get("projectTitle")?.toString() || undefined,
       sampleTitle: formData.get("sampleTitle")?.toString() || undefined,
@@ -67,43 +102,38 @@ async function parseRequest(request: NextRequest) {
       ...parseAdditionalSampleNotes(parsed.additionalSampleNotes),
     ];
 
-    if (file instanceof File && file.size > 0) {
-      const mediaPath = await saveUploadedVideo(file);
-      const inspected = await inspectMedia(mediaPath);
-      const { frameIds, timestamps } = await extractPreviewFrameSet(
-        mediaPath,
-        inspected.durationSeconds,
+    if (uploadedFiles.length > 0) {
+      const primaryFile = uploadedFiles[0]!;
+      const primaryVideo = await saveAndInspectUploadedVideo(primaryFile);
+      const additionalVideoSamples = await Promise.all(
+        uploadedFiles.slice(1).map(async (file, index): Promise<ParsedAdditionalSample> => {
+          const video = await saveAndInspectUploadedVideo(file);
+          return {
+            sampleTitle: file.name || `补充视频样例 ${index + 1}`,
+            sampleNotes: `用户上传了补充样例视频「${file.name || `第 ${index + 1} 条`}」，请结合视频元数据和关键帧拆解其可迁移结构。`,
+            sampleUrl: "",
+            mediaPath: video.mediaPath,
+            mediaMeta: video.mediaMeta,
+          };
+        }),
       );
       return {
         ...parsed,
-        additionalSamples,
-        mediaPath,
-        mediaMeta: mediaMetaSchema.parse({
-          ...inspected,
-          previewFrames: frameIds,
-          frameTimestamps: timestamps,
-        }),
+        additionalSamples: [...additionalSamples, ...additionalVideoSamples],
+        mediaPath: primaryVideo.mediaPath,
+        mediaMeta: primaryVideo.mediaMeta,
       };
     }
 
     const localUploadName = normalizeText(parsed.localUploadName);
     if (localUploadName) {
       const mediaPath = await resolveUploadedVideoPath(localUploadName);
-      const inspected = await inspectMedia(mediaPath);
-      const { frameIds, timestamps } = await extractPreviewFrameSet(
-        mediaPath,
-        inspected.durationSeconds,
-      );
+      const video = await inspectVideoInput(mediaPath);
       return {
         ...parsed,
         additionalSamples,
-        mediaPath,
-        mediaMeta: mediaMetaSchema.parse({
-          ...inspected,
-          previewFrames: frameIds,
-          frameTimestamps: timestamps,
-          sourceKind: "upload",
-        }),
+        mediaPath: video.mediaPath,
+        mediaMeta: video.mediaMeta,
       };
     }
 
@@ -127,21 +157,12 @@ async function parseRequest(request: NextRequest) {
   const localUploadName = normalizeText(parsed.localUploadName);
   if (localUploadName) {
     const mediaPath = await resolveUploadedVideoPath(localUploadName);
-    const inspected = await inspectMedia(mediaPath);
-    const { frameIds, timestamps } = await extractPreviewFrameSet(
-      mediaPath,
-      inspected.durationSeconds,
-    );
+    const video = await inspectVideoInput(mediaPath);
     return {
       ...parsed,
       additionalSamples,
-      mediaPath,
-      mediaMeta: mediaMetaSchema.parse({
-        ...inspected,
-        previewFrames: frameIds,
-        frameTimestamps: timestamps,
-        sourceKind: "upload",
-      }),
+      mediaPath: video.mediaPath,
+      mediaMeta: video.mediaMeta,
     };
   }
   return {
@@ -178,12 +199,15 @@ export async function POST(request: NextRequest) {
       mediaMeta: input.mediaMeta as MediaMeta,
       mediaPath: input.mediaPath || undefined,
     });
+    const additionalSamples = input.additionalSamples as ParsedAdditionalSample[];
     const additionalResults = await Promise.all(
-      input.additionalSamples.map((sample) =>
+      additionalSamples.map((sample) =>
         analyzeSample({
           sampleTitle: sample.sampleTitle,
           sampleNotes: sample.sampleNotes,
           sampleUrl: sample.sampleUrl || undefined,
+          mediaMeta: sample.mediaMeta,
+          mediaPath: sample.mediaPath || undefined,
         }),
       ),
     );

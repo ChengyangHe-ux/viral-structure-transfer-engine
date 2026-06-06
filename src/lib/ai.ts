@@ -31,10 +31,11 @@ import {
   type PreviewFrameImage,
 } from "@/lib/media";
 import { parseJsonFromText } from "@/lib/structured-json";
+import { describeUserMaterialsForPrompt } from "@/lib/user-materials";
 
 const aiPlanDraftSchema = z.object({
   projectTitle: z.string().min(1),
-  targetBrief: z.string().min(4),
+  targetBrief: z.string().min(2),
   strategySummary: z.string().min(8),
   inheritedStructure: z.array(z.string().min(1)),
   versions: z.array(planVersionSchema).min(1),
@@ -476,9 +477,10 @@ export async function generateMigratedPlan(input: {
   direction: string;
   analysis: VideoStructureAnalysis;
 }) {
+  const promptUserMaterials = describeUserMaterialsForPrompt(input.userMaterials);
   const retrievedTechniques = retrieveEditingTechniques({
     targetBrief: input.targetBrief,
-    userMaterials: input.userMaterials,
+    userMaterials: promptUserMaterials,
     direction: input.direction,
     analysis: input.analysis,
     limit: 5,
@@ -486,7 +488,7 @@ export async function generateMigratedPlan(input: {
 
   if (!hasAiConfig()) {
     const plan = attachEditingTechniquesToPlan({
-      plan: createFallbackPlan(input),
+      plan: createFallbackPlan({ ...input, userMaterials: promptUserMaterials }),
       techniques: retrievedTechniques,
     });
     const adaptedPlan = attachMaterialAdaptation({
@@ -513,7 +515,7 @@ export async function generateMigratedPlan(input: {
 
 项目：${input.projectTitle}
 新主题/商品 Brief：${input.targetBrief}
-用户素材：${input.userMaterials || "用户未提供明确素材，请识别缺口并给出补全策略。"}
+用户素材：${promptUserMaterials || "用户未提供明确素材，请识别缺口并给出补全策略。"}
 生成方向：${input.direction}
 
 样例结构分析：
@@ -554,7 +556,7 @@ ${formatEditingTechniquesForPrompt(retrievedTechniques)}
     };
   } catch (error) {
     const plan = attachEditingTechniquesToPlan({
-      plan: createFallbackPlan(input),
+      plan: createFallbackPlan({ ...input, userMaterials: promptUserMaterials }),
       techniques: retrievedTechniques,
     });
     const adaptedPlan = attachMaterialAdaptation({

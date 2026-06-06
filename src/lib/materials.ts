@@ -5,6 +5,11 @@ import {
   type MaterialAdaptation,
   type MigratedVideoPlan,
 } from "@/lib/schemas";
+import {
+  describeUserMaterialsForPrompt,
+  parseStoredUserMaterials,
+  type SavedUserMaterial,
+} from "@/lib/user-materials";
 
 const materialSlots = [
   {
@@ -90,6 +95,25 @@ function splitMaterialItems(userMaterials: string) {
     .filter((item) => !/缺少|没有|待补|需要补充|不足|未提供/.test(item));
 }
 
+function explicitlyMissingSlotIds(userMaterials: string) {
+  const missingClauses = Array.from(
+    userMaterials.matchAll(/(?:缺少|没有|待补|需要补充|不足|未提供)[^；;。\n]*/g),
+  ).map((match) => match[0]);
+  const missingText = missingClauses.join(" ");
+
+  if (!missingText) return new Set<string>();
+
+  return new Set(
+    materialSlots
+      .filter(
+        (slot) =>
+          hasKeyword(missingText, slot.keywords) ||
+          missingText.includes(slot.slotName.replace("镜头", "")),
+      )
+      .map((slot) => slot.slotId),
+  );
+}
+
 function inferAssetKind(text: string): MaterialAsset["kind"] {
   if (/链接|入口|二维码|店铺|购买|领取|私信|url|https?:\/\//i.test(text)) {
     return "link";
@@ -126,6 +150,32 @@ function suggestedSlotsForAsset(text: string, kind: MaterialAsset["kind"]) {
             : [];
 
   return unique([...directMatches, ...kindMatches]).slice(0, 4);
+}
+
+function spreadSlotsForSavedVisual({
+  kind,
+  visualIndex,
+  visualTotal,
+}: {
+  kind: MaterialAsset["kind"];
+  visualIndex: number;
+  visualTotal: number;
+}) {
+  if (kind !== "image" && kind !== "video") return [];
+
+  if (visualTotal <= 1) {
+    return kind === "video"
+      ? ["hook", "usage", "comparison", "proof", "cta"]
+      : ["hook", "hero", "comparison", "proof", "cta"];
+  }
+
+  if (visualIndex === 0) return ["hook", "hero"];
+  if (visualIndex === visualTotal - 1) return ["proof", "cta"];
+
+  const ratio = visualIndex / Math.max(1, visualTotal - 1);
+  if (ratio < 0.4) return kind === "video" ? ["usage", "hero"] : ["hero", "usage"];
+  if (ratio < 0.72) return ["comparison", "usage", "proof"];
+  return ["proof", "comparison", "cta"];
 }
 
 function assetSignals(text: string, kind: MaterialAsset["kind"], slots: string[]) {
@@ -172,8 +222,24 @@ export function parseMaterialAssets({
   targetBrief: string;
   userMaterials?: string;
 }): MaterialAsset[] {
-  const items = splitMaterialItems(userMaterials || "");
-  return items.map((item, index) => {
+  const stored = parseStoredUserMaterials(userMaterials);
+  const savedVisualMaterials =
+    stored?.materials.filter((material) => material.kind === "image" || material.kind === "video") ??
+    [];
+  const savedAssets =
+    stored?.materials.map((material, index) => {
+      const visualIndex = savedVisualMaterials.findIndex((item) => item.id === material.id);
+      return assetFromSavedMaterial({
+        material,
+        index,
+        targetBrief,
+        visualIndex,
+        visualTotal: savedVisualMaterials.length,
+      });
+    }) ?? [];
+  const textSource = stored ? stored.notes : userMaterials || "";
+  const items = splitMaterialItems(textSource);
+  const textAssets = items.map((item, index) => {
     const kind = inferAssetKind(item);
     const suggestedSlots = suggestedSlotsForAsset(`${targetBrief} ${item}`, kind);
     const qualityScore = assetQualityScore({
@@ -186,6 +252,7 @@ export function parseMaterialAssets({
       id: `asset-${index + 1}`,
       kind,
       label: compactLabel(item),
+      previewFrames: [],
       detectedSignals: assetSignals(item, kind, suggestedSlots),
       suggestedSlots,
       qualityScore,
@@ -196,6 +263,7 @@ export function parseMaterialAssets({
       recommendedUse: recommendedUseForAsset(suggestedSlots, kind),
     };
   });
+  return [...savedAssets, ...textAssets];
 }
 
 function recommendationsForSlot(
@@ -215,11 +283,68 @@ function recommendationsForSlot(
 }
 
 function summarizeMaterials(userMaterials: string, targetBrief: string) {
-  const clean = userMaterials.trim();
+  const clean = describeUserMaterialsForPrompt(userMaterials).trim();
   if (!clean) {
     return `未提供明确用户素材；仅能基于主题 Brief 生成素材补全建议。主题：${targetBrief}`;
   }
   return clean.length > 180 ? `${clean.slice(0, 180)}...` : clean;
+}
+
+function assetFromSavedMaterial({
+  material,
+  index,
+  targetBrief,
+  visualIndex,
+  visualTotal,
+}: {
+  material: SavedUserMaterial;
+  index: number;
+  targetBrief: string;
+  visualIndex: number;
+  visualTotal: number;
+}): MaterialAsset {
+  const kind = material.kind;
+  const sourceText = [
+    material.label,
+    material.originalName,
+    material.textSnippet,
+    material.durationSeconds ? `${material.durationSeconds.toFixed(1)}秒视频` : "",
+    material.width && material.height ? `${material.width}x${material.height}` : "",
+  ].join(" ");
+  const suggestedSlots = unique([
+    ...suggestedSlotsForAsset(`${targetBrief} ${sourceText}`, kind),
+    ...spreadSlotsForSavedVisual({
+      kind,
+      visualIndex: Math.max(0, visualIndex),
+      visualTotal,
+    }),
+  ]).slice(0, 5);
+  const qualityScore = clampScore(
+    assetQualityScore({
+      text: sourceText,
+      kind,
+      slotCount: suggestedSlots.length,
+    }) + (material.kind === "video" ? 8 : material.kind === "image" ? 6 : 3),
+  );
+
+  return {
+    id: material.id || `asset-${index + 1}`,
+    kind,
+    label: compactLabel(material.label || material.originalName),
+    sourcePath: material.filePath,
+    originalName: material.originalName,
+    sizeBytes: material.sizeBytes,
+    durationSeconds: material.durationSeconds,
+    previewFrames: material.previewFrames,
+    detectedSignals: assetSignals(sourceText, kind, suggestedSlots),
+    suggestedSlots,
+    qualityScore,
+    highlightReason:
+      suggestedSlots.length > 0
+        ? `真实文件已入库，可支撑 ${suggestedSlots.length} 个结构槽位。`
+        : "真实文件已入库，但还需要人工确认最适合放入哪个镜头。",
+    recommendedUse: recommendedUseForAsset(suggestedSlots, kind),
+  };
 }
 
 export function evaluateMaterialAdaptation({
@@ -229,20 +354,32 @@ export function evaluateMaterialAdaptation({
   targetBrief: string;
   userMaterials?: string;
 }): MaterialAdaptation {
-  const materialText = `${targetBrief}\n${userMaterials || ""}`;
+  const materialText = `${targetBrief}\n${describeUserMaterialsForPrompt(userMaterials)}`;
   const assets = parseMaterialAssets({ targetBrief, userMaterials });
+  const explicitMissingSlots = explicitlyMissingSlotIds(
+    describeUserMaterialsForPrompt(userMaterials),
+  );
   const slots = materialSlots.map((slot) => {
     const recommendedAssets = recommendationsForSlot(assets, slot.slotId);
     const matchedByAsset = recommendedAssets.length > 0;
     const matchedByText = hasKeyword(materialText, slot.keywords);
-    const fit = matchedByAsset ? "matched" : matchedByText ? "partial" : "missing";
+    const explicitlyMissing = explicitMissingSlots.has(slot.slotId);
+    const fit = explicitlyMissing
+      ? "missing"
+      : matchedByAsset
+        ? "matched"
+        : matchedByText
+          ? "partial"
+          : "missing";
 
     return {
       slotId: slot.slotId,
       slotName: slot.slotName,
       requiredFor: slot.requiredFor,
       requiredMaterial: slot.requiredMaterial,
-      matchedMaterial: matchedByAsset
+      matchedMaterial: explicitlyMissing
+        ? "用户明确标记该结构槽位缺素材，需要通过补拍、包装、字幕或复用策略补全。"
+        : matchedByAsset
         ? `推荐素材：${recommendedAssets.map((asset) => asset.label).join(" / ")}。`
         : matchedByText
           ? `从输入中识别到与“${slot.keywords.slice(0, 3).join(" / ")}”相关的素材线索。`
@@ -250,7 +387,9 @@ export function evaluateMaterialAdaptation({
       recommendedAssets,
       fit,
       impact:
-        fit === "matched"
+        explicitlyMissing
+          ? "该槽位被用户标记为素材缺口，若不补全会影响结构完整度。"
+          : fit === "matched"
           ? "可直接支撑目标结构。"
           : fit === "partial"
             ? "可用文字或包装承接，但真实画面说服力偏弱。"

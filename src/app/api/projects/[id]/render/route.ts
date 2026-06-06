@@ -137,6 +137,7 @@ export async function POST(
       planId: record.id,
       renderId,
       downloadUrl: `/api/renders/${renderId}`,
+      previewUrl: `/api/renders/video?path=${encodeURIComponent(outputPath)}`,
       quality,
       mode,
     });

@@ -22,10 +22,13 @@ prisma/dev.db-journal
 data/uploads
 data/frames
 data/renders
+data/user-materials
 data/template-videos/*
 !data/template-videos/README.md
 data/*.png
 data/*.jpg
+material-transfer-*.png
+page-snapshot-*.md
 screenshots/
 .playwright-mcp/
 何承洋简历.pdf

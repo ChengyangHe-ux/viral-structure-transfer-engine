@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -14,6 +14,7 @@ import {
   FileJson,
   FileText,
   GitBranch,
+  ImageIcon,
   Loader2,
   PackageCheck,
   PencilLine,
@@ -22,6 +23,7 @@ import {
   Trash2,
   Upload,
   Video,
+  X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -36,13 +38,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { demoPresets } from "@/lib/demo-presets";
 import {
   buildMigrationMap,
   materialFitText,
   type MigrationMapRow,
 } from "@/lib/mapping";
 import { diffPlans } from "@/lib/plan-diff";
+import {
+  buildContestRequirementCoverage,
+  type ContestRequirementCoverageReport,
+} from "@/lib/requirement-coverage";
 import { buildStoryboardFrames, type StoryboardFrame } from "@/lib/storyboard";
 import {
   buildStructureFingerprint,
@@ -109,9 +114,24 @@ type PlanLoadResponse = {
   error?: string;
 };
 
+type FullVideoPackagingMode = "smart" | "clean";
+
+type GeneratedVideoPackaging = {
+  mode?: FullVideoPackagingMode;
+  label?: string;
+  subtitles: boolean;
+  audio: boolean;
+};
+
 type VideoGenerateResponse = {
   mode?: "hook" | "full-video";
   audioMode?: "natural-sfx" | "model-voiceover";
+  packagingMode?: FullVideoPackagingMode;
+  generationStatus?: "completed" | "processing" | "blocked" | "failed";
+  retryable?: boolean;
+  outputBaseName?: string;
+  completedSegments?: number;
+  totalSegments?: number;
   localVideoUrl?: string | null;
   videoUrl?: string | null;
   segmentSeconds?: string;
@@ -125,6 +145,11 @@ type VideoGenerateResponse = {
   segments?: Array<{
     order: number;
     role: string;
+    source?: "aigc-video" | "user-video" | "user-image";
+    slotId?: string;
+    materialLabel?: string | null;
+    reason?: string;
+    editSummary?: string | null;
     downloaded?: {
       filePath: string;
       bytes: number;
@@ -135,12 +160,57 @@ type VideoGenerateResponse = {
     role: string;
     status?: string | null;
   }>;
+  renderStrategy?: {
+    type: "all-aigc" | "hybrid-material-aigc" | "material-remix";
+    targetDurationSeconds: number;
+    sourceMaterialCount: number;
+    reusedMaterialSegmentCount: number;
+    aigcSegmentCount: number;
+    materialSummary?: string;
+    decisions?: Array<{
+      order: number;
+      role: string;
+      source: "aigc-video" | "user-video" | "user-image";
+      slotId?: string;
+      materialLabel?: string | null;
+      provider?: string;
+      reason?: string;
+      editSummary?: string | null;
+    }>;
+  };
   downloaded?: {
     filePath: string;
     bytes: number;
   } | null;
   debugFilePath?: string;
+  packaging?: GeneratedVideoPackaging;
   error?: string;
+};
+
+type LatestRenderResponse = {
+  video?: {
+    title: string;
+    note: string;
+    localVideoUrl: string;
+    outputBaseName?: string | null;
+    createdAt?: string;
+    durationSeconds?: number | null;
+    packaging?: GeneratedVideoPackaging;
+  } | null;
+  error?: string;
+};
+
+type GeneratedVideoState = {
+  title: string;
+  url: string | null;
+  note: string;
+  createdAt: string;
+  status?: "completed" | "processing" | "failed";
+  retryable?: boolean;
+  outputBaseName?: string | null;
+  progressText?: string;
+  packaging?: GeneratedVideoPackaging;
+  renderStrategy?: VideoGenerateResponse["renderStrategy"];
 };
 
 type StatusState =
@@ -167,11 +237,13 @@ type RunModeState = {
     | null;
 };
 
+type SampleSourceMode = "upload" | "url" | "library";
+
 const samplePlaceholder =
-  "粘贴样例视频观察 / 口播转写 / 人工拆解。建议写成“时间段 + 发生了什么”。例如：0-2s 先抛结果对比；2-10s 连续 3 个使用场景；结尾引导收藏领取清单。";
+  "可选：补充样例口播、节奏、字幕风格。多个样例用 --- 分隔。";
 
 const briefPlaceholder =
-  "描述你要迁移到的新主题/商品 Brief（目标人群 + 场景 + 核心卖点 + 结尾动作）。例如：面向大学生的简历优化工具，主打 10 分钟生成岗位匹配版简历，结尾引导“收藏+私信关键词”。";
+  "例：AI 简历工具｜大学生｜10分钟生成岗位匹配版简历｜已有录屏/截图，缺真人 CTA。";
 
 function statusIcon(type: StatusState["type"]) {
   if (type === "loading") return <Loader2 className="animate-spin" />;
@@ -194,70 +266,214 @@ function formatSeconds(seconds?: number) {
   return `${minutes}m${remaining.toFixed(0)}s`;
 }
 
-function MediaMetaPanel({ mediaMeta }: { mediaMeta: MediaMeta }) {
-  const hasAnyMeta =
-    mediaMeta.durationSeconds ||
-    (mediaMeta.width && mediaMeta.height) ||
-    mediaMeta.frameRate ||
-    typeof mediaMeta.hasAudio === "boolean" ||
-    mediaMeta.previewFrames.length;
+function videoPackagingLabel(packaging?: GeneratedVideoPackaging) {
+  if (!packaging) return null;
+  if (packaging.label) return packaging.label;
+  if (packaging.mode === "clean" || (!packaging.subtitles && !packaging.audio)) {
+    return "干净成片";
+  }
+  return "智能包装";
+}
 
-  if (!hasAnyMeta) return null;
+function renderSourceLabel(source?: string) {
+  if (source === "user-video") return "视频素材";
+  if (source === "user-image") return "图片素材";
+  if (source === "aigc-video") return "AI 补镜";
+  return "待处理";
+}
+
+function renderSourceVariant(source?: string) {
+  if (source === "aigc-video") return "info" as const;
+  if (source === "user-video" || source === "user-image") return "success" as const;
+  return "outline" as const;
+}
+
+function renderStrategyTitle(strategy?: GeneratedVideoState["renderStrategy"]) {
+  if (!strategy) return "素材优先剪辑";
+  if (strategy.type === "material-remix") return "真实素材重组";
+  if (strategy.type === "hybrid-material-aigc") return "素材 + AI 补镜";
+  return "AI 分段生成";
+}
+
+function sourceKindLabel(mediaMeta?: MediaMeta | null) {
+  if (mediaMeta?.sourceKind === "upload") return "上传视频";
+  if (mediaMeta?.sourceKind === "url") return "样例链接";
+  return "人工观察";
+}
+
+function compactLine(value: string, maxLength = 72) {
+  const clean = value.replace(/\s+/g, " ").trim();
+  return clean.length > maxLength ? `${clean.slice(0, maxLength - 1)}...` : clean;
+}
+
+function formatFileSize(size: number) {
+  if (!Number.isFinite(size) || size <= 0) return "未知大小";
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(0)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function materialFileKind(file: File) {
+  const name = file.name.toLowerCase();
+  if (file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|heic|svg)$/.test(name)) {
+    return {
+      label: "图片",
+      icon: ImageIcon,
+    };
+  }
+  if (file.type.startsWith("video/") || /\.(mp4|mov|webm|m4v|avi|mkv)$/.test(name)) {
+    return {
+      label: "视频",
+      icon: Video,
+    };
+  }
+  return {
+    label: "文案",
+    icon: FileText,
+  };
+}
+
+function extractInlineMaterialNotes(text: string) {
+  return text
+    .split(/[\n；;。]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) =>
+      /素材|已有|缺少|没有|待补|需要补充|不足|未提供|图片|图|截图|视频|录屏|文案|脚本|评价|反馈|入口|CTA/i.test(
+        item,
+      ),
+    )
+    .join("；");
+}
+
+function SampleBasicsPanel({
+  analysis,
+  mediaMeta,
+  runMode,
+}: {
+  analysis: VideoStructureAnalysis;
+  mediaMeta?: MediaMeta | null;
+  runMode: RunModeState;
+}) {
+  const durationSeconds = mediaMeta?.durationSeconds ?? analysis.durationSeconds;
+  const firstFrameId = mediaMeta?.previewFrames[0];
+  const frameCount = mediaMeta?.previewFrames.length ?? 0;
+  const resolution =
+    mediaMeta?.width && mediaMeta?.height ? `${mediaMeta.width}×${mediaMeta.height}` : "待补充";
+  const audioText =
+    typeof mediaMeta?.hasAudio === "boolean"
+      ? mediaMeta.hasAudio
+        ? "检测到音频"
+        : "未检测到音频"
+      : "按文本/视觉推断";
+  const captionOverview = compactLine(
+    [
+      analysis.subtitleLayout.density,
+      analysis.subtitleLayout.placement,
+      analysis.beatMap[0]?.captionObservation,
+    ]
+      .filter(Boolean)
+      .join("；"),
+    110,
+  );
+  const modelModeText = runMode.sample
+    ? runMode.sample.mode === "direct-video"
+      ? "整段视频理解"
+      : runMode.sample.mode === "frames"
+        ? "关键帧理解"
+        : "本地兜底"
+    : "等待理解";
+  const modelModeDetail = runMode.sample
+    ? runMode.sample.note
+    : "上传视频后由模型理解画面、关键帧、字幕/语音线索。";
 
   return (
-    <div className="space-y-3 rounded-lg border bg-background p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">多模态线索</Badge>
-        <Badge variant="outline">
-          {mediaMeta.sourceKind === "upload"
-            ? "上传视频"
-            : mediaMeta.sourceKind === "url"
-              ? "样例链接"
-              : "人工观察"}
-        </Badge>
-        {mediaMeta.durationSeconds ? (
-          <Badge variant="outline">时长 {formatSeconds(mediaMeta.durationSeconds)}</Badge>
-        ) : null}
-        {mediaMeta.width && mediaMeta.height ? (
-          <Badge variant="outline">
-            {mediaMeta.width}×{mediaMeta.height}
-          </Badge>
-        ) : null}
-        {mediaMeta.frameRate ? (
-          <Badge variant="outline">FPS {mediaMeta.frameRate}</Badge>
-        ) : null}
-        {typeof mediaMeta.hasAudio === "boolean" ? (
-          <Badge variant="outline">{mediaMeta.hasAudio ? "有音频" : "无音频"}</Badge>
-        ) : null}
-        {mediaMeta.previewFrames.length ? (
-          <Badge variant="outline">时间轴采样 {mediaMeta.previewFrames.length} 帧</Badge>
-        ) : null}
-      </div>
-      {mediaMeta.frameTimestamps.length ? (
-        <p className="text-xs leading-6 text-muted-foreground">
-          采样点：{mediaMeta.frameTimestamps.map((seconds) => formatSeconds(seconds)).join(" / ")}
-        </p>
-      ) : null}
-
-      {mediaMeta.previewFrames.length ? (
-        <div className="grid grid-cols-3 gap-2">
-          {mediaMeta.previewFrames.map((frameId) => (
-            <div className="overflow-hidden rounded-md border bg-muted/20" key={frameId}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                alt="样例预览帧"
-                className="aspect-video w-full object-cover"
-                loading="lazy"
-                src={`/api/frames/${encodeURIComponent(frameId)}`}
-              />
+    <div className="rounded-lg border bg-white p-4">
+      <div className="grid grid-cols-[112px_minmax(0,1fr)] gap-4 sm:grid-cols-[132px_minmax(0,1fr)]">
+        <div className="w-full rounded-md border bg-muted/20 p-2">
+          {firstFrameId ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              alt="样例封面帧"
+              className="aspect-[9/16] w-full rounded-sm object-cover"
+              loading="lazy"
+              src={`/api/frames/${encodeURIComponent(firstFrameId)}`}
+            />
+          ) : (
+            <div className="flex aspect-[9/16] flex-col items-center justify-center rounded-sm bg-background px-4 text-center">
+              <Video className="size-8 text-muted-foreground" />
+              <p className="mt-3 text-sm font-semibold text-foreground">等待封面帧</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                上传视频并启用抽帧后，这里会展示样例封面。
+              </p>
             </div>
-          ))}
+          )}
         </div>
-      ) : (
-        <p className="text-xs leading-6 text-muted-foreground">
-          未抽取预览帧（可能缺少 ffmpeg），但仍可基于转写/观察继续拆解。
-        </p>
-      )}
+
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">样例洞察</Badge>
+                <Badge variant="outline">{sourceKindLabel(mediaMeta)}</Badge>
+                <Badge variant={runMode.sample?.mode === "local" ? "warning" : "success"}>
+                  {modelModeText}
+                </Badge>
+              </div>
+              <p className="mt-2 text-base font-semibold leading-6 text-foreground">
+                {analysis.sampleTitle}
+              </p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                {compactLine(modelModeDetail, 96)}
+              </p>
+            </div>
+            <Badge variant="outline">{analysis.beatMap.length} 个结构段</Badge>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              ["时长", formatSeconds(durationSeconds)],
+              ["镜头/段落", `${analysis.beatMap.length} 段`],
+              ["画幅", resolution],
+              ["音频/语音", audioText],
+            ].map(([label, value]) => (
+              <div className="rounded-md border bg-background p-3" key={label}>
+                <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+                <p className="mt-1 text-base font-semibold text-foreground">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-md border bg-background p-3">
+              <p className="text-xs font-semibold text-foreground">内容承诺</p>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {analysis.contentPromise}
+              </p>
+            </div>
+            <div className="rounded-md border bg-background p-3">
+              <p className="text-xs font-semibold text-foreground">字幕 / 语音概览</p>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {captionOverview || "等待样例字幕、口播或人工观察补充。"}
+              </p>
+            </div>
+            <div className="rounded-md border bg-background p-3">
+              <p className="text-xs font-semibold text-foreground">封面 / 关键帧</p>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {frameCount
+                  ? `已抽取 ${frameCount} 张时间轴关键帧${
+                      mediaMeta?.frameTimestamps.length
+                        ? `：${mediaMeta.frameTimestamps
+                            .slice(0, 4)
+                            .map((seconds) => formatSeconds(seconds))
+                            .join(" / ")}`
+                        : ""
+                    }。`
+                  : "当前基于文本或链接观察拆解，未抽取本地关键帧。"}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -288,49 +504,102 @@ function focusBarClass(focus: StructureFocus) {
 
 function StructureFingerprintPanel({ analysis }: { analysis: VideoStructureAnalysis }) {
   const fingerprint = useMemo(() => buildStructureFingerprint(analysis), [analysis]);
+  const primaryHook = analysis.hookPatterns[0];
+  const primaryMusicCue = analysis.musicAndBeats[0];
+  const primarySellingPoint = analysis.sellingPointProgression[0];
+  const rhythmPreview = fingerprint.rhythmCurve.slice(0, 4);
 
   return (
     <div className="space-y-4 rounded-lg border bg-white p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">结构指纹</Badge>
-            <Badge variant="outline">Hook {fingerprint.hookStrength}/100</Badge>
-            <Badge variant="outline">{fingerprint.shotDensityPer10s} 镜/10s</Badge>
+            <Badge variant="secondary">结构蓝图</Badge>
+            <Badge variant="outline">脚本/段落</Badge>
+            <Badge variant="outline">节奏</Badge>
+            <Badge variant="outline">包装</Badge>
           </div>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          <p className="mt-2 text-sm leading-6 text-foreground">
             {fingerprint.summary}
           </p>
         </div>
-        <BarChart3 className="size-8 shrink-0 text-primary" />
+        <div className="grid grid-cols-3 gap-2 text-right">
+          <div>
+            <p className="text-[11px] text-muted-foreground">Hook</p>
+            <p className="text-sm font-semibold text-foreground">{fingerprint.hookStrength}/100</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">镜头</p>
+            <p className="text-sm font-semibold text-foreground">{fingerprint.shotDensityPer10s}/10s</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">字幕</p>
+            <p className="text-sm font-semibold text-foreground">{fingerprint.subtitleDensityPer10s}/10s</p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-        {[
-          ["Hook 强度", `${fingerprint.hookStrength}/100`],
-          ["镜头密度", `${fingerprint.shotDensityPer10s} /10s`],
-          ["字幕密度", `${fingerprint.subtitleDensityPer10s} 屏/10s`],
-          ["证据位置", `${fingerprint.proofPositionPercent}%`],
-          ["CTA 位置", `${fingerprint.ctaPositionPercent}%`],
-        ].map(([label, value]) => (
-          <div className="rounded-md border bg-background p-3" key={label}>
-            <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
-            <p className="mt-1 text-lg font-semibold tracking-normal text-foreground">
-              {value}
-            </p>
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-md border bg-background p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">脚本结构</Badge>
+            <span className="text-[11px] text-muted-foreground">Hook / 展开 / CTA</span>
           </div>
-        ))}
+          <p className="mt-3 text-sm font-semibold leading-6 text-foreground">
+            {primaryHook?.expression || analysis.contentPromise}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            迁移规则：{primaryHook?.transferableRule || analysis.reusableTemplate[0] || "保留开头吸引、中段解释、结尾行动的推进顺序。"}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            卖点推进：{primarySellingPoint ? `${primarySellingPoint.order}. ${primarySellingPoint.intent} - ${primarySellingPoint.message}` : analysis.reusableTemplate.slice(0, 2).join(" / ")}
+          </p>
+        </div>
+
+        <div className="rounded-md border bg-background p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">节奏结构</Badge>
+            <span className="text-[11px] text-muted-foreground">
+              证据 {fingerprint.proofPositionPercent}% / CTA {fingerprint.ctaPositionPercent}%
+            </span>
+          </div>
+          <p className="mt-3 text-sm font-semibold leading-6 text-foreground">
+            {analysis.pacing.opening}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            中段：{analysis.pacing.middle}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            收束：{analysis.pacing.ending}；{analysis.pacing.rhythmNotes}
+          </p>
+        </div>
+
+        <div className="rounded-md border bg-background p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">包装结构</Badge>
+            <span className="text-[11px] text-muted-foreground">字幕 / 贴纸 / 转场 / 音乐</span>
+          </div>
+          <p className="mt-3 text-sm font-semibold leading-6 text-foreground">
+            {analysis.subtitleLayout.placement}，{analysis.subtitleLayout.density}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            强调方式：{analysis.subtitleLayout.emphasisStyle}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            画面包装：{analysis.visualPackaging.motionGraphics}；{primaryMusicCue ? `${primaryMusicCue.moment} ${primaryMusicCue.audioCue}` : analysis.visualPackaging.editingNotes}
+          </p>
+        </div>
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold text-foreground">结构曲线</p>
+          <p className="text-xs font-semibold text-foreground">结构段落预览</p>
           <p className="text-xs text-muted-foreground">{fingerprint.durationSeconds}s</p>
         </div>
         <div className="grid gap-2">
-          {fingerprint.rhythmCurve.map((point) => (
+          {rhythmPreview.map((point) => (
             <div
-              className="grid gap-2 sm:grid-cols-[92px_minmax(0,1fr)] sm:items-center"
+              className="grid gap-2 rounded-md border bg-background p-3 sm:grid-cols-[86px_minmax(0,1fr)] sm:items-center"
               key={`${point.index}-${point.timeRange}`}
             >
               <div className="flex min-w-0 items-center gap-2">
@@ -348,9 +617,9 @@ function StructureFingerprintPanel({ analysis }: { analysis: VideoStructureAnaly
                     {point.intensity}
                   </span>
                 </div>
-                <div className="h-2 rounded-full bg-muted">
+                <div className="h-1.5 rounded-full bg-muted">
                   <div
-                    className={`h-2 rounded-full ${focusBarClass(point.focus)}`}
+                    className={`h-1.5 rounded-full ${focusBarClass(point.focus)}`}
                     style={{ width: `${point.intensity}%` }}
                   />
                 </div>
@@ -651,33 +920,35 @@ function FunctionFlowPanel({
 }) {
   const steps = [
     {
-      title: "多输入",
-      description: "样例视频、链接、人工观察、多样例和用户素材都可进入同一条链路。",
-      ready: true,
+      title: "样例洞察",
+      description: analysis
+        ? `已完成基础解析，并抽取 ${analysis.beatMap.length} 个结构段。`
+        : "支持样例视频、链接、多文件和补充说明输入。",
+      ready: Boolean(analysis),
     },
     {
-      title: "样例拆解",
+      title: "结构蓝图",
       description: analysis
-        ? `已抽取 ${analysis.beatMap.length} 个节拍，包含 Hook、节奏、字幕和包装线索。`
-        : "等待输入样例后提取 Hook、节奏、字幕、包装和转化收口。",
+        ? "已抽取脚本/段落、节奏、字幕包装和可迁移规则。"
+        : "等待样例后展示 hook、节奏、字幕包装和卖点推进。",
       ready: Boolean(analysis),
     },
     {
       title: "手法迁移",
       description: plan
         ? `已生成 ${plan.versions.length} 个版本，并保留可编辑时间线。`
-        : "把样例里的可迁移规则映射到新主题或商品。",
+        : "把样例结构映射到新主题、商品卖点或用户素材。",
       ready: Boolean(plan),
     },
     {
-      title: "素材补全",
+      title: "素材体检",
       description: plan?.materialAdaptation
         ? `识别 ${plan.materialAdaptation.missingSlotCount} 个素材缺口，并给出补全策略。`
         : "根据用户素材判断哪些镜头可用，哪些需要字幕、包装或重排补足。",
       ready: Boolean(plan?.materialAdaptation),
     },
     {
-      title: "预览出片",
+      title: "发布与导出",
       description: plan
         ? "可查看竖屏分镜、编辑脚本字段，并导出 Markdown / JSON 或渲染视频。"
         : "生成方案后可直接预览分镜、编辑脚本并导出。",
@@ -691,14 +962,14 @@ function FunctionFlowPanel({
         <div>
           <div className="flex items-center gap-2">
             <ClipboardList className="size-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">功能流程</h3>
+            <h3 className="text-sm font-semibold text-foreground">创作链路</h3>
           </div>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            页面只展示创作链路本身：输入样例、拆解结构、迁移手法、补齐素材、预览结果。
+            从样例洞察到新片方案，展示手法如何迁移、素材如何补齐、结果如何落地。
           </p>
         </div>
         <Badge variant={plan ? "success" : analysis ? "secondary" : "outline"}>
-          {plan ? "方案已生成" : analysis ? "样例已拆解" : "待开始"}
+          {plan ? "方案已生成" : analysis ? "样例已分析" : "待开始"}
         </Badge>
       </div>
 
@@ -749,7 +1020,7 @@ function RunModePanel({ runMode }: { runMode: RunModeState }) {
         : "待运行",
       detail: runMode.plan
         ? runMode.plan.note
-        : "生成迁移方案后会显示脚本来自云模型还是本地兜底策略。",
+        : "生成新片方案后会显示脚本来自云模型还是本地兜底策略。",
       ready: Boolean(runMode.plan),
     },
   ];
@@ -979,7 +1250,7 @@ function EditingTechniquePanel({
             <Badge variant="outline">匹配 {techniques.length} 条</Badge>
           </div>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            根据 Brief、素材线索和样例结构匹配剪辑手法，把“怎么剪”落实到脚本、转场、字幕和制作备注里。
+            根据新内容、素材线索和样例结构匹配剪辑手法，把“怎么剪”落实到脚本、转场、字幕和制作备注里。
           </p>
         </div>
         <Database className="size-8 shrink-0 text-primary" />
@@ -1002,6 +1273,81 @@ function EditingTechniquePanel({
             </p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
               预期：{technique.expectedImpact}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function coverageStatusText(status: ContestRequirementCoverageReport["items"][number]["status"]) {
+  if (status === "ready") return "已完成";
+  if (status === "partial") return "部分";
+  return "待补";
+}
+
+function coverageBadgeVariant(status: ContestRequirementCoverageReport["items"][number]["status"]) {
+  if (status === "ready") return "success";
+  if (status === "partial") return "warning";
+  return "outline";
+}
+
+function RequirementCoveragePanel({
+  report,
+}: {
+  report: ContestRequirementCoverageReport;
+}) {
+  const p0Total = report.items.filter((item) => item.priority === "P0").length;
+  const p1Total = report.items.filter((item) => item.priority === "P1").length;
+  const bonusTotal = report.items.filter((item) => item.priority === "加分").length;
+
+  return (
+    <div className="space-y-4 rounded-lg border bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">工作台状态</Badge>
+            <Badge variant={report.p0CompletedCount === p0Total ? "success" : "warning"}>
+              基础流程 {report.p0CompletedCount}/{p0Total}
+            </Badge>
+            <Badge variant={report.p1CompletedCount === p1Total ? "success" : "warning"}>
+              创作能力 {report.p1CompletedCount}/{p1Total}
+            </Badge>
+            <Badge variant={report.bonusReadyCount === bonusTotal ? "success" : "outline"}>
+              智能增强 {report.bonusReadyCount}/{bonusTotal}
+            </Badge>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            自动检查当前创作链路是否完整，帮你快速确认从样例分析、素材诊断到预览导出的关键能力。
+          </p>
+        </div>
+        <Badge variant={report.completedCount === report.totalCount ? "success" : "warning"}>
+          {report.completedCount}/{report.totalCount}
+        </Badge>
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        {report.items.map((item) => (
+          <div className="rounded-md border bg-background p-3" key={item.taskId}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">
+                  {item.priority === "P0" ? "基础" : item.priority === "P1" ? "进阶" : "增强"}
+                </Badge>
+              </div>
+              <Badge variant={coverageBadgeVariant(item.status)}>
+                {coverageStatusText(item.status)}
+              </Badge>
+            </div>
+            <p className="mt-2 text-sm font-semibold leading-5 text-foreground">
+              {item.title}
+            </p>
+            <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
+              {item.evidence}
+            </p>
+            <p className="mt-2 text-[11px] font-medium leading-4 text-foreground">
+              模块：{item.judgePanel}
             </p>
           </div>
         ))}
@@ -1286,21 +1632,589 @@ function StoryboardPreview({
   );
 }
 
+function MiniSampleInsight({
+  analysis,
+  mediaMeta,
+  showAll,
+  onToggleAll,
+}: {
+  analysis: VideoStructureAnalysis;
+  mediaMeta: MediaMeta | null;
+  showAll: boolean;
+  onToggleAll: () => void;
+}) {
+  const fingerprint = useMemo(() => buildStructureFingerprint(analysis), [analysis]);
+  const firstFrameId = mediaMeta?.previewFrames[0];
+  const topBeats = showAll ? analysis.beatMap : analysis.beatMap.slice(0, 3);
+  const coreCards = [
+    {
+      label: "开头",
+      title: analysis.hookPatterns[0]?.type || "先抓注意",
+      body: analysis.hookPatterns[0]?.transferableRule || analysis.pacing.opening,
+    },
+    {
+      label: "节奏",
+      title: `${fingerprint.shotDensityPer10s} 镜/10s`,
+      body: analysis.pacing.rhythmNotes,
+    },
+    {
+      label: "包装",
+      title: analysis.subtitleLayout.density,
+      body: `${analysis.subtitleLayout.placement}；${analysis.visualPackaging.editingNotes}`,
+    },
+  ];
+
+  return (
+    <div className="studio-insight">
+      <div className="studio-insight-main">
+        <div className="studio-thumb">
+          {firstFrameId ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              alt="样例封面帧"
+              className="h-full w-full object-cover"
+              src={`/api/frames/${encodeURIComponent(firstFrameId)}`}
+            />
+          ) : (
+            <Video className="size-7 text-primary" />
+          )}
+        </div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">核心手法</Badge>
+            <Badge variant="outline">{analysis.beatMap.length} 段</Badge>
+            <Badge variant="outline">{formatSeconds(mediaMeta?.durationSeconds ?? analysis.durationSeconds)}</Badge>
+          </div>
+          <h3 className="mt-3 text-xl font-bold leading-7 text-foreground">
+            {analysis.contentPromise}
+          </h3>
+          <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">
+            {analysis.summary}
+          </p>
+        </div>
+      </div>
+
+      <div className="studio-summary-grid">
+        {coreCards.map((item) => (
+          <div className="studio-summary-card" key={item.label}>
+            <span>{item.label}</span>
+            <strong>{compactLine(item.title, 20)}</strong>
+            <p>{compactLine(item.body, 54)}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="studio-mini-timeline">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-foreground">节拍路径</p>
+          <Button size="sm" type="button" variant="outline" onClick={onToggleAll}>
+            {showAll ? "收起" : "展开"}
+          </Button>
+        </div>
+        <div className="mt-3 grid gap-2">
+          {topBeats.map((beat, index) => (
+            <div className="studio-mini-beat" key={`${beat.timeRange}-${index}`}>
+              <Badge variant="outline">{beat.timeRange}</Badge>
+              <div>
+                <p>{beat.shotPurpose}</p>
+                <span>{compactLine(beat.transferableRule, 64)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function versionIntent(version: PlanVersion, index: number) {
+  const text = `${version.versionName} ${version.positioning} ${version.bestFor}`;
+  if (/hook|点击|开头|吸引/i.test(text)) {
+    return {
+      label: "高点击",
+      focus: "开头更强",
+      tone: "rose",
+      proof: "先放冲突和结果，优先拉停留。",
+    };
+  }
+  if (/转化|成交|私信|cta|购买|引导/i.test(text)) {
+    return {
+      label: "高转化",
+      focus: "信任更足",
+      tone: "emerald",
+      proof: "证据和行动更靠前，适合带转化目标。",
+    };
+  }
+  if (/节奏|快|种草|内容|质感|氛围/i.test(text)) {
+    return {
+      label: "高节奏",
+      focus: "观看更顺",
+      tone: "blue",
+      proof: "镜头推进更紧，适合内容种草和展示。",
+    };
+  }
+  const fallback = [
+    ["稳妥版", "结构完整", "emerald", "按样例结构稳定迁移，适合先出可用稿。"],
+    ["冲击版", "开头抢眼", "rose", "强化前 3 秒，适合测试点击。"],
+    ["节奏版", "推进更快", "blue", "压缩解释，适合短平快发布。"],
+  ][index % 3]!;
+  return {
+    label: fallback[0],
+    focus: fallback[1],
+    tone: fallback[2],
+    proof: fallback[3],
+  };
+}
+
+function VersionChoiceCards({
+  plan,
+  activeVersion,
+  onChange,
+}: {
+  plan: MigratedVideoPlan;
+  activeVersion: number;
+  onChange: (index: number) => void;
+}) {
+  return (
+    <div className="studio-version-grid">
+      {plan.versions.map((version, index) => {
+        const intent = versionIntent(version, index);
+        const score = plan.evaluation?.versionScores.find(
+          (item) => item.versionName === version.versionName,
+        )?.score;
+        return (
+          <button
+            className={`studio-version-card is-${intent.tone} ${index === activeVersion ? "is-active" : ""}`}
+            key={version.versionName}
+            onClick={() => onChange(index)}
+            type="button"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span>{intent.label}</span>
+                <strong>{version.versionName}</strong>
+              </div>
+              {score ? <Badge variant="outline">{score}</Badge> : null}
+            </div>
+            <p>{intent.proof}</p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <Badge variant="secondary">{intent.focus}</Badge>
+              <Badge variant="outline">{compactLine(version.bestFor, 16)}</Badge>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ActiveVersionSummary({
+  version,
+  rows,
+}: {
+  version: PlanVersion;
+  rows: MigrationMapRow[];
+}) {
+  const firstRows = rows.slice(0, 3);
+
+  return (
+    <div className="studio-active-version">
+      <div className="studio-version-brief">
+        <Badge variant="secondary">当前版本</Badge>
+        <h3>{version.coverTitle}</h3>
+        <p>{version.positioning}</p>
+        <div className="flex flex-wrap gap-1.5">
+          {version.hashtags.slice(0, 5).map((tag) => (
+            <Badge key={tag} variant="outline">
+              {tag}
+            </Badge>
+          ))}
+        </div>
+      </div>
+      <div className="studio-version-beats">
+        {firstRows.map((row, index) => (
+          <div className="studio-version-beat" key={`${row.outputTimeRange}-${index}`}>
+            <Badge variant="outline">{row.outputTimeRange}</Badge>
+            <div>
+              <p>{row.outputPurpose}</p>
+              <span>{compactLine(row.outputLine, 58)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MaterialGapSnapshot({
+  adaptation,
+}: {
+  adaptation?: MaterialAdaptation;
+}) {
+  if (!adaptation) {
+    return (
+      <div className="studio-gap-snapshot">
+        <div>
+          <span>素材状态</span>
+          <strong>等待输入</strong>
+          <p>生成后会自动判断哪些镜头可用、哪些需要补。</p>
+        </div>
+        <PackageCheck className="size-7 text-primary" />
+      </div>
+    );
+  }
+
+  const visibleSlots = [
+    ...adaptation.slots.filter((slot) => slot.fit === "missing"),
+    ...adaptation.slots.filter((slot) => slot.fit === "partial"),
+    ...adaptation.slots.filter((slot) => slot.fit === "matched"),
+  ].slice(0, 3);
+
+  return (
+    <div className="studio-gap-snapshot">
+      <div className="studio-gap-head">
+        <div>
+          <span>素材体检</span>
+          <strong>{adaptation.sufficiencyScore}/100</strong>
+          <p>{adaptation.timelineAdjustment}</p>
+        </div>
+        <Badge variant={adaptation.missingSlotCount ? "warning" : "success"}>
+          缺口 {adaptation.missingSlotCount}
+        </Badge>
+      </div>
+      <div className="studio-gap-slots">
+        {visibleSlots.map((slot) => (
+          <div className="studio-gap-slot" key={slot.slotId}>
+            <Badge
+              variant={
+                slot.fit === "matched"
+                  ? "success"
+                  : slot.fit === "partial"
+                    ? "warning"
+                    : "outline"
+              }
+            >
+              {fitText(slot.fit)}
+            </Badge>
+            <div>
+              <p>{slot.slotName}</p>
+              <span>{completionStrategyText(slot.completionStrategy)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OutputPreviewPanel({
+  generatedVideo,
+  renderingVideo,
+  showMore,
+  disabled,
+  fullVideoPackagingMode,
+  onQuickPreview,
+  onFullVideo,
+  onHighRender,
+  onHighAudio,
+  onTechnique,
+  onExportMd,
+  onExportJson,
+  onPackagingModeChange,
+  onToggleMore,
+}: {
+  generatedVideo: GeneratedVideoState | null;
+  renderingVideo: boolean;
+  showMore: boolean;
+  disabled: boolean;
+  fullVideoPackagingMode: FullVideoPackagingMode;
+  onQuickPreview: () => void;
+  onFullVideo: () => void;
+  onHighRender: () => void;
+  onHighAudio: () => void;
+  onTechnique: () => void;
+  onExportMd: () => void;
+  onExportJson: () => void;
+  onPackagingModeChange: (mode: FullVideoPackagingMode) => void;
+  onToggleMore: () => void;
+}) {
+  const isProcessing = generatedVideo?.status === "processing";
+  const statusBadgeVariant = generatedVideo?.url ? "success" : isProcessing ? "warning" : "outline";
+  const statusLabel = generatedVideo?.url ? "已生成" : isProcessing ? "生成中" : "待生成";
+  const primaryActionLabel = isProcessing || generatedVideo?.retryable ? "继续生成" : "生成成片";
+  const packagingLabel = videoPackagingLabel(generatedVideo?.packaging);
+  const strategy = generatedVideo?.renderStrategy;
+  const decisions = strategy?.decisions?.slice(0, 3) ?? [];
+
+  return (
+    <div className="studio-output-panel">
+      <div className="studio-output-preview">
+        {generatedVideo?.url ? (
+          <video
+            className="studio-output-video"
+            controls
+            playsInline
+            preload="metadata"
+            src={generatedVideo.url}
+          />
+        ) : (
+          <div className="studio-output-empty">
+            <Video className="size-9" />
+            <strong>成片预览</strong>
+            <span>生成后会在这里直接播放</span>
+          </div>
+        )}
+      </div>
+
+      <div className="studio-output-copy">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary">最终结果</Badge>
+          <Badge variant={statusBadgeVariant}>{statusLabel}</Badge>
+          {packagingLabel ? <Badge variant="info">{packagingLabel}</Badge> : null}
+        </div>
+        <h3>{generatedVideo?.title || "先看成片，再调细节"}</h3>
+        <p>
+          {generatedVideo?.note ||
+            "主按钮会优先复用你上传的真实素材，缺口用生成视频模型补齐；没有指定时长时默认约 15 秒。"}
+        </p>
+        {generatedVideo?.createdAt ? (
+          <span className="studio-output-time">最近生成：{generatedVideo.createdAt}</span>
+        ) : null}
+        {generatedVideo?.progressText ? (
+          <span className="studio-output-time">{generatedVideo.progressText}</span>
+        ) : null}
+
+        <div className="studio-remix-strip">
+          <div className="studio-remix-head">
+            <span>{renderStrategyTitle(strategy)}</span>
+            {strategy ? (
+              <small>
+                素材 {strategy.reusedMaterialSegmentCount} / AI {strategy.aigcSegmentCount}
+              </small>
+            ) : (
+              <small>上传素材后自动剪入</small>
+            )}
+          </div>
+          {decisions.length ? (
+            <div className="studio-remix-list">
+              {decisions.map((decision) => (
+                <div className="studio-remix-item" key={`${decision.order}-${decision.source}`}>
+                  <Badge variant={renderSourceVariant(decision.source)}>
+                    {renderSourceLabel(decision.source)}
+                  </Badge>
+                  <div>
+                    <p>
+                      {decision.materialLabel || `第 ${decision.order} 段`}
+                    </p>
+                    <span>
+                      {decision.editSummary || decision.reason || compactLine(decision.role, 52)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="studio-package-toggle" aria-label="成片包装方式">
+          {[
+            { mode: "smart" as const, label: "智能包装", caption: "字幕 + 轻音频" },
+            { mode: "clean" as const, label: "干净成片", caption: "无烧录字幕" },
+          ].map((option) => (
+            <button
+              className={fullVideoPackagingMode === option.mode ? "is-active" : ""}
+              disabled={disabled}
+              key={option.mode}
+              onClick={() => onPackagingModeChange(option.mode)}
+              type="button"
+            >
+              <span>{option.label}</span>
+              <small>{option.caption}</small>
+            </button>
+          ))}
+        </div>
+
+        <div className="studio-output-actions">
+          <Button
+            disabled={disabled}
+            onClick={onFullVideo}
+            size="sm"
+            type="button"
+          >
+            {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
+            {renderingVideo ? "生成中" : primaryActionLabel}
+          </Button>
+          {generatedVideo?.url ? (
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+            >
+              <a href={generatedVideo.url} target="_blank" rel="noreferrer">
+                <Download />
+                打开成片
+              </a>
+            </Button>
+          ) : null}
+          <Button onClick={onExportMd} size="sm" type="button" variant="outline">
+            <Download />
+            导出方案
+          </Button>
+          <Button onClick={onToggleMore} size="sm" type="button" variant="outline">
+            {showMore ? <ArrowUp /> : <ArrowDown />}
+            {showMore ? "收起" : "更多"}
+          </Button>
+        </div>
+
+        {showMore ? (
+          <div className="studio-output-more">
+            <Button
+              disabled={disabled}
+              onClick={onQuickPreview}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
+              本地快速预览
+            </Button>
+            <Button
+              disabled={disabled}
+              onClick={onHighRender}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
+              本地清晰预览
+            </Button>
+            <Button
+              disabled={disabled}
+              onClick={onHighAudio}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
+              本地有声预览
+            </Button>
+            <Button
+              disabled={disabled}
+              onClick={onTechnique}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {renderingVideo ? <Loader2 className="animate-spin" /> : <GitBranch />}
+              本地说明片
+            </Button>
+            <Button onClick={onExportJson} size="sm" type="button" variant="outline">
+              <FileJson />
+              导出数据
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function RecentRenderPanel({ generatedVideo }: { generatedVideo: GeneratedVideoState }) {
+  if (!generatedVideo.url) return null;
+  const packagingLabel = videoPackagingLabel(generatedVideo.packaging);
+
+  return (
+    <div className="studio-output-panel">
+      <div className="studio-output-preview">
+        <video
+          className="studio-output-video"
+          controls
+          playsInline
+          preload="metadata"
+          src={generatedVideo.url}
+        />
+      </div>
+      <div className="studio-output-copy">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary">最近成片</Badge>
+          <Badge variant="success">可播放</Badge>
+          {packagingLabel ? <Badge variant="info">{packagingLabel}</Badge> : null}
+        </div>
+        <h3>{generatedVideo.title}</h3>
+        <p>{generatedVideo.note}</p>
+        {generatedVideo.createdAt ? (
+          <span className="studio-output-time">生成时间：{generatedVideo.createdAt}</span>
+        ) : null}
+        {generatedVideo.progressText ? (
+          <span className="studio-output-time">{generatedVideo.progressText}</span>
+        ) : null}
+        <div className="studio-output-actions">
+          <Button asChild size="sm" type="button">
+            <a href={generatedVideo.url} target="_blank" rel="noreferrer">
+              <Download />
+              打开成片
+            </a>
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SampleCompactRecap({
+  analysis,
+  mediaMeta,
+  onDetails,
+}: {
+  analysis: VideoStructureAnalysis;
+  mediaMeta: MediaMeta | null;
+  onDetails: () => void;
+}) {
+  const fingerprint = useMemo(() => buildStructureFingerprint(analysis), [analysis]);
+
+  return (
+    <div className="studio-sample-recap">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary">样片手法</Badge>
+          <Badge variant="outline">{analysis.beatMap.length} 段</Badge>
+          <Badge variant="outline">
+            {formatSeconds(mediaMeta?.durationSeconds ?? analysis.durationSeconds)}
+          </Badge>
+        </div>
+        <h3>{analysis.contentPromise}</h3>
+        <p>{compactLine(analysis.summary, 130)}</p>
+      </div>
+      <div className="studio-sample-recap-stats">
+        <span>Hook {fingerprint.hookStrength}</span>
+        <span>{fingerprint.shotDensityPer10s} 镜/10s</span>
+        <Button size="sm" type="button" variant="outline" onClick={onDetails}>
+          查看
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
-  const [projectTitle, setProjectTitle] = useState("爆款结构迁移演示项目");
-  const [sampleTitle, setSampleTitle] = useState("优质短视频样例");
+  const [projectTitle] = useState("爆款结构迁移演示项目");
+  const [sampleTitle] = useState("优质短视频样例");
   const [sampleUrl, setSampleUrl] = useState("");
   const [sampleNotes, setSampleNotes] = useState("");
-  const [additionalSampleNotes, setAdditionalSampleNotes] = useState("");
   const [targetBrief, setTargetBrief] = useState("");
-  const [userMaterials, setUserMaterials] = useState("");
-  const [sampleFile, setSampleFile] = useState<File | null>(null);
+  const [userMaterialFiles, setUserMaterialFiles] = useState<File[]>([]);
+  const [sampleFiles, setSampleFiles] = useState<File[]>([]);
+  const [sampleFileInputKey, setSampleFileInputKey] = useState(0);
+  const [sampleSourceMode, setSampleSourceMode] = useState<SampleSourceMode>("upload");
   const [localUploadName, setLocalUploadName] = useState("");
   const [availableUploads, setAvailableUploads] = useState<
     Array<{ name: string; sizeBytes: number; modifiedAt: string }>
   >([]);
   const simpleMode = true;
   const [showAllSampleBeats, setShowAllSampleBeats] = useState(false);
+  const [showSampleDetails, setShowSampleDetails] = useState(false);
+  const [showProductionDetails, setShowProductionDetails] = useState(false);
+  const [showRenderOptions, setShowRenderOptions] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<VideoStructureAnalysis | null>(null);
   const [plan, setPlan] = useState<MigratedVideoPlan | null>(null);
@@ -1328,12 +2242,53 @@ export default function Home() {
   } | null>(null);
   const [status, setStatus] = useState<StatusState>({
     type: "idle",
-    message: "先准备一个样例（链接/文件/观察文本），再把它的结构迁移到你的新主题。",
+    message: "导入样例，生成新片。",
   });
   const [runMode, setRunMode] = useState<RunModeState>({ sample: null, plan: null });
   const [renderingVideo, setRenderingVideo] = useState(false);
+  const [generatedVideo, setGeneratedVideo] = useState<GeneratedVideoState | null>(null);
+  const [fullVideoPackagingMode, setFullVideoPackagingMode] =
+    useState<FullVideoPackagingMode>("smart");
 
-  const hasTechniqueHits = Boolean(plan?.retrievedTechniques.length);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLatestRender() {
+      try {
+        const response = await fetch("/api/renders/latest");
+        const payload = (await response.json()) as LatestRenderResponse;
+        if (!response.ok || !payload.video || cancelled) return;
+
+        setGeneratedVideo((current) => {
+          if (current) return current;
+          const createdAt = payload.video?.createdAt
+            ? new Date(payload.video.createdAt).toLocaleTimeString()
+            : new Date().toLocaleTimeString();
+          return {
+            title: payload.video?.title || "最近成片",
+            url: payload.video?.localVideoUrl || null,
+            note: payload.video?.note || "已完成拼接，可直接播放验证。",
+            createdAt,
+          status: "completed",
+          retryable: false,
+          outputBaseName: payload.video?.outputBaseName ?? null,
+          packaging: payload.video?.packaging,
+          progressText: payload.video?.durationSeconds
+            ? `${payload.video.durationSeconds.toFixed(1)} 秒`
+            : undefined,
+          };
+        });
+      } catch {
+        // No recent render is a normal empty state.
+      }
+    }
+
+    void loadLatestRender();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function loadUploads() {
     try {
@@ -1349,6 +2304,17 @@ export default function Home() {
     } catch {
       setAvailableUploads([]);
     }
+  }
+
+  function handleSampleSourceModeChange(mode: SampleSourceMode) {
+    setSampleSourceMode(mode);
+    if (mode !== "upload") {
+      setSampleFiles([]);
+      setSampleFileInputKey((current) => current + 1);
+    }
+    if (mode !== "url") setSampleUrl("");
+    if (mode !== "library") setLocalUploadName("");
+    if (mode === "library" && availableUploads.length === 0) void loadUploads();
   }
 
   const activePlanVersion = useMemo(
@@ -1367,6 +2333,32 @@ export default function Home() {
       version: activePlanVersion,
     });
   }, [analysis, plan, activePlanVersion]);
+  useEffect(() => {
+    if (!showProductionDetails) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setShowProductionDetails(false);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showProductionDetails]);
+
+  const requirementCoverage = useMemo(
+    () =>
+      buildContestRequirementCoverage({
+        analysis,
+        plan,
+        techniqueTransfer: activeTechniqueRecipe,
+      }),
+    [analysis, plan, activeTechniqueRecipe],
+  );
   async function refreshPlanHistory(nextProjectId: string) {
     setLoadingPlanHistory(true);
     try {
@@ -1412,18 +2404,18 @@ export default function Home() {
   async function handleAnalyze() {
     if (
       !sampleNotes.trim() &&
-      !sampleFile &&
+      !sampleFiles.length &&
       !sampleUrl.trim() &&
       !localUploadName.trim()
     ) {
       setStatus({
         type: "error",
-        message: "请至少提供样例视频文件、本地导入视频、链接或人工观察文本。",
+        message: "请至少提供样例视频文件、本地导入视频、样例链接或补充说明。",
       });
       return;
     }
 
-    setStatus({ type: "loading", message: "正在拆解样例结构..." });
+    setStatus({ type: "loading", message: "正在理解样例视频并整理创作手法..." });
     setPlan(null);
     setPlanHistory([]);
     setActivePlanId(null);
@@ -1436,17 +2428,30 @@ export default function Home() {
     setNlEditPreview(null);
     setMediaMeta(null);
     setRunMode({ sample: null, plan: null });
+    setShowSampleDetails(false);
+    setShowProductionDetails(false);
+    setShowRenderOptions(false);
+    setGeneratedVideo(null);
 
     const formData = new FormData();
     formData.append("projectTitle", projectTitle);
     formData.append("sampleTitle", sampleTitle);
     formData.append("sampleUrl", sampleUrl);
     formData.append("localUploadName", localUploadName);
-    formData.append("sampleNotes", sampleNotes || "用户上传了样例视频，请结合视频元数据和常见短视频结构进行拆解。");
-    formData.append("additionalSampleNotes", additionalSampleNotes);
+    const sampleNoteBlocks = sampleNotes
+      .split(/\n\s*---+\s*\n/)
+      .map((block) => block.trim())
+      .filter(Boolean);
+    const primarySampleNote = sampleNoteBlocks[0] || sampleNotes.trim();
+    const extraSampleNotes = sampleNoteBlocks.slice(1).join("\n---\n");
+    formData.append(
+      "sampleNotes",
+      primarySampleNote || "用户上传了样例视频，请结合视频元数据和常见短视频结构进行拆解。",
+    );
+    formData.append("additionalSampleNotes", extraSampleNotes);
     formData.append("targetBrief", targetBrief);
-    if (sampleFile) {
-      formData.append("sampleFile", sampleFile);
+    for (const file of sampleFiles) {
+      formData.append("sampleFiles", file);
     }
 
     const response = await fetch("/api/analyze-sample", {
@@ -1456,7 +2461,7 @@ export default function Home() {
     const payload = (await response.json()) as AnalyzeResponse;
 
     if (!response.ok) {
-      setStatus({ type: "error", message: payload.error || "样例拆解失败" });
+      setStatus({ type: "error", message: payload.error || "样例分析失败" });
       return;
     }
 
@@ -1483,10 +2488,10 @@ export default function Home() {
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
       message: payload.usedFallback
-        ? `样例结构拆解完成：已整理 ${payload.sourceSampleCount ?? 1} 条样例的 hook、节奏和包装线索。`
+        ? `样例分析完成：已整理 ${payload.sourceSampleCount ?? 1} 条样例的 hook、节奏和包装线索。`
         : payload.directVideoUsed
-          ? `样例结构拆解完成：已结合整段视频与 ${payload.visionFrameCount ?? 0} 个时间轴关键帧；样例数 ${payload.sourceSampleCount ?? 1}。`
-          : `样例结构拆解完成：已结合 ${payload.visionFrameCount ?? 0} 个时间轴关键帧；样例数 ${payload.sourceSampleCount ?? 1}。`,
+          ? `样例分析完成：已结合整段视频与 ${payload.visionFrameCount ?? 0} 个时间轴关键帧；样例数 ${payload.sourceSampleCount ?? 1}。`
+          : `样例分析完成：已结合 ${payload.visionFrameCount ?? 0} 个时间轴关键帧；样例数 ${payload.sourceSampleCount ?? 1}。`,
     });
     void refreshPlanHistory(payload.projectId);
   }
@@ -1629,62 +2634,41 @@ export default function Home() {
     }
   }
 
-  function applyDemoPreset(preset: (typeof demoPresets)[number]) {
-    setProjectTitle(preset.projectTitle);
-    setSampleTitle(preset.sampleTitle);
-    setSampleNotes(preset.sampleNotes);
-    setAdditionalSampleNotes("");
-    setTargetBrief(preset.targetBrief);
-    setUserMaterials(preset.userMaterials);
-    setSampleUrl("");
-    setSampleFile(null);
-    setAnalysis(null);
-    setPlan(null);
-    setPlanHistory([]);
-    setActivePlanId(null);
-    setRefineInstruction("");
-    setProjectId(null);
-    setActiveVersion(0);
-    setEditMode(false);
-    setDraftVersion(null);
-    setNlEditInstruction("");
-    setNlEditFeedback(null);
-    setNlEditPreview(null);
-    setRunMode({ sample: null, plan: null });
-    setStatus({
-      type: "idle",
-      message: `已载入演示预设：${preset.label}。`,
-    });
-  }
-
   async function handleGeneratePlan() {
     if (!projectId || !analysis) {
-      setStatus({ type: "error", message: "请先完成样例结构拆解。" });
+      setStatus({ type: "error", message: "请先完成样例分析。" });
       return;
     }
     if (!targetBrief.trim()) {
-      setStatus({ type: "error", message: "请输入新主题或商品 Brief。" });
+      setStatus({ type: "error", message: "请输入要创作的新主题或商品信息。" });
+      return;
+    }
+    if (targetBrief.trim().length < 2) {
+      setStatus({ type: "error", message: "请至少写清主题或商品名称，比如“卖咖啡”。" });
       return;
     }
 
     setStatus({
       type: "loading",
-      message: "正在把样例手法迁移成多版本脚本...",
+      message: "正在生成多版本新片方案...",
     });
+    const formData = new FormData();
+    formData.append("projectId", projectId);
+    formData.append("targetBrief", targetBrief);
+    formData.append("userMaterials", extractInlineMaterialNotes(targetBrief));
+    formData.append("direction", "生成可编辑方案脚本，并保留视频时间线扩展空间");
+    for (const file of userMaterialFiles) {
+      formData.append("userMaterialFiles", file);
+    }
+
     const response = await fetch("/api/generate-plan", {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        projectId,
-        targetBrief,
-        userMaterials,
-        direction: "生成可编辑方案脚本，并保留视频时间线扩展空间",
-      }),
+      body: formData,
     });
     const payload = (await response.json()) as PlanResponse;
 
     if (!response.ok) {
-      setStatus({ type: "error", message: payload.error || "迁移方案生成失败" });
+      setStatus({ type: "error", message: payload.error || "新片方案生成失败" });
       return;
     }
 
@@ -1695,25 +2679,28 @@ export default function Home() {
     setDraftVersion(null);
     setNlEditFeedback(null);
     setNlEditPreview(null);
+    setShowProductionDetails(false);
+    setShowRenderOptions(false);
+    setGeneratedVideo(null);
     setRunMode((current) => ({
       ...current,
       plan: {
         mode: payload.usedFallback ? "local" : "model",
         note: payload.usedFallback
-          ? "模型不可用或超时，已用本地迁移策略生成可编辑脚本。"
-          : "已调用兼容文本模型，把样例结构迁移成多版本脚本。",
+          ? "模型不可用或超时，已用本地创作策略生成可编辑脚本。"
+          : "已调用兼容文本模型，把样例手法转化为多版本脚本。",
       },
     }));
     setStatus({
       type: payload.usedFallback ? "warning" : "success",
-      message: "迁移脚本已生成，可直接编辑并导出。",
+      message: "新片方案已生成，可编辑、预览并导出。",
     });
     void refreshPlanHistory(payload.projectId);
   }
 
   async function handleRefinePlan() {
     if (!projectId || !plan) {
-      setStatus({ type: "error", message: "请先生成迁移方案。" });
+      setStatus({ type: "error", message: "请先生成新片方案。" });
       return;
     }
     if (!refineInstruction.trim()) {
@@ -1754,35 +2741,220 @@ export default function Home() {
     });
   }
 
+  async function handleRenderPreset(
+    preset: "draft" | "high" | "high-quality" | "technique",
+  ) {
+    if (!projectId) return;
+
+    const meta = {
+      draft: {
+        loading: "正在生成快速预览...",
+        title: "快速预览",
+        note: "用于快速检查节奏、字幕和画面层级。",
+        body: { quality: "draft" },
+      },
+      high: {
+        loading: "正在生成清晰成片...",
+        title: "清晰成片",
+        note: "适合用于演示、汇报和提交素材。",
+        body: { quality: "high" },
+      },
+      "high-quality": {
+        loading: "正在渲染高质量有声视频...",
+        title: "高质量有声成片",
+        note: "带自动音频策略，适合最终展示。",
+        body: { quality: "high", mode: "high-quality" },
+      },
+      technique: {
+        loading: "正在渲染说明片...",
+        title: "结构说明片",
+        note: "用于解释样例手法如何迁移到新内容。",
+        body: { quality: "high", mode: "technique" },
+      },
+    }[preset];
+
+    setRenderingVideo(true);
+    setStatus({ type: "loading", message: meta.loading });
+    try {
+      const response = await fetch(`/api/projects/${projectId}/render`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          planId: activePlanId,
+          title: projectTitle,
+          ...meta.body,
+        }),
+      });
+      const data = (await response.json()) as {
+        downloadUrl?: string;
+        previewUrl?: string;
+        error?: string;
+      };
+      if (!response.ok || !data.downloadUrl) {
+        throw new Error(data.error || "渲染失败");
+      }
+      setGeneratedVideo({
+        title: meta.title,
+        url: data.previewUrl || data.downloadUrl,
+        note: meta.note,
+        createdAt: new Date().toLocaleTimeString(),
+      });
+      setStatus({ type: "success", message: `${meta.title}已生成，可在成片预览中查看。` });
+    } catch {
+      setStatus({
+        type: "error",
+        message: "视频生成失败，请稍后重试或先导出方案。",
+      });
+    } finally {
+      setRenderingVideo(false);
+    }
+  }
+
+  async function handleGenerateFullVideo() {
+    if (!projectId) return;
+
+    const resumeOutputBaseName =
+      generatedVideo?.retryable && generatedVideo.outputBaseName
+        ? generatedVideo.outputBaseName
+        : null;
+
+    setRenderingVideo(true);
+    setStatus({
+      type: "loading",
+      message: resumeOutputBaseName
+        ? "正在继续生成剩余分段..."
+        : fullVideoPackagingMode === "smart"
+          ? "正在生成成片：复用真实素材，缺口用视频模型补齐，并加入智能包装..."
+          : "正在生成干净成片：复用真实素材，缺口用视频模型补齐...",
+    });
+    try {
+      const response = await fetch(`/api/projects/${projectId}/generate-video`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          planId: activePlanId,
+          versionIndex: activeVersion,
+          beatIndex: 0,
+          mode: "full-video",
+          audioMode: "natural-sfx",
+          packagingMode: fullVideoPackagingMode,
+          resumeOutputBaseName,
+        }),
+      });
+      const data = (await response.json()) as VideoGenerateResponse;
+      if (!data.downloaded && (data.generationStatus === "processing" || data.retryable)) {
+        const completed = data.completedSegments ?? data.segments?.filter((segment) => segment.downloaded).length ?? 0;
+        const total = data.totalSegments ?? data.adaptiveTransfer?.targetBeatCount ?? data.segments?.length ?? 0;
+        const progressText = total > 0 ? `进度 ${completed}/${total} 段` : "进度已保存";
+        const missing = data.missingSegments?.length
+          ? `剩余：${data.missingSegments.map((segment) => `第${segment.order}段`).join("、")}`
+          : "剩余分段等待生成";
+
+        setGeneratedVideo({
+          title: "成片生成中",
+          url: null,
+          note: `${progressText}，${missing}。再次点击会从这里继续。`,
+          createdAt: new Date().toLocaleTimeString(),
+          status: "processing",
+          retryable: true,
+          outputBaseName: data.outputBaseName ?? resumeOutputBaseName,
+          progressText,
+          renderStrategy: data.renderStrategy,
+        });
+        setStatus({
+          type: "warning",
+          message: data.error || "生成视频模型仍在处理，已保存进度，可继续生成。",
+        });
+        return;
+      }
+
+      if (!response.ok || !data.downloaded) {
+        const missing = data.missingSegments?.length
+          ? ` 未完成分段：${data.missingSegments
+              .map((segment) => `${segment.order}-${segment.role}${segment.status ? `(${segment.status})` : ""}`)
+              .join("、")}`
+          : "";
+        throw new Error(`${data.error || "完整视频生成失败"}${missing}`);
+      }
+      const outputUrl = data.localVideoUrl || data.videoUrl || null;
+      const duration =
+        data.renderStrategy?.targetDurationSeconds ?? data.adaptiveTransfer?.targetDurationSeconds;
+      const reused = data.renderStrategy?.reusedMaterialSegmentCount ?? 0;
+      const aigc = data.renderStrategy?.aigcSegmentCount ?? data.segments?.length ?? 0;
+      const packagingLabel = videoPackagingLabel(data.packaging);
+      const isCleanPackaging =
+        data.packaging?.mode === "clean" ||
+        (data.packaging ? !data.packaging.subtitles && !data.packaging.audio : false);
+      const packagingNote = isCleanPackaging
+        ? "，干净成片无烧录字幕"
+        : packagingLabel
+          ? `，${packagingLabel}已完成`
+          : "";
+      setGeneratedVideo({
+        title: reused ? "素材混合成片" : "AI生成成片",
+        url: outputUrl,
+        note: reused
+          ? `已按手法槽位剪入真实素材 ${reused} 段，AI 补齐 ${aigc} 段并自动拼接${
+              duration ? `，目标约 ${duration} 秒` : ""
+            }${packagingNote}。`
+          : `由生成视频模型按当前目标内容生成 ${aigc} 段并自动拼接${
+              duration ? `，目标约 ${duration} 秒` : ""
+            }${packagingNote}。`,
+        createdAt: new Date().toLocaleTimeString(),
+        status: "completed",
+        retryable: false,
+        outputBaseName: data.outputBaseName ?? null,
+        progressText: data.totalSegments ? `完成 ${data.totalSegments}/${data.totalSegments} 段` : undefined,
+        packaging: data.packaging,
+        renderStrategy: data.renderStrategy,
+      });
+      setStatus({
+        type: "success",
+        message: reused
+          ? "素材混合成片已完成，可在成片预览中查看。"
+          : "AI生成视频已完成，可在成片预览中查看。",
+      });
+    } catch (error) {
+      setStatus({
+        type: "error",
+        message: error instanceof Error ? error.message : "完整视频生成失败。",
+      });
+    } finally {
+      setRenderingVideo(false);
+    }
+  }
+
   return (
     <main className="studio-shell min-h-screen">
       <header className="studio-topbar">
-        <div className="studio-brand">
-          <div className="studio-logo">
-            <Video className="size-5" />
+        <div className="studio-topbar-inner">
+          <div className="studio-brand">
+            <div className="studio-logo">
+              <Video className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="studio-kicker">Viral Director Studio</p>
+              <h1>爆款结构迁移引擎</h1>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="studio-kicker">Viral Director Studio</p>
-            <h1>爆款结构迁移引擎</h1>
-          </div>
-        </div>
 
-        <div className="studio-actions">
-          <Badge variant={plan ? "success" : analysis ? "secondary" : "outline"}>
-            {plan ? "可预览" : analysis ? "已拆解" : "准备输入"}
-          </Badge>
+          <div className="studio-actions">
+            <Badge variant={plan ? "success" : analysis ? "secondary" : "outline"}>
+              {plan ? "可预览" : analysis ? "已分析" : "准备输入"}
+            </Badge>
+          </div>
         </div>
       </header>
 
       <section className="studio-statusbar">
         <div className="studio-steps">
-          <span className={`studio-step ${analysis ? "is-done" : "is-active"}`}>样例拆解</span>
+          <span className={`studio-step ${analysis ? "is-done" : "is-active"}`}>样例洞察</span>
           <ArrowRight className="hidden size-4 md:block" />
-          <span className={`studio-step ${hasTechniqueHits ? "is-done" : ""}`}>手法匹配</span>
+          <span className={`studio-step ${analysis ? "is-done" : ""}`}>结构蓝图</span>
           <ArrowRight className="hidden size-4 md:block" />
-          <span className={`studio-step ${plan ? "is-done" : ""}`}>迁移脚本</span>
+          <span className={`studio-step ${plan?.materialAdaptation ? "is-done" : ""}`}>素材体检</span>
           <ArrowRight className="hidden size-4 md:block" />
-          <span className={`studio-step ${plan ? "is-active" : ""}`}>编辑出片</span>
+          <span className={`studio-step ${plan ? "is-active" : ""}`}>成片方案</span>
         </div>
 
         <div className={`studio-status-message is-${status.type}`}>
@@ -1791,154 +2963,147 @@ export default function Home() {
         </div>
       </section>
 
-      <section
-        className={`workspace-grid studio-workspace mx-auto grid gap-5 px-4 py-5 sm:px-5 ${
-          simpleMode
-            ? "lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]"
-            : "lg:grid-cols-[372px_minmax(0,1fr)]"
-        }`}
-      >
+      <section className="workspace-grid studio-workspace">
         <div className="control-rail space-y-4">
-          <Card>
+          <Card className="studio-reference-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Video className="size-4 text-primary" />
-                1. 样例拆解
+                参考样片
               </CardTitle>
-              <CardDescription>选预设或粘贴观察文本，先把样例拆成结构规则。</CardDescription>
+              <CardDescription>视频 / 链接 / 多样例</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>演示预设</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {demoPresets.map((preset) => (
-                    <Button
-                      key={preset.label}
-                      onClick={() => applyDemoPreset(preset)}
-                      size="sm"
+              <div className="space-y-3 rounded-lg border bg-background p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label>参考来源</Label>
+                  <Badge variant="outline">可多选</Badge>
+                </div>
+
+                <div className="studio-source-switch" role="tablist" aria-label="参考来源">
+                  {[
+                    ["upload", "上传视频"],
+                    ["url", "粘贴链接"],
+                    ["library", "素材库"],
+                  ].map(([mode, label]) => (
+                    <button
+                      aria-selected={sampleSourceMode === mode}
+                      className={sampleSourceMode === mode ? "is-active" : ""}
+                      key={mode}
+                      onClick={() => handleSampleSourceModeChange(mode as SampleSourceMode)}
+                      role="tab"
                       type="button"
-                      variant="outline"
                     >
-                      {preset.label}
-                    </Button>
+                      {label}
+                    </button>
                   ))}
                 </div>
+
+                {sampleSourceMode === "upload" ? (
+                  <div className="space-y-2">
+                    <Input
+                      aria-label="样例视频文件"
+                      id="sampleFile"
+                      key={`sample-file-${sampleFileInputKey}`}
+                      type="file"
+                      accept="video/*"
+                      multiple
+                      onChange={(event) => {
+                        setSampleFiles(Array.from(event.target.files || []));
+                        setLocalUploadName("");
+                        setSampleUrl("");
+                      }}
+                    />
+                    {sampleFiles.length ? (
+                      <div className="studio-selected-file">
+                        <Video className="size-4 text-primary" />
+                        <span>
+                          {sampleFiles.length} 个视频
+                          {sampleFiles[0] ? `：${sampleFiles[0].name}` : ""}
+                          {sampleFiles.length > 1 ? " 等" : ""}
+                        </span>
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setSampleFiles([]);
+                            setSampleFileInputKey((current) => current + 1);
+                          }}
+                        >
+                          清除
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">首个视频作为主样例</p>
+                    )}
+                  </div>
+                ) : null}
+
+                {sampleSourceMode === "url" ? (
+                  <Input
+                    aria-label="样例链接"
+                    id="sampleUrl"
+                    placeholder="https://..."
+                    value={sampleUrl}
+                    onChange={(event) => {
+                      setSampleUrl(event.target.value);
+                      setSampleFiles([]);
+                      setLocalUploadName("");
+                    }}
+                  />
+                ) : null}
+
+                {sampleSourceMode === "library" ? (
+                  <div className="studio-library-row">
+                    <select
+                      aria-label="从素材库选择样例"
+                      id="localUploadName"
+                      className="studio-library-select"
+                      value={localUploadName}
+                      onFocus={() => {
+                        if (availableUploads.length === 0) void loadUploads();
+                      }}
+                      onChange={(event) => {
+                        setLocalUploadName(event.target.value);
+                        setSampleFiles([]);
+                        setSampleFileInputKey((current) => current + 1);
+                        setSampleUrl("");
+                      }}
+                    >
+                      <option value="">选择已导入的视频</option>
+                      {availableUploads.map((file) => (
+                        <option key={file.name} value={file.name}>
+                          {file.name} ({(file.sizeBytes / 1024 / 1024).toFixed(1)} MB)
+                        </option>
+                      ))}
+                    </select>
+                    <Button onClick={loadUploads} size="sm" type="button" variant="outline">
+                      刷新
+                    </Button>
+                    {localUploadName ? (
+                      <div className="studio-selected-file is-library">
+                        <Database className="size-4 text-primary" />
+                        <span>{localUploadName}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="sampleNotes">样例观察/转写</Label>
+                <Label htmlFor="sampleNotes">补充观察（可选）</Label>
                 <Textarea
                   id="sampleNotes"
                   placeholder={samplePlaceholder}
                   value={sampleNotes}
                   onChange={(event) => setSampleNotes(event.target.value)}
-                  rows={5}
+                  rows={3}
                 />
               </div>
-              <details className="rounded-lg border bg-background p-3 text-sm">
-                <summary className="cursor-pointer font-semibold text-foreground">
-                  高级输入：视频、链接、多样例和标题
-                </summary>
-                <div className="mt-3 space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="projectTitle">项目名称</Label>
-                    <Input
-                      id="projectTitle"
-                      value={projectTitle}
-                      onChange={(event) => setProjectTitle(event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sampleTitle">样例标题</Label>
-                    <Input
-                      id="sampleTitle"
-                      value={sampleTitle}
-                      onChange={(event) => setSampleTitle(event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="localUploadName">从素材库选择样例</Label>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <select
-                          id="localUploadName"
-                          className="flex h-10 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                          value={localUploadName}
-                          onFocus={() => {
-                            if (availableUploads.length === 0) void loadUploads();
-                          }}
-                          onChange={(event) => {
-                            setLocalUploadName(event.target.value);
-                            setSampleFile(null);
-                          }}
-                        >
-                          <option value="">（不使用本地导入）</option>
-                          {availableUploads.map((file) => (
-                            <option key={file.name} value={file.name}>
-                              {file.name} ({(file.sizeBytes / 1024 / 1024).toFixed(1)} MB)
-                            </option>
-                          ))}
-                        </select>
-                        <Button onClick={loadUploads} size="sm" type="button" variant="outline">
-                          刷新
-                        </Button>
-                      </div>
-                      {availableUploads.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                          暂无可选视频。也可以直接上传样例文件。
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          选择后会直接用于样例拆解，无需重复上传。
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sampleFile">样例视频文件</Label>
-                    <Input
-                      id="sampleFile"
-                      type="file"
-                      accept="video/*"
-                      onChange={(event) => {
-                        setSampleFile(event.target.files?.[0] || null);
-                        setLocalUploadName("");
-                      }}
-                    />
-                    {sampleFile ? (
-                      <p className="text-xs text-muted-foreground">
-                        已选择：{sampleFile.name}，{(sampleFile.size / 1024 / 1024).toFixed(1)} MB
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sampleUrl">样例链接</Label>
-                    <Input
-                      id="sampleUrl"
-                      placeholder="https://..."
-                      value={sampleUrl}
-                      onChange={(event) => setSampleUrl(event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="additionalSampleNotes">补充样例（可选）</Label>
-                    <Textarea
-                      id="additionalSampleNotes"
-                      placeholder={`多样例模式：每条样例用 --- 分隔。可写：
-标题：教育产品样例
-0-2s 先给痛点，2-8s 三段证据，结尾 CTA。`}
-                      value={additionalSampleNotes}
-                      onChange={(event) => setAdditionalSampleNotes(event.target.value)}
-                      rows={3}
-                    />
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      可粘贴更多优质样例，系统会汇总共性结构；上传视频仍以主样例为准。
-                    </p>
-                  </div>
-                </div>
-              </details>
               <Button className="w-full" onClick={handleAnalyze}>
                 {status.type === "loading" ? <Loader2 className="animate-spin" /> : <ClipboardList />}
-                拆解成结构卡片
+                理解样片
               </Button>
             </CardContent>
           </Card>
@@ -1947,26 +3112,77 @@ export default function Home() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ClipboardList className="size-4 text-primary" />
-                2. 迁移 Brief
+                新片需求与素材
               </CardTitle>
-              <CardDescription>描述新主题、商品、受众和想要强化的卖点。</CardDescription>
+              <CardDescription>主题 / 卖点 / 素材</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Textarea
-                placeholder={briefPlaceholder}
-                value={targetBrief}
-                onChange={(event) => setTargetBrief(event.target.value)}
-                className="min-h-[96px]"
-              />
               <div className="space-y-2">
-                <Label htmlFor="userMaterials">用户素材</Label>
                 <Textarea
-                  id="userMaterials"
-                  placeholder="描述已有素材，例如：产品图、操作录屏、使用场景、评价截图、CTA 入口；也可以说明缺少哪些素材。"
-                  value={userMaterials}
-                  onChange={(event) => setUserMaterials(event.target.value)}
-                  className="min-h-[96px]"
+                  id="targetBrief"
+                  placeholder={briefPlaceholder}
+                  value={targetBrief}
+                  onChange={(event) => setTargetBrief(event.target.value)}
+                  className="min-h-[112px]"
                 />
+              </div>
+
+              <div className="space-y-3 rounded-lg border bg-background p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label htmlFor="userMaterialFiles">素材文件</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge variant="outline">图片</Badge>
+                    <Badge variant="outline">视频</Badge>
+                    <Badge variant="outline">文案</Badge>
+                  </div>
+                </div>
+                <Input
+                  aria-label="用户素材文件"
+                  id="userMaterialFiles"
+                  type="file"
+                  multiple
+                  accept="image/*,video/*,.txt,.md,.pdf,.doc,.docx"
+                  onChange={(event) => setUserMaterialFiles(Array.from(event.target.files || []))}
+                />
+                {userMaterialFiles.length ? (
+                  <div className="grid gap-2">
+                    {userMaterialFiles.slice(0, 6).map((file, index) => {
+                      const kind = materialFileKind(file);
+                      const Icon = kind.icon;
+                      return (
+                        <div
+                          className="flex min-w-0 items-center justify-between gap-3 rounded-md border bg-white px-3 py-2"
+                          key={`${file.name}-${file.size}-${index}`}
+                        >
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Icon className="size-4 shrink-0 text-primary" />
+                            <span className="truncate text-xs font-medium text-foreground">
+                              {file.name}
+                            </span>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Badge variant="secondary">{kind.label}</Badge>
+                            <span className="text-[11px] text-muted-foreground">
+                              {formatFileSize(file.size)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {userMaterialFiles.length > 6 ? (
+                      <p className="text-xs text-muted-foreground">
+                        另有 {userMaterialFiles.length - 6} 个素材文件会一起参与剪辑。
+                      </p>
+                    ) : null}
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      图片组会做轻运动与裁切，视频组会按开头、过程、证明等槽位截取成 9:16 时间线。
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    可选：图片组、视频组或文案文件；上传后会优先用真实素材剪辑，缺口再用生成模型补齐。
+                  </p>
+                )}
               </div>
               <Button
                 className="w-full"
@@ -1975,7 +3191,7 @@ export default function Home() {
                 variant="secondary"
               >
                 {status.type === "loading" ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-                生成迁移方案
+                生成新片方案
               </Button>
             </CardContent>
           </Card>
@@ -2038,265 +3254,6 @@ export default function Home() {
             </Card>
           ) : null}
 
-          {projectId && plan ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Video className="size-4 text-primary" />
-                  一键出片
-                </CardTitle>
-                <CardDescription>
-                  直接生成可下载视频，用于现场演示和案例提交。
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    type="button"
-                    variant="default"
-                    disabled={renderingVideo || status.type === "loading"}
-                    onClick={async () => {
-                      if (!projectId) return;
-                      setRenderingVideo(true);
-                      setStatus({ type: "loading", message: "正在生成快速预览..." });
-                      try {
-                        const response = await fetch(`/api/projects/${projectId}/render`, {
-                          method: "POST",
-                          headers: { "content-type": "application/json" },
-                          body: JSON.stringify({
-                            planId: activePlanId,
-                            quality: "draft",
-                            title: projectTitle,
-                          }),
-                        });
-                        const data = (await response.json()) as {
-                          downloadUrl?: string;
-                          error?: string;
-                        };
-                        if (!response.ok || !data.downloadUrl) {
-                          throw new Error(data.error || "渲染失败");
-                        }
-                        window.location.href = data.downloadUrl;
-                        setStatus({ type: "success", message: "渲染完成，已开始下载。" });
-                      } catch {
-                        setStatus({
-                          type: "error",
-                          message: "视频生成失败，请稍后重试或先导出方案。",
-                        });
-                      } finally {
-                        setRenderingVideo(false);
-                      }
-                    }}
-                  >
-                    {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
-                    快速预览
-                  </Button>
-                  <Button
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                    disabled={renderingVideo || status.type === "loading"}
-                    onClick={async () => {
-                      if (!projectId) return;
-                      setRenderingVideo(true);
-                      setStatus({ type: "loading", message: "正在生成清晰成片..." });
-                      try {
-                        const response = await fetch(`/api/projects/${projectId}/render`, {
-                          method: "POST",
-                          headers: { "content-type": "application/json" },
-                          body: JSON.stringify({
-                            planId: activePlanId,
-                            quality: "high",
-                            title: projectTitle,
-                          }),
-                        });
-                        const data = (await response.json()) as {
-                          downloadUrl?: string;
-                          error?: string;
-                        };
-                        if (!response.ok || !data.downloadUrl) {
-                          throw new Error(data.error || "渲染失败");
-                        }
-                        window.location.href = data.downloadUrl;
-                        setStatus({ type: "success", message: "渲染完成，已开始下载。" });
-                      } catch {
-                        setStatus({
-                          type: "error",
-                          message: "视频生成失败，请稍后重试或先导出方案。",
-                        });
-                      } finally {
-                        setRenderingVideo(false);
-                      }
-                    }}
-                  >
-                    {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
-                    清晰成片
-                  </Button>
-                  <Button
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                    disabled={renderingVideo || status.type === "loading"}
-                    onClick={async () => {
-                      if (!projectId) return;
-                      setRenderingVideo(true);
-                      setStatus({ type: "loading", message: "正在渲染高质量有声视频..." });
-                      try {
-                        const response = await fetch(`/api/projects/${projectId}/render`, {
-                          method: "POST",
-                          headers: { "content-type": "application/json" },
-                          body: JSON.stringify({
-                            planId: activePlanId,
-                            quality: "high",
-                            mode: "high-quality",
-                            title: projectTitle,
-                          }),
-                        });
-                        const data = (await response.json()) as {
-                          downloadUrl?: string;
-                          error?: string;
-                        };
-                        if (!response.ok || !data.downloadUrl) {
-                          throw new Error(data.error || "渲染失败");
-                        }
-                        window.location.href = data.downloadUrl;
-                        setStatus({ type: "success", message: "高质量有声视频已生成，开始下载。" });
-                      } catch {
-                        setStatus({
-                          type: "error",
-                          message: "视频生成失败，请稍后重试或先导出方案。",
-                        });
-                      } finally {
-                        setRenderingVideo(false);
-                      }
-                    }}
-                  >
-                    {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
-                    高质量有声
-                  </Button>
-                  <Button
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                    disabled={renderingVideo || status.type === "loading"}
-                    onClick={async () => {
-                      if (!projectId) return;
-                      setRenderingVideo(true);
-                      setStatus({ type: "loading", message: "正在渲染手法迁移说明片..." });
-                      try {
-                        const response = await fetch(`/api/projects/${projectId}/render`, {
-                          method: "POST",
-                          headers: { "content-type": "application/json" },
-                          body: JSON.stringify({
-                            planId: activePlanId,
-                            quality: "high",
-                            mode: "technique",
-                            title: projectTitle,
-                          }),
-                        });
-                        const data = (await response.json()) as {
-                          downloadUrl?: string;
-                          error?: string;
-                        };
-                        if (!response.ok || !data.downloadUrl) {
-                          throw new Error(data.error || "渲染失败");
-                        }
-                        window.location.href = data.downloadUrl;
-                        setStatus({ type: "success", message: "手法迁移说明片已生成，开始下载。" });
-                      } catch {
-                        setStatus({
-                          type: "error",
-                          message: "视频生成失败，请稍后重试或先导出方案。",
-                        });
-                      } finally {
-                        setRenderingVideo(false);
-                      }
-                    }}
-                  >
-                    {renderingVideo ? <Loader2 className="animate-spin" /> : <GitBranch />}
-                    手法迁移说明片
-                  </Button>
-                  <Button
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                    disabled={renderingVideo || status.type === "loading"}
-                    onClick={async () => {
-                      if (!projectId) return;
-                      setRenderingVideo(true);
-                      setStatus({
-                        type: "loading",
-                        message: "正在按样例手法生成迁移成片...",
-                      });
-                      try {
-                        const response = await fetch(`/api/projects/${projectId}/generate-video`, {
-                          method: "POST",
-                          headers: { "content-type": "application/json" },
-                          body: JSON.stringify({
-                            planId: activePlanId,
-                            versionIndex: activeVersion,
-                            beatIndex: 0,
-                            mode: "full-video",
-                            audioMode: "natural-sfx",
-                          }),
-                        });
-                        const data = (await response.json()) as VideoGenerateResponse;
-                        if (!response.ok || !data.downloaded) {
-                          const missing = data.missingSegments?.length
-                            ? ` 未完成分段：${data.missingSegments
-                                .map((segment) => `${segment.order}-${segment.role}${segment.status ? `(${segment.status})` : ""}`)
-                                .join("、")}`
-                            : "";
-                          throw new Error(`${data.error || "手法迁移成片生成失败"}${missing}`);
-                        }
-                        if (data.localVideoUrl || data.videoUrl) {
-                          window.open(data.localVideoUrl || data.videoUrl || "", "_blank");
-                        }
-                        const duration = data.adaptiveTransfer?.targetDurationSeconds;
-                        setStatus({
-                          type: "success",
-                          message: `手法迁移成片完成：按样例结构生成 ${data.segments?.length || 0} 段${duration ? `，目标约 ${duration} 秒` : ""}并自动拼接。`,
-                        });
-                      } catch (error) {
-                        setStatus({
-                          type: "error",
-                          message: error instanceof Error ? error.message : "手法迁移成片生成失败。",
-                        });
-                      } finally {
-                        setRenderingVideo(false);
-                      }
-                    }}
-                  >
-                    {renderingVideo ? <Loader2 className="animate-spin" /> : <Video />}
-                    按样例手法出片
-                  </Button>
-                  <Button
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                    onClick={() => downloadExport(projectId, "md", activePlanId)}
-                  >
-                    <Download />
-                    导出方案
-                  </Button>
-                  <Button
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                    onClick={() => downloadExport(projectId, "json", activePlanId)}
-                  >
-                    <FileJson />
-                    导出数据
-                  </Button>
-                </div>
-                <p className="text-xs leading-6 text-muted-foreground">
-                  建议先生成快速预览确认节奏，再生成清晰成片或有声成片用于展示。
-                </p>
-              </CardContent>
-            </Card>
-          ) : null}
-
           {!simpleMode ? (
             <Card>
               <CardHeader>
@@ -2328,171 +3285,138 @@ export default function Home() {
           ) : null}
         </div>
 
-        <div className="result-rail space-y-5">
-          <Card>
+        <div className="result-rail space-y-4">
+          <Card className={!analysis ? "studio-sample-card" : undefined}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Database className="size-4 text-primary" />
-                样例结构拆解
+                样例洞察
               </CardTitle>
-              <CardDescription>系统会把样例拆成可迁移规则，而不是复刻内容。</CardDescription>
+              <CardDescription>镜头 / 节奏 / 包装</CardDescription>
             </CardHeader>
             <CardContent>
               {analysis ? (
-                <div className="space-y-5">
-                  <RunModePanel runMode={runMode} />
-                  {mediaMeta ? <MediaMetaPanel mediaMeta={mediaMeta} /> : null}
-                  <StructureFingerprintPanel analysis={analysis} />
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <div className="rounded-lg border bg-background p-3">
-                      <p className="text-xs text-muted-foreground">内容承诺</p>
-                      <p className="mt-1 text-sm font-medium">{analysis.contentPromise}</p>
-                    </div>
-                    <div className="rounded-lg border bg-background p-3">
-                      <p className="text-xs text-muted-foreground">目标人群</p>
-                      <p className="mt-1 text-sm font-medium">{analysis.targetAudience}</p>
-                    </div>
-                    <div className="rounded-lg border bg-background p-3">
-                      <p className="text-xs text-muted-foreground">可复用模板</p>
-                      <p className="mt-1 text-sm font-medium">
-                        {analysis.reusableTemplate.slice(0, 3).join(" / ")}
-                      </p>
-                    </div>
-                  </div>
-
-                  {simpleMode ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium text-foreground">节拍拆解（精简）</p>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          type="button"
-                          onClick={() => setShowAllSampleBeats(!showAllSampleBeats)}
-                        >
-                          {showAllSampleBeats ? "收起" : "展开全部"}
-                        </Button>
-                      </div>
-                      {(showAllSampleBeats ? analysis.beatMap : analysis.beatMap.slice(0, 4)).map((beat) => (
-                        <div className="timeline-row rounded-lg border bg-background/70 p-4" key={beat.timeRange}>
-                          <div>
-                            <Badge variant="outline">{beat.timeRange}</Badge>
-                            <p className="mt-2 text-xs font-medium text-muted-foreground">
-                              {beat.shotPurpose}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">{beat.transferableRule}</p>
-                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                              {beat.visualObservation}；{beat.captionObservation}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                <div className="space-y-4">
+                  {plan ? (
+                    <SampleCompactRecap
+                      analysis={analysis}
+                      mediaMeta={mediaMeta}
+                      onDetails={() => setShowSampleDetails(!showSampleDetails)}
+                    />
                   ) : (
-                    <div className="space-y-3">
-                      {analysis.beatMap.map((beat) => (
-                      <div className="timeline-row rounded-lg border bg-background/70 p-4" key={beat.timeRange}>
-                        <div>
-                          <Badge variant="outline">{beat.timeRange}</Badge>
-                          <p className="mt-2 text-xs font-medium text-muted-foreground">
-                            {beat.shotPurpose}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">{beat.transferableRule}</p>
-                          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                            {beat.visualObservation}；{beat.captionObservation}
-                          </p>
+                    <MiniSampleInsight
+                      analysis={analysis}
+                      mediaMeta={mediaMeta}
+                      showAll={showAllSampleBeats}
+                      onToggleAll={() => setShowAllSampleBeats(!showAllSampleBeats)}
+                    />
+                  )}
+
+                  <div className="studio-fold">
+                    <Button
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowSampleDetails(!showSampleDetails)}
+                    >
+                      {showSampleDetails ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
+                      {showSampleDetails ? "收起细节" : "查看细节"}
+                    </Button>
+
+                    {showSampleDetails ? (
+                      <div className="studio-fold-panel mt-3 space-y-4">
+                        <SampleBasicsPanel analysis={analysis} mediaMeta={mediaMeta} runMode={runMode} />
+                        <StructureFingerprintPanel analysis={analysis} />
+                        {!simpleMode ? <RunModePanel runMode={runMode} /> : null}
+                        <div className="space-y-3">
+                          {analysis.beatMap.map((beat) => (
+                            <div className="timeline-row rounded-lg border bg-background/70 p-4" key={beat.timeRange}>
+                              <div>
+                                <Badge variant="outline">{beat.timeRange}</Badge>
+                                <p className="mt-2 text-xs font-medium text-muted-foreground">
+                                  {beat.shotPurpose}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium">{beat.transferableRule}</p>
+                                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                                  {beat.visualObservation}；{beat.captionObservation}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                      ))}
-                    </div>
-                  )}
+                    ) : null}
+                  </div>
                 </div>
               ) : (
-                <div className="flex min-h-[260px] flex-col items-center justify-center rounded-lg border border-dashed bg-background px-6 text-center">
-                  <Upload className="size-8 text-muted-foreground" />
-                  <p className="mt-3 text-sm font-medium">等待样例拆解</p>
-                  <p className="mt-1 max-w-md text-sm leading-6 text-muted-foreground">
-                    上传样例或输入人工观察后，这里会展示 hook、节奏、字幕、包装和卖点推进结构。
-                  </p>
+                  <div className="studio-empty-panel min-h-[260px]">
+                  <div className="studio-empty-icon">
+                    <Upload className="size-6" />
+                  </div>
+                  <p className="mt-3 text-sm font-semibold">等待样例</p>
+                  <div className="studio-empty-chips">
+                    <Badge variant="outline">时长</Badge>
+                    <Badge variant="outline">镜头</Badge>
+                    <Badge variant="outline">字幕</Badge>
+                    <Badge variant="outline">节奏</Badge>
+                  </div>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={!plan ? "studio-plan-card" : undefined}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="size-4 text-primary" />
-                多版本方案脚本
+                新片方案
               </CardTitle>
-              <CardDescription>脚本、分镜和时间线同步展示，方便直接改稿和出片。</CardDescription>
+              <CardDescription>脚本 / 分镜 / 时间线</CardDescription>
             </CardHeader>
             <CardContent>
               {plan && activePlanVersion ? (
-                <div className="space-y-5">
-                  <div className="flex flex-wrap gap-2">
-                    {plan.versions.map((version, index) => (
-                      <Button
-                        key={version.versionName}
-                        size="sm"
-                        variant={index === activeVersion ? "default" : "outline"}
-                        onClick={() => setActiveVersion(index)}
-                      >
-                        {version.versionName}
-                      </Button>
-                    ))}
-                  </div>
+                <div className="space-y-4">
+                  <OutputPreviewPanel
+                    generatedVideo={generatedVideo}
+                    renderingVideo={renderingVideo}
+                    showMore={showRenderOptions}
+                    disabled={renderingVideo || status.type === "loading"}
+                    fullVideoPackagingMode={fullVideoPackagingMode}
+                    onQuickPreview={() => void handleRenderPreset("draft")}
+                    onFullVideo={() => void handleGenerateFullVideo()}
+                    onHighRender={() => void handleRenderPreset("high")}
+                    onHighAudio={() => void handleRenderPreset("high-quality")}
+                    onTechnique={() => void handleRenderPreset("technique")}
+                    onExportMd={() => {
+                      if (projectId) downloadExport(projectId, "md", activePlanId);
+                    }}
+                    onExportJson={() => {
+                      if (projectId) downloadExport(projectId, "json", activePlanId);
+                    }}
+                    onPackagingModeChange={setFullVideoPackagingMode}
+                    onToggleMore={() => setShowRenderOptions(!showRenderOptions)}
+                  />
 
-                  <div className="rounded-lg border bg-accent/40 p-4">
-                    <p className="text-sm font-medium text-accent-foreground">
-                      {plan.strategySummary}
-                    </p>
-                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                      继承结构：{plan.inheritedStructure.join(" / ")}
-                    </p>
-                  </div>
+                  <VersionChoiceCards
+                    plan={plan}
+                    activeVersion={activeVersion}
+                    onChange={setActiveVersion}
+                  />
 
-                  <EditingTechniquePanel techniques={plan.retrievedTechniques} />
-
-                  <FunctionFlowPanel analysis={analysis} plan={plan} />
-
-                  {activeTechniqueRecipe ? (
-                    <TechniqueTransferPanel recipe={activeTechniqueRecipe} />
-                  ) : null}
-
-                  {plan.materialAdaptation ? (
-                    <MaterialAdaptationPanel adaptation={plan.materialAdaptation} />
-                  ) : null}
-
-                  <StoryboardPreview
+                  <ActiveVersionSummary
                     version={activePlanVersion}
                     rows={activeMigrationRows}
                   />
 
-                  <TimelineOverview rows={activeMigrationRows} />
+                  <MaterialGapSnapshot adaptation={plan.materialAdaptation} />
 
-                  {!simpleMode && analysis ? (
-                    <MigrationMappingPanel
-                      analysis={analysis}
-                      plan={plan}
-                      version={activePlanVersion}
-                    />
-                  ) : null}
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-background p-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">可编辑时间线</p>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        支持在页面里直接改 beat 字段并保存为新稿，导出 / 预览同步更新。
-                      </p>
-                    </div>
+                  <div className="studio-plan-actions">
                     <Button
                       variant={editMode ? "secondary" : "outline"}
                       size="sm"
+                      type="button"
                       onClick={() => {
                         if (!editMode) setDraftVersion(activePlanVersion);
                         if (editMode) setDraftVersion(null);
@@ -2500,7 +3424,16 @@ export default function Home() {
                       }}
                     >
                       <PencilLine className="size-4" />
-                      {editMode ? "退出编辑" : "进入编辑"}
+                      {editMode ? "退出精修" : "精修时间线"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowProductionDetails(true)}
+                    >
+                      <ArrowDown className="size-4" />
+                      打开制作台
                     </Button>
                   </div>
 
@@ -2517,159 +3450,199 @@ export default function Home() {
                     />
                   ) : null}
 
-                  <div className="space-y-3 rounded-lg border bg-background p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">
-                          自然语言微调
+                  {showProductionDetails ? (
+                    <div
+                      className="studio-workbench-overlay"
+                      role="presentation"
+                      onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) {
+                          setShowProductionDetails(false);
+                        }
+                      }}
+                    >
+                      <section
+                        aria-labelledby="studio-workbench-title"
+                        aria-modal="true"
+                        className="studio-workbench-dialog"
+                        role="dialog"
+                        tabIndex={-1}
+                      >
+                        <div className="studio-workbench-header">
+                          <div className="min-w-0">
+                            <Badge variant="secondary">制作台</Badge>
+                            <h2 id="studio-workbench-title">高级制作台</h2>
+                            <p>分镜、时间线、素材诊断和微调都在这里完成，主页面保持干净。</p>
+                          </div>
+                          <Button
+                            aria-label="关闭制作台"
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                            onClick={() => setShowProductionDetails(false)}
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        </div>
+
+                        <div className="studio-workbench-scroll space-y-4">
+                          <div className="rounded-lg border bg-accent/40 p-4">
+                        <p className="text-sm font-medium text-accent-foreground">
+                          {plan.strategySummary}
                         </p>
-                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                          一句话改细节并保存为新版本：支持封面/文案标题、话题标签、按段落改字段、按秒延长/缩短时间段。
+                        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                          保留：{plan.inheritedStructure.join(" / ")}
                         </p>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleNlEditAction("preview")}
-                          disabled={nlEditApplying || !nlEditInstruction.trim()}
-                        >
-                          {nlEditApplying ? (
-                            <Loader2 className="animate-spin" />
-                          ) : (
-                            <BarChart3 className="size-4" />
-                          )}
-                          预览
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => handleNlEditAction("apply")}
-                          disabled={nlEditApplying || !nlEditInstruction.trim()}
-                        >
-                          {nlEditApplying ? (
-                            <Loader2 className="animate-spin" />
-                          ) : (
-                            <PencilLine className="size-4" />
-                          )}
-                          保存新稿
-                        </Button>
-                      </div>
-                    </div>
-                    <Textarea
-                      value={nlEditInstruction}
-                      onChange={(event) => setNlEditInstruction(event.target.value)}
-                      placeholder="第2段口播改为 给出更具体的步骤；封面标题：10分钟做出岗位匹配简历；话题=简历优化 AI求职 #大学生；第1段延长1秒"
-                      className="min-h-[92px]"
-                    />
-                    {nlEditPreview ? (
-                      <div className="rounded-lg border bg-accent/20 p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-xs font-semibold text-foreground">预览结果（未保存）</p>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span>确认修改点后再保存为新稿</span>
-                            <Button type="button" size="sm" variant="outline" onClick={() => setNlEditPreview(null)}>
-                              关闭预览
+
+                      <div className="space-y-3 rounded-lg border bg-background p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">一句话调整</p>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                              例如：开头更抓人、减少字幕、把商品信息提前。
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleNlEditAction("preview")}
+                              disabled={nlEditApplying || !nlEditInstruction.trim()}
+                            >
+                              {nlEditApplying ? (
+                                <Loader2 className="animate-spin" />
+                              ) : (
+                                <BarChart3 className="size-4" />
+                              )}
+                              预览
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => handleNlEditAction("apply")}
+                              disabled={nlEditApplying || !nlEditInstruction.trim()}
+                            >
+                              {nlEditApplying ? (
+                                <Loader2 className="animate-spin" />
+                              ) : (
+                                <PencilLine className="size-4" />
+                              )}
+                              保存
                             </Button>
                           </div>
                         </div>
-                        <div className="mt-2 grid gap-3 md:grid-cols-2">
-                          <div>
-                            <p className="text-xs font-semibold text-foreground">将应用</p>
-                            <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
-                              {(nlEditPreview.applied.length ? nlEditPreview.applied : ["（无）"]).map(
-                                (item, index) => (
-                                  <li key={`preview-applied-${index}`}>{item}</li>
-                                ),
-                              )}
-                            </ul>
+                        <Textarea
+                          value={nlEditInstruction}
+                          onChange={(event) => setNlEditInstruction(event.target.value)}
+                          placeholder="开头更抓人一些；减少字幕；把商品信息提前"
+                          className="min-h-[84px]"
+                        />
+                        {nlEditPreview ? (
+                          <div className="rounded-lg border bg-accent/20 p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-xs font-semibold text-foreground">预览结果</p>
+                              <Button type="button" size="sm" variant="outline" onClick={() => setNlEditPreview(null)}>
+                                关闭
+                              </Button>
+                            </div>
+                            <div className="mt-2 grid gap-3 md:grid-cols-2">
+                              <div>
+                                <p className="text-xs font-semibold text-foreground">将应用</p>
+                                <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+                                  {(nlEditPreview.applied.length ? nlEditPreview.applied : ["（无）"]).map(
+                                    (item, index) => (
+                                      <li key={`preview-applied-${index}`}>{item}</li>
+                                    ),
+                                  )}
+                                </ul>
+                              </div>
+                              <div>
+                                <p className="text-xs font-semibold text-foreground">提示</p>
+                                <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+                                  {(nlEditPreview.warnings.length ? nlEditPreview.warnings : ["（无）"]).map(
+                                    (item, index) => (
+                                      <li key={`preview-warning-${index}`}>{item}</li>
+                                    ),
+                                  )}
+                                </ul>
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-xs font-semibold text-foreground">提示</p>
-                            <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
-                              {(nlEditPreview.warnings.length ? nlEditPreview.warnings : ["（无）"]).map(
-                                (item, index) => (
-                                  <li key={`preview-warning-${index}`}>{item}</li>
-                                ),
-                              )}
-                            </ul>
+                        ) : null}
+                        {nlEditFeedback ? (
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <div className="rounded-lg border bg-accent/30 p-3">
+                              <p className="text-xs font-semibold text-foreground">已应用</p>
+                              <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+                                {(nlEditFeedback.applied.length
+                                  ? nlEditFeedback.applied
+                                  : ["（无）"]
+                                ).map((item, index) => (
+                                  <li key={`applied-${index}`}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div className="rounded-lg border bg-accent/30 p-3">
+                              <p className="text-xs font-semibold text-foreground">提示</p>
+                              <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
+                                {(nlEditFeedback.warnings.length
+                                  ? nlEditFeedback.warnings
+                                  : ["（无）"]
+                                ).map((item, index) => (
+                                  <li key={`warning-${index}`}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
                           </div>
-                        </div>
-                        <div className="mt-3 rounded-lg border bg-background/70 p-3">
-                          <p className="text-xs font-semibold text-foreground">差异摘要</p>
-                          <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
-                            {(() => {
-                              const items = nlEditPreview.diff.length
-                                ? nlEditPreview.diff
-                                : plan
-                                  ? diffPlans(plan, nlEditPreview.plan)
-                                  : [];
-                              if (items.length === 0) return ["（无）"];
-                              return items.slice(0, 12).map((item) => {
-                                if (item.kind === "beats-count") {
-                                  return `${item.versionName}：段落数 ${item.before} → ${item.after}`;
-                                }
-                                if (item.kind === "hashtags") {
-                                  return `${item.versionName}：话题 ${item.before.join(" ")} → ${item.after.join(" ")}`;
-                                }
-                                if (item.kind === "version") {
-                                  return `${item.versionName}：${item.field} ${item.before} → ${item.after}`;
-                                }
-                                return `${item.versionName}：第${item.beatIndex + 1}段.${item.field} ${item.before} → ${item.after}`;
-                              });
-                            })().map((line, index) => (
-                              <li key={`diff-${index}`}>{line}</li>
-                            ))}
-                          </ul>
-                          {(nlEditPreview.diff.length ? nlEditPreview.diff : plan ? diffPlans(plan, nlEditPreview.plan) : []).length > 12 ? (
-                            <p className="mt-2 text-[11px] text-muted-foreground">
-                              已省略部分差异（当前最多展示 12 条）。
-                            </p>
-                          ) : null}
-                        </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                    {nlEditFeedback ? (
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div className="rounded-lg border bg-accent/30 p-3">
-                          <p className="text-xs font-semibold text-foreground">已应用</p>
-                          <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
-                            {(nlEditFeedback.applied.length
-                              ? nlEditFeedback.applied
-                              : ["（无）"]
-                            ).map((item, index) => (
-                              <li key={`applied-${index}`}>{item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div className="rounded-lg border bg-accent/30 p-3">
-                          <p className="text-xs font-semibold text-foreground">提示</p>
-                          <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
-                            {(nlEditFeedback.warnings.length
-                              ? nlEditFeedback.warnings
-                              : ["（无）"]
-                            ).map((item, index) => (
-                              <li key={`warning-${index}`}>{item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
 
-                  <VersionTimeline version={activePlanVersion} />
+                      <EditingTechniquePanel techniques={plan.retrievedTechniques} />
+                      <FunctionFlowPanel analysis={analysis} plan={plan} />
+                      <RequirementCoveragePanel report={requirementCoverage} />
+                      {activeTechniqueRecipe ? (
+                        <TechniqueTransferPanel recipe={activeTechniqueRecipe} />
+                      ) : null}
+                      {plan.materialAdaptation ? (
+                        <MaterialAdaptationPanel adaptation={plan.materialAdaptation} />
+                      ) : null}
+                      <StoryboardPreview
+                        version={activePlanVersion}
+                        rows={activeMigrationRows}
+                      />
+                      <TimelineOverview rows={activeMigrationRows} />
+                      {!simpleMode && analysis ? (
+                        <MigrationMappingPanel
+                          analysis={analysis}
+                          plan={plan}
+                          version={activePlanVersion}
+                        />
+                      ) : null}
+                      <VersionTimeline version={activePlanVersion} />
+                        </div>
+                      </section>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
-                  <div className="space-y-4">
-                  <div className="flex min-h-[260px] flex-col items-center justify-center rounded-lg border border-dashed bg-background px-6 text-center">
-                    <FileText className="size-8 text-muted-foreground" />
-                    <p className="mt-3 text-sm font-medium">等待迁移方案</p>
-                    <p className="mt-1 max-w-md text-sm leading-6 text-muted-foreground">
-                      完成样例拆解并填写 Brief 后，系统会生成稳妥转化、强 Hook、内容种草等版本。
-                    </p>
-                  </div>
-                  <FunctionFlowPanel analysis={analysis} plan={plan} />
+                <div className="space-y-4">
+                  {generatedVideo?.url ? (
+                    <RecentRenderPanel generatedVideo={generatedVideo} />
+                  ) : (
+                    <div className="studio-empty-panel min-h-[260px]">
+                      <div className="studio-empty-icon">
+                        <FileText className="size-6" />
+                      </div>
+                      <p className="mt-3 text-sm font-semibold">等待方案</p>
+                      <div className="studio-empty-chips">
+                        <Badge variant="outline">多版本</Badge>
+                        <Badge variant="outline">分镜</Badge>
+                        <Badge variant="outline">素材缺口</Badge>
+                        <Badge variant="outline">导出</Badge>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
