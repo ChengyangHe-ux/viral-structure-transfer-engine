@@ -6,6 +6,7 @@ const eslintConfig = [
   ...nextTypescript,
   {
     ignores: [
+      ".codex-home/**",
       ".next/**",
       "node_modules/**",
       "coverage/**",

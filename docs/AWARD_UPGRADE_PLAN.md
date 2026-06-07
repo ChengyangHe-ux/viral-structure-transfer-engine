@@ -1,6 +1,6 @@
 # 拿奖导向改进方案
 
-更新时间：2026-05-26
+更新时间：2026-06-07
 
 ## 一句话定位
 
@@ -94,6 +94,13 @@ https://platform.openai.com/docs/guides/image-generation
 - 缺口任务队列：每个缺口都有补全策略、替代镜头和风险提示。
 - 可编辑导演台：用户改 hook、卖点顺序、字幕密度、节奏档位，预览马上变化。
 - 证据交付包：导出 MP4、Markdown、JSON、质量报告、关键帧和时间线。
+
+## 2026-06-07 阶段性落地
+
+- 首页结果列已补齐导演预览、导演控制条、迁移证据链、真实素材盘点、AIGC 补素材任务台和交付证据包，评委可以从同一屏看到结构、素材、预览和提交状态。
+- 新增“时间线交换 JSON”面板，把当前版本整理成 `viral-structure-transfer.timeline.v1`：包含 9:16 画面轨、口播字幕轨、包装转场轨、样例到新片段映射、素材槽位、候选资产和评分摘要。
+- `AIGC 补素材任务台` 的提示词复制和 `时间线交换 JSON` 共用浏览器剪贴板 helper，减少现场演示时在不同导出入口之间切换。
+- 下一步应把页面内复制载荷沉淀为提交包中的 `timeline.json` 文件，并预留 `.otio` 或剪映草稿适配器。
 
 ## 新增数据协议
 
@@ -250,6 +257,7 @@ https://platform.openai.com/docs/guides/image-generation
 1. 新增 `submission:case`：生成 MP4、关键帧、质量报告、Markdown、timeline JSON。
 2. 把 `video:check` 输出保存为 `quality-report.json`。
 3. README 给出“一条命令生成提交材料”的流程。
+4. 将页面“时间线交换 JSON”载荷写入最终演示包，保持前端证据和提交文件同源。
 
 验收：
 
