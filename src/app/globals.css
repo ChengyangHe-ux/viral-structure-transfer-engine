@@ -807,6 +807,13 @@ button:not(:disabled):active {
   gap: 0.75rem;
 }
 
+.studio-timeline-json-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
 .studio-timeline-track-head span {
   overflow-wrap: anywhere;
   color: hsl(var(--foreground));
@@ -2848,6 +2855,14 @@ button:not(:disabled):active {
   .studio-timeline-export-actions {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .studio-timeline-json-actions {
+    justify-content: stretch;
+  }
+
+  .studio-timeline-json-actions .inline-flex {
+    flex: 1 1 8rem;
   }
 
   .studio-material-actions {

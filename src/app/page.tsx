@@ -472,6 +472,36 @@ function downloadExport(projectId: string, format: "md" | "json", planId?: strin
   window.open(`/api/projects/${projectId}/export?format=${format}${planQuery}`, "_blank");
 }
 
+function safeDownloadName(value: string, fallback: string) {
+  const clean = value
+    .replace(/\s+/g, "-")
+    .replace(/[^\u4e00-\u9fa5a-zA-Z0-9._-]+/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 72);
+  return clean || fallback;
+}
+
+function downloadTextFile({
+  fileName,
+  text,
+  mimeType,
+}: {
+  fileName: string;
+  text: string;
+  mimeType: string;
+}) {
+  const blob = new Blob([text], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
 function formatSeconds(seconds?: number) {
   if (!seconds || !Number.isFinite(seconds)) return "--";
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
@@ -557,6 +587,49 @@ async function copyTextToClipboard(text: string) {
   textarea.select();
   document.execCommand("copy");
   document.body.removeChild(textarea);
+}
+
+function csvCell(value: unknown) {
+  const text = String(value ?? "")
+    .replace(/\r?\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function buildTimelineExchangeCsv(payload: TimelineExchangePayload) {
+  const headers = [
+    "track",
+    "order",
+    "time_range",
+    "duration_seconds",
+    "name_or_text",
+    "material_slot",
+    "material_fit",
+    "completion_strategy",
+    "completion_plan",
+    "visual_suggestion",
+    "transition_and_rhythm",
+    "replaceable_assets",
+  ];
+  const rows = payload.tracks.flatMap((track) =>
+    track.clips.map((clip) => [
+      track.name,
+      clip.order,
+      clip.timeRange,
+      clip.durationSeconds.toFixed(2),
+      clip.name || clip.text || clip.overlayText || clip.id,
+      clip.materialSlotName,
+      clip.materialFit,
+      clip.completionStrategy,
+      clip.completionPlan,
+      clip.visualSuggestion,
+      clip.transitionAndRhythm,
+      clip.replaceableAssets,
+    ]),
+  );
+
+  return [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
 }
 
 function formatFileSize(size: number) {
@@ -3649,6 +3722,11 @@ function TimelineExchangePanel({
     [analysis, activeVersion, plan, rows],
   );
   const payloadText = useMemo(() => JSON.stringify(payload, null, 2), [payload]);
+  const csvText = useMemo(() => buildTimelineExchangeCsv(payload), [payload]);
+  const fileBaseName = useMemo(
+    () => safeDownloadName(`${plan.projectTitle}-${activeVersion.versionName}-timeline`, "timeline-exchange"),
+    [activeVersion.versionName, plan.projectTitle],
+  );
   const previewLines = payloadText.split("\n").slice(0, 18).join("\n");
   const fitCounts = {
     matched: rows.filter((row) => row.materialFit === "matched").length,
@@ -3660,6 +3738,22 @@ function TimelineExchangePanel({
     await copyTextToClipboard(payloadText);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
+  }
+
+  function downloadJsonPayload() {
+    downloadTextFile({
+      fileName: `${fileBaseName}.json`,
+      text: payloadText,
+      mimeType: "application/json;charset=utf-8",
+    });
+  }
+
+  function downloadCsvPayload() {
+    downloadTextFile({
+      fileName: `${fileBaseName}.csv`,
+      text: `\uFEFF${csvText}`,
+      mimeType: "text/csv;charset=utf-8",
+    });
   }
 
   return (
@@ -3741,10 +3835,20 @@ function TimelineExchangePanel({
                 <span>可复制载荷</span>
                 <strong>{payload.schema}</strong>
               </div>
-              <Button onClick={() => void copyPayload()} size="sm" type="button" variant="outline">
-                <Copy />
-                {copied ? "已复制" : "复制 JSON"}
-              </Button>
+              <div className="studio-timeline-json-actions">
+                <Button onClick={() => void copyPayload()} size="sm" type="button" variant="outline">
+                  <Copy />
+                  {copied ? "已复制" : "复制 JSON"}
+                </Button>
+                <Button onClick={downloadJsonPayload} size="sm" type="button" variant="outline">
+                  <Download />
+                  下载 JSON
+                </Button>
+                <Button onClick={downloadCsvPayload} size="sm" type="button" variant="outline">
+                  <Download />
+                  剪辑表 CSV
+                </Button>
+              </div>
             </div>
             <pre className="studio-timeline-json-preview">
               {previewLines}
